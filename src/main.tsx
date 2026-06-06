@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { open } from '@tauri-apps/plugin-dialog';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
 import { MapMeta } from '~/domain/map';
 import Toolbar from '~/components/Toolbar';
@@ -29,6 +30,15 @@ interface MapTab {
 }
 
 let tabSeq = 0;
+
+const ResizeHandle = () => (
+  <PanelResizeHandle className="group relative w-1.5 flex-shrink-0 outline-none">
+    <div
+      style={{ background: 'linear-gradient(to bottom, transparent 0%, hsl(var(--primary)) 50%, transparent 100%)' }}
+      className="pointer-events-none absolute inset-y-2 left-1/2 w-px -translate-x-1/2 rounded-full opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-data-[resize-handle-state=hover]:opacity-100 group-data-[resize-handle-state=drag]:opacity-100"
+    />
+  </PanelResizeHandle>
+);
 
 const App = () => {
   const [assets, setAssets] = React.useState<LoadedAssets | null>(null);
@@ -143,68 +153,77 @@ const App = () => {
     <div className="flex h-screen flex-col bg-background text-foreground">
       <Toolbar onNew={handleNew} onOpen={handleOpen} loading={busy || !assets} />
 
-      <div className="flex min-h-0 flex-1 gap-1.5 overflow-hidden bg-toolbar-bg p-1.5">
-        {assets && palette && (
-          <PalettePanel
-            data={palette}
-            items={assets.items}
-            outfits={assets.outfits}
-            sprPath={assets.sprPath}
-            onSelectBrush={setActiveBrush}
-            transparency={assets.transparency}
-          />
-        )}
+      <div className="flex min-h-0 flex-1 overflow-hidden bg-toolbar-bg p-1.5">
+        <PanelGroup direction="horizontal" autoSaveId="nosbor-main-layout">
+          {assets && palette && (
+            <>
+              <Panel order={1} id="palette" minSize={12} maxSize={40} defaultSize={18}>
+                <PalettePanel
+                  data={palette}
+                  items={assets.items}
+                  outfits={assets.outfits}
+                  sprPath={assets.sprPath}
+                  onSelectBrush={setActiveBrush}
+                  transparency={assets.transparency}
+                />
+              </Panel>
+              <ResizeHandle />
+            </>
+          )}
 
-        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-card shadow-island">
-          <MapTabs
-            tabs={tabs}
-            onNew={handleNew}
-            onClose={closeTab}
-            activeId={activeId}
-            onSelect={setActiveId}
-            disabled={busy || !assets}
-          />
-
-          <div className="relative min-h-0 flex-1">
-            {active && assets ? (
-              <MapCanvas
-                key={active.id}
-                map={active.map}
-                zoom={active.zoom}
-                minZoom={MIN_ZOOM}
-                maxZoom={MAX_ZOOM}
-                onHover={setHover}
-                items={assets.items}
-                floorZ={active.floorZ}
-                onZoomChange={setZoom}
-                sprPath={assets.sprPath}
-                activeBrush={activeBrush}
-                onFloorChange={setFloorZ}
-                onSelect={setSelectedItem}
-                itemNames={assets.itemNames}
-                onSelectBrush={setActiveBrush}
-                transparency={assets.transparency}
+          <Panel id="map" order={2} minSize={30}>
+            <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-card shadow-island">
+              <MapTabs
+                tabs={tabs}
+                onNew={handleNew}
+                onClose={closeTab}
+                activeId={activeId}
+                onSelect={setActiveId}
+                disabled={busy || !assets}
               />
-            ) : (
-              <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">
-                {error ?? status}
-              </div>
-            )}
 
-            {progress && (
-              <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur-sm">
-                <div className="text-sm text-muted-foreground">{progress.label}</div>
-                <div className="h-2 w-72 overflow-hidden rounded-full bg-secondary">
-                  <div
-                    style={{ width: `${Math.round(progress.value * 100)}%` }}
-                    className="h-full rounded-full bg-primary transition-[width] duration-150 ease-out"
+              <div className="relative min-h-0 flex-1">
+                {active && assets ? (
+                  <MapCanvas
+                    key={active.id}
+                    map={active.map}
+                    zoom={active.zoom}
+                    minZoom={MIN_ZOOM}
+                    maxZoom={MAX_ZOOM}
+                    onHover={setHover}
+                    items={assets.items}
+                    floorZ={active.floorZ}
+                    onZoomChange={setZoom}
+                    sprPath={assets.sprPath}
+                    activeBrush={activeBrush}
+                    onFloorChange={setFloorZ}
+                    onSelect={setSelectedItem}
+                    itemNames={assets.itemNames}
+                    onSelectBrush={setActiveBrush}
+                    transparency={assets.transparency}
                   />
-                </div>
-                <div className="font-mono text-xs text-muted-foreground">{Math.round(progress.value * 100)}%</div>
+                ) : (
+                  <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">
+                    {error ?? status}
+                  </div>
+                )}
+
+                {progress && (
+                  <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur-sm">
+                    <div className="text-sm text-muted-foreground">{progress.label}</div>
+                    <div className="h-2 w-72 overflow-hidden rounded-full bg-secondary">
+                      <div
+                        style={{ width: `${Math.round(progress.value * 100)}%` }}
+                        className="h-full rounded-full bg-primary transition-[width] duration-150 ease-out"
+                      />
+                    </div>
+                    <div className="font-mono text-xs text-muted-foreground">{Math.round(progress.value * 100)}%</div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          </Panel>
+        </PanelGroup>
       </div>
 
       <StatusBar

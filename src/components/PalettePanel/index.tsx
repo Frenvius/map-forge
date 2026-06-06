@@ -132,7 +132,7 @@ const PalettePanel = ({ data, items, outfits, sprPath, transparency, onSelectBru
   }
 
   return (
-    <div className="flex h-full w-64 flex-shrink-0 flex-col overflow-hidden rounded-lg bg-card shadow-island">
+    <div className="flex h-full w-full flex-col overflow-hidden rounded-lg bg-card shadow-island">
       <div className="flex h-7 flex-shrink-0 items-center border-b border-border/50 bg-secondary/80 px-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground">Palette</h2>
         <span className="ml-auto font-mono text-[10px] text-muted-foreground">{tiles.length}</span>
