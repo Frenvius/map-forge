@@ -87,6 +87,10 @@ export async function paintTiles(
   await invoke('paint_tiles', { mapId, z, xs, ys, serverId, isGround });
 }
 
+export async function moveItem(mapId: number, z: number, fromX: number, fromY: number, toX: number, toY: number): Promise<void> {
+  await invoke('move_item', { mapId, z, fromX, fromY, toX, toY });
+}
+
 export async function fetchMapChunks(mapId: number, z: number, keys: number[]): Promise<Map<string, ChunkTiles>> {
   const result = new Map<string, ChunkTiles>();
   if (keys.length === 0) return result;

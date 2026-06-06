@@ -8,7 +8,7 @@ import { DRAW_CURSOR } from '~/usecase/cursors';
 import { Position, ChunkTiles } from '~/domain/map';
 import { visibleFloorRange } from '~/usecase/floors';
 import { slotUV, GLRenderer, ATLAS_SLOTS } from '~/usecase/glRenderer';
-import { paintTiles, packChunkKey, fetchMapChunks } from '~/adapter/map';
+import { moveItem, paintTiles, packChunkKey, fetchMapChunks } from '~/adapter/map';
 
 import { HoverInfo, HoverItem, MapCanvasProps } from './types';
 
@@ -25,6 +25,7 @@ const MESH_CACHE_MAX = 4096;
 const MESH_CACHE_LOW = 3072;
 const BUILD_BUDGET_MS = 12;
 const BUILD_BUDGET_MAX = 256;
+const MOVE_THRESHOLD_SQ = 16;
 
 interface Camera {
   x: number;
@@ -122,10 +123,15 @@ const MapCanvas = ({
   const hoveredTile = React.useRef<Position | null>(null);
   const ghostRef = React.useRef<HTMLImageElement>(null);
   const highlightRef = React.useRef<HTMLDivElement>(null);
+  const selected = React.useRef<Position | null>(null);
+  const moveDrag = React.useRef<null | { from: Position; startX: number; startY: number; active: boolean }>(null);
+  const moveDest = React.useRef<Position | null>(null);
+  const pendingMove = React.useRef<Float32Array | null>(null);
   const [panning, setPanning] = React.useState(false);
+  const [moving, setMoving] = React.useState(false);
 
   const paintable = activeBrush != null && activeBrush.serverId != null;
-  const canvasCursor = paintable ? DRAW_CURSOR : panning ? 'grabbing' : 'grab';
+  const canvasCursor = paintable ? DRAW_CURSOR : panning ? 'grabbing' : moving ? 'grabbing' : 'default';
 
   const [menu, setMenu] = React.useState<null | { clientX: number; clientY: number; tile: Position; dest: Position | null }>(
     null
@@ -435,6 +441,19 @@ const MapCanvas = ({
         }
       }
     }
+    if (selected.current) {
+      const hl = buildTopItemMesh(selected.current, 0, 0);
+      if (hl) renderer.drawHighlight(hl, camX, camY, scale, 0, 0, 0, 0.45);
+    }
+
+    const md = moveDrag.current;
+    if (md && md.active && moveDest.current) {
+      const ghost = buildTopItemMesh(md.from, moveDest.current.x - md.from.x, moveDest.current.y - md.from.y);
+      if (ghost) renderer.drawGhost(ghost, camX, camY, scale, 0.55);
+    } else if (pendingMove.current) {
+      renderer.drawGhost(pendingMove.current, camX, camY, scale, 0.55);
+    }
+
     renderer.endFrame();
     lastChunksDrawn.current = drawn;
 
@@ -583,18 +602,83 @@ const MapCanvas = ({
     outline.style.transform = transform;
   }
 
+  function buildTopItemMesh(tile: Position, shiftTilesX: number, shiftTilesY: number): Float32Array | null {
+    const { items, floorZ } = inputs.current;
+    if (tile.z !== floorZ) return null;
+
+    const tx = tile.x;
+    const ty = tile.y;
+    const ct = getTiles(Math.floor(tx / CHUNK), Math.floor(ty / CHUNK), floorZ);
+    if (!ct) return null;
+    let found = -1;
+    for (let i = 0; i < ct.tileX.length; i++) {
+      if (ct.tileX[i] === tx && ct.tileY[i] === ty) {
+        found = i;
+        break;
+      }
+    }
+    if (found < 0) return null;
+
+    const start = ct.itemOffset[found];
+    const end = ct.itemOffset[found + 1];
+    const top = end - 1;
+    const sx = shiftTilesX * TILE;
+    const sy = shiftTilesY * TILE;
+    const inst: number[] = [];
+    let drawElevation = 0;
+    for (let ii = start; ii < end; ii++) {
+      const thing = items.get(ct.clientIds[ii]);
+      if (!thing || thing.spriteIndex.length === 0) continue;
+
+      if (ii === top) {
+        const px = thing.patternX > 0 ? tx % thing.patternX : 0;
+        const py = thing.patternY > 0 ? ty % thing.patternY : 0;
+        const ox = (thing.offsetX || 0) + drawElevation;
+        const oy = (thing.offsetY || 0) + drawElevation;
+
+        for (let l = 0; l < thing.layers; l++) {
+          for (let h = 0; h < thing.height; h++) {
+            for (let w = 0; w < thing.width; w++) {
+              const sid = thing.spriteIndex[getSpriteIndex(thing, w, h, l, px, py, 0, 0)];
+              if (!sid) continue;
+              const data = spriteData.current.get(sid);
+              if (!data || data.empty) continue;
+              const slot = spriteSlotFor(sid, data);
+              if (slot < 0) continue;
+              const { u0, v0 } = slotUV(slot);
+              inst.push((tx - w) * TILE - ox + sx, (ty - h) * TILE - oy + sy, u0, v0);
+            }
+          }
+        }
+      }
+
+      if (thing.hasElevation) drawElevation = Math.min(drawElevation + thing.elevation, MAX_ELEVATION);
+    }
+
+    return inst.length > 0 ? new Float32Array(inst) : null;
+  }
+
   function onMouseDown(e: React.MouseEvent) {
+    if (e.button === 1) {
+      e.preventDefault();
+      drag.current = { startX: e.clientX, startY: e.clientY, camX: camera.current.x, camY: camera.current.y };
+      setPanning(true);
+      return;
+    }
+    if (e.button !== 0) return;
+
     const brush = inputs.current.activeBrush;
-    if (e.button === 0 && brush && brush.serverId != null) {
+    if (brush && brush.serverId != null) {
       painting.current = true;
       lastPaintKey.current = null;
       paintAt(tileUnderCursor(e));
       return;
     }
-    if (e.button === 0 || e.button === 1) {
-      drag.current = { startX: e.clientX, startY: e.clientY, camX: camera.current.x, camY: camera.current.y };
-      setPanning(true);
-    }
+
+    const pos = tileUnderCursor(e);
+    selected.current = pos;
+    moveDest.current = pos;
+    moveDrag.current = { from: pos, startX: e.clientX, startY: e.clientY, active: false };
   }
   function onMouseMove(e: React.MouseEvent) {
     if (painting.current) {
@@ -605,6 +689,17 @@ const MapCanvas = ({
         x: drag.current.camX - (e.clientX - drag.current.startX) / z,
         y: drag.current.camY - (e.clientY - drag.current.startY) / z
       };
+    } else if (moveDrag.current) {
+      const md = moveDrag.current;
+      if (!md.active) {
+        const dx = e.clientX - md.startX;
+        const dy = e.clientY - md.startY;
+        if (dx * dx + dy * dy > MOVE_THRESHOLD_SQ) {
+          md.active = true;
+          setMoving(true);
+        }
+      }
+      if (md.active) moveDest.current = tileUnderCursor(e);
     }
     const pos = tileUnderCursor(e);
     hoveredTile.current = pos;
@@ -615,12 +710,14 @@ const MapCanvas = ({
     }
   }
   function onMouseUp() {
+    finishMove();
     drag.current = null;
     painting.current = false;
     lastPaintKey.current = null;
     setPanning(false);
   }
   function onMouseLeave() {
+    finishMove();
     drag.current = null;
     painting.current = false;
     lastPaintKey.current = null;
@@ -628,6 +725,40 @@ const MapCanvas = ({
     hoveredTile.current = null;
     setPanning(false);
     inputs.current.onHover(null);
+  }
+
+  function finishMove() {
+    const md = moveDrag.current;
+    moveDrag.current = null;
+    if (!md) return;
+    setMoving(false);
+    const dest = moveDest.current;
+    moveDest.current = null;
+    if (!md.active || !dest || (dest.x === md.from.x && dest.y === md.from.y)) return;
+
+    const from = md.from;
+    pendingMove.current = buildTopItemMesh(from, dest.x - from.x, dest.y - from.y);
+    moveItem(inputs.current.map.id, from.z, from.x, from.y, dest.x, dest.y)
+      .then(() => Promise.all([refetchChunkNow(from.x, from.y, from.z), refetchChunkNow(dest.x, dest.y, dest.z)]))
+      .then(() => {
+        selected.current = dest;
+        spriteVersion.current++;
+      })
+      .catch((err) => console.error('Failed to move item', err))
+      .finally(() => {
+        pendingMove.current = null;
+      });
+  }
+
+  async function refetchChunkNow(x: number, y: number, z: number) {
+    const cx = Math.floor(x / CHUNK);
+    const cy = Math.floor(y / CHUNK);
+    const key = `${z},${cx},${cy}`;
+    const res = await fetchMapChunks(inputs.current.map.id, z, [packChunkKey(cx, cy)]);
+    chunkTiles.current.set(key, res.get(`${cx},${cy}`) ?? null);
+    tilesLastUsed.current.set(key, frameTick.current);
+    requestedChunks.current.add(key);
+    chunkMesh.current.delete(key);
   }
 
   function hoverAt(pos: Position): HoverInfo {

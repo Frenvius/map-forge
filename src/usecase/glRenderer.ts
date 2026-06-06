@@ -64,6 +64,40 @@ void main() {
 	frag = c;
 }`;
 
+const HL_FRAG_SRC = `#version 300 es
+precision highp float;
+in vec2 vUV;
+in vec2 vSlot;
+uniform sampler2D uAtlas;
+uniform vec4 uColor;
+out vec4 frag;
+const float T = ${TILE.toFixed(1)};
+const float A = ${ATLAS_DIM.toFixed(1)};
+void main() {
+	vec2 lo = vSlot * A + 0.5;
+	vec2 hi = vSlot * A + (T - 0.5);
+	vec4 c = texture(uAtlas, clamp(vUV * A, lo, hi) / A);
+	if (c.a < 0.01) discard;
+	frag = vec4(uColor.rgb, uColor.a * c.a);
+}`;
+
+const GHOST_FRAG_SRC = `#version 300 es
+precision highp float;
+in vec2 vUV;
+in vec2 vSlot;
+uniform sampler2D uAtlas;
+uniform float uAlpha;
+out vec4 frag;
+const float T = ${TILE.toFixed(1)};
+const float A = ${ATLAS_DIM.toFixed(1)};
+void main() {
+	vec2 lo = vSlot * A + 0.5;
+	vec2 hi = vSlot * A + (T - 0.5);
+	vec4 c = texture(uAtlas, clamp(vUV * A, lo, hi) / A);
+	if (c.a < 0.01) discard;
+	frag = vec4(c.rgb, c.a * uAlpha);
+}`;
+
 const DIM_VERT_SRC = `#version 300 es
 void main() {
 	vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
@@ -105,6 +139,24 @@ export class GLRenderer {
   private dimProgram: WebGLProgram;
   private dimVao: WebGLVertexArrayObject;
   private uDimColor: WebGLUniformLocation;
+  private hlProgram: WebGLProgram;
+  private hlVao: WebGLVertexArrayObject;
+  private hlBuffer: WebGLBuffer;
+  private hlCam: WebGLUniformLocation;
+  private hlScale: WebGLUniformLocation;
+  private hlSnap: WebGLUniformLocation;
+  private hlViewport: WebGLUniformLocation;
+  private hlFloorOffset: WebGLUniformLocation;
+  private hlColor: WebGLUniformLocation;
+  private ghostProgram: WebGLProgram;
+  private ghostCam: WebGLUniformLocation;
+  private ghostScale: WebGLUniformLocation;
+  private ghostSnap: WebGLUniformLocation;
+  private ghostViewport: WebGLUniformLocation;
+  private ghostFloorOffset: WebGLUniformLocation;
+  private ghostAlpha: WebGLUniformLocation;
+  private bufW = 0;
+  private bufH = 0;
   private meshes = new Map<string, ChunkMesh>();
 
   constructor(canvas: HTMLCanvasElement) {
@@ -123,6 +175,22 @@ export class GLRenderer {
     this.uDimColor = gl.getUniformLocation(this.dimProgram, 'uColor')!;
     this.dimVao = gl.createVertexArray()!;
 
+    this.hlProgram = this.link(VERT_SRC, HL_FRAG_SRC);
+    this.hlCam = gl.getUniformLocation(this.hlProgram, 'uCam')!;
+    this.hlScale = gl.getUniformLocation(this.hlProgram, 'uScale')!;
+    this.hlSnap = gl.getUniformLocation(this.hlProgram, 'uSnap')!;
+    this.hlViewport = gl.getUniformLocation(this.hlProgram, 'uViewport')!;
+    this.hlFloorOffset = gl.getUniformLocation(this.hlProgram, 'uFloorOffset')!;
+    this.hlColor = gl.getUniformLocation(this.hlProgram, 'uColor')!;
+
+    this.ghostProgram = this.link(VERT_SRC, GHOST_FRAG_SRC);
+    this.ghostCam = gl.getUniformLocation(this.ghostProgram, 'uCam')!;
+    this.ghostScale = gl.getUniformLocation(this.ghostProgram, 'uScale')!;
+    this.ghostSnap = gl.getUniformLocation(this.ghostProgram, 'uSnap')!;
+    this.ghostViewport = gl.getUniformLocation(this.ghostProgram, 'uViewport')!;
+    this.ghostFloorOffset = gl.getUniformLocation(this.ghostProgram, 'uFloorOffset')!;
+    this.ghostAlpha = gl.getUniformLocation(this.ghostProgram, 'uAlpha')!;
+
     this.vao = gl.createVertexArray()!;
     gl.bindVertexArray(this.vao);
     this.quad = gl.createBuffer()!;
@@ -134,6 +202,22 @@ export class GLRenderer {
     gl.enableVertexAttribArray(1);
     gl.vertexAttribDivisor(1, 1);
     gl.enableVertexAttribArray(2);
+    gl.vertexAttribDivisor(2, 1);
+    gl.bindVertexArray(null);
+
+    this.hlVao = gl.createVertexArray()!;
+    this.hlBuffer = gl.createBuffer()!;
+    gl.bindVertexArray(this.hlVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.vertexAttribDivisor(0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.hlBuffer);
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 0);
+    gl.vertexAttribDivisor(1, 1);
+    gl.enableVertexAttribArray(2);
+    gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 16, 8);
     gl.vertexAttribDivisor(2, 1);
     gl.bindVertexArray(null);
 
@@ -211,6 +295,8 @@ export class GLRenderer {
 
   beginFrame(bufW: number, bufH: number, camX: number, camY: number, scale: number, snap: number) {
     const gl = this.gl;
+    this.bufW = bufW;
+    this.bufH = bufH;
     gl.viewport(0, 0, bufW, bufH);
     gl.clearColor(0x11 / 255, 0x15 / 255, 0x1c / 255, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -249,6 +335,42 @@ export class GLRenderer {
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, mesh.count);
   }
 
+  drawHighlight(data: Float32Array, camX: number, camY: number, scale: number, r: number, g: number, b: number, a: number) {
+    if (data.length === 0) return;
+    const gl = this.gl;
+    gl.useProgram(this.hlProgram);
+    gl.bindVertexArray(this.hlVao);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.atlas);
+    gl.uniform2f(this.hlCam, camX, camY);
+    gl.uniform1f(this.hlScale, scale);
+    gl.uniform1f(this.hlSnap, 1);
+    gl.uniform2f(this.hlViewport, this.bufW, this.bufH);
+    gl.uniform2f(this.hlFloorOffset, 0, 0);
+    gl.uniform4f(this.hlColor, r, g, b, a);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.hlBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, data.length / FLOATS_PER_INSTANCE);
+  }
+
+  drawGhost(data: Float32Array, camX: number, camY: number, scale: number, alpha: number) {
+    if (data.length === 0) return;
+    const gl = this.gl;
+    gl.useProgram(this.ghostProgram);
+    gl.bindVertexArray(this.hlVao);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.atlas);
+    gl.uniform2f(this.ghostCam, camX, camY);
+    gl.uniform1f(this.ghostScale, scale);
+    gl.uniform1f(this.ghostSnap, 1);
+    gl.uniform2f(this.ghostViewport, this.bufW, this.bufH);
+    gl.uniform2f(this.ghostFloorOffset, 0, 0);
+    gl.uniform1f(this.ghostAlpha, alpha);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.hlBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, data.length / FLOATS_PER_INSTANCE);
+  }
+
   endFrame() {
     this.gl.bindVertexArray(null);
   }
@@ -259,9 +381,13 @@ export class GLRenderer {
     this.meshes.clear();
     gl.deleteTexture(this.atlas);
     gl.deleteBuffer(this.quad);
+    gl.deleteBuffer(this.hlBuffer);
     gl.deleteVertexArray(this.vao);
     gl.deleteVertexArray(this.dimVao);
+    gl.deleteVertexArray(this.hlVao);
     gl.deleteProgram(this.program);
     gl.deleteProgram(this.dimProgram);
+    gl.deleteProgram(this.hlProgram);
+    gl.deleteProgram(this.ghostProgram);
   }
 }

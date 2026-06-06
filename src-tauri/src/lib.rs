@@ -325,6 +325,7 @@ fn serialize_chunks(m: &MapModel, z: u8, keys: &[u32]) -> Vec<u8> {
 		if tiles.is_empty() {
 			continue;
 		}
+		tiles.sort_unstable_by_key(|(x, y, _)| (*y, *x));
 
 		push_u16(&mut out, (k >> 16) as u16);
 		push_u16(&mut out, (k & 0xFFFF) as u16);
@@ -355,6 +356,37 @@ fn base_tile_items(m: &MapModel, z: u8, chunk_key: u32, x: u16, y: u16) -> Vec<(
 		}
 	}
 	Vec::new()
+}
+
+fn tile_stack_mut<'a>(m: &'a mut MapModel, z: u8, x: u16, y: u16) -> &'a mut Vec<(u16, u16)> {
+	let chunk_key = ((x as u32 / CHUNK) << 16) | (y as u32 / CHUNK);
+	let pos = (x as u32) << 16 | y as u32;
+	let known = m.edits.get(&z).and_then(|c| c.get(&chunk_key)).is_some_and(|t| t.contains_key(&pos));
+	let base = if known { Vec::new() } else { base_tile_items(m, z, chunk_key, x, y) };
+	m.edits.entry(z).or_default().entry(chunk_key).or_default().entry(pos).or_insert(base)
+}
+
+#[tauri::command]
+fn move_item(
+	map_id: u32,
+	z: u8,
+	from_x: u16,
+	from_y: u16,
+	to_x: u16,
+	to_y: u16,
+	map_state: tauri::State<MapState>,
+) -> Result<(), String> {
+	if from_x == to_x && from_y == to_y {
+		return Ok(());
+	}
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+	let item = match tile_stack_mut(m, z, from_x, from_y).pop() {
+		Some(it) => it,
+		None => return Ok(()),
+	};
+	tile_stack_mut(m, z, to_x, to_y).push(item);
+	Ok(())
 }
 
 #[tauri::command]
@@ -580,6 +612,7 @@ pub fn run() {
 			new_otbm,
 			close_map,
 			paint_tiles,
+			move_item,
 			get_map_chunks,
 			set_window_acrylic
 		])
