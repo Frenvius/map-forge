@@ -133,6 +133,7 @@ const MapCanvas = ({
   const ghostRef = React.useRef<HTMLImageElement>(null);
   const highlightRef = React.useRef<HTMLDivElement>(null);
   const selected = React.useRef<Position | null>(null);
+  const highlightedPos = React.useRef<Position | null>(null);
   const moveDrag = React.useRef<null | { from: Position; startX: number; startY: number; active: boolean }>(null);
   const moveDest = React.useRef<Position | null>(null);
   const pendingMove = React.useRef<Float32Array | null>(null);
@@ -260,6 +261,8 @@ const MapCanvas = ({
     const { items } = inputs.current;
     const key = `${z},${cx},${cy}`;
     const ct = chunkTiles.current.get(key) as ChunkTiles | null | undefined;
+    const sel = selected.current;
+    const selHere = sel != null && sel.z === z;
     const inst: number[] = [];
     let complete = true;
 
@@ -268,6 +271,8 @@ const MapCanvas = ({
         const tx = ct.tileX[i];
         const ty = ct.tileY[i];
         const end = ct.itemOffset[i + 1];
+        const top = end - 1;
+        const tintTile = selHere && sel!.x === tx && sel!.y === ty;
         let drawElevation = 0;
         for (let ii = ct.itemOffset[i]; ii < end; ii++) {
           const thing = items.get(ct.clientIds[ii]);
@@ -276,6 +281,7 @@ const MapCanvas = ({
           const py = thing.patternY > 0 ? ty % thing.patternY : 0;
           const ox = (thing.offsetX || 0) + drawElevation;
           const oy = (thing.offsetY || 0) + drawElevation;
+          const tint = tintTile && ii === top ? 1 : 0;
 
           for (let l = 0; l < thing.layers; l++) {
             for (let h = 0; h < thing.height; h++) {
@@ -296,7 +302,7 @@ const MapCanvas = ({
                   continue;
                 }
                 const { u0, v0 } = slotUV(slot);
-                inst.push((tx - w) * TILE - ox, (ty - h) * TILE - oy, u0, v0);
+                inst.push((tx - w) * TILE - ox, (ty - h) * TILE - oy, u0, v0, tint);
               }
             }
           }
@@ -308,7 +314,7 @@ const MapCanvas = ({
 
     gl.current!.setChunkMesh(key, new Float32Array(inst));
     chunkMesh.current.set(key, {
-      count: inst.length / 4,
+      count: inst.length / 5,
       version: spriteVersion.current,
       epoch: spriteEpoch.current,
       complete,
@@ -371,6 +377,14 @@ const MapCanvas = ({
     const { sprPath, transparency, floorZ } = inputs.current;
     const zoom = zoomRef.current;
     frameTick.current++;
+
+    const sel = selected.current;
+    const prev = highlightedPos.current;
+    if (sel?.x !== prev?.x || sel?.y !== prev?.y || sel?.z !== prev?.z) {
+      if (prev) invalidateChunkMesh(prev.x, prev.y, prev.z);
+      if (sel) invalidateChunkMesh(sel.x, sel.y, sel.z);
+      highlightedPos.current = sel ? { x: sel.x, y: sel.y, z: sel.z } : null;
+    }
 
     const dpr = window.devicePixelRatio || 1;
     const vw = canvas.clientWidth;
@@ -454,11 +468,6 @@ const MapCanvas = ({
         }
       }
     }
-    if (selected.current) {
-      const hl = buildTopItemMesh(selected.current, 0, 0);
-      if (hl) renderer.drawHighlight(hl, camX, camY, scale, 0, 0, 0, 0.45);
-    }
-
     const md = moveDrag.current;
     if (md && md.active && moveDest.current) {
       const ghost = buildTopItemMesh(md.from, moveDest.current.x - md.from.x, moveDest.current.y - md.from.y);
@@ -659,7 +668,7 @@ const MapCanvas = ({
               const slot = spriteSlotFor(sid, data);
               if (slot < 0) continue;
               const { u0, v0 } = slotUV(slot);
-              inst.push((tx - w) * TILE - ox + sx, (ty - h) * TILE - oy + sy, u0, v0);
+              inst.push((tx - w) * TILE - ox + sx, (ty - h) * TILE - oy + sy, u0, v0, 0);
             }
           }
         }
@@ -775,6 +784,12 @@ const MapCanvas = ({
         inputs.current.onSelect(hoverAt(pos).item);
       })
       .catch((err) => console.error('Failed to delete item', err));
+  }
+
+  function invalidateChunkMesh(x: number, y: number, z: number) {
+    const key = `${z},${Math.floor(x / CHUNK)},${Math.floor(y / CHUNK)}`;
+    gl.current?.deleteChunkMesh(key);
+    chunkMesh.current.delete(key);
   }
 
   async function refetchChunkNow(x: number, y: number, z: number) {
