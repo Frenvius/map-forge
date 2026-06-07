@@ -82,17 +82,27 @@ export async function paintTiles(
   xs: number[],
   ys: number[],
   serverId: number,
-  isGround: boolean
-): Promise<void> {
-  await invoke('paint_tiles', { mapId, z, xs, ys, serverId, isGround });
+  isGround: boolean,
+  isDoodad: boolean,
+  automagic: boolean
+): Promise<number[]> {
+  return invoke<number[]>('paint_tiles', { mapId, z, xs, ys, serverId, isGround, isDoodad, automagic });
 }
 
-export async function deleteItem(mapId: number, z: number, x: number, y: number): Promise<void> {
-  await invoke('delete_item', { mapId, z, x, y });
+export async function deleteItem(mapId: number, z: number, x: number, y: number, automagic: boolean): Promise<number[]> {
+  return invoke<number[]>('delete_item', { mapId, z, x, y, automagic });
 }
 
-export async function moveItem(mapId: number, z: number, fromX: number, fromY: number, toX: number, toY: number): Promise<void> {
-  await invoke('move_item', { mapId, z, fromX, fromY, toX, toY });
+export async function moveItem(
+  mapId: number,
+  z: number,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  automagic: boolean
+): Promise<number[]> {
+  return invoke<number[]>('move_item', { mapId, z, fromX, fromY, toX, toY, automagic });
 }
 
 export async function fetchMapChunks(mapId: number, z: number, keys: number[]): Promise<Map<string, ChunkTiles>> {

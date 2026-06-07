@@ -25,6 +25,7 @@ import ToolsPanel from '~/components/ToolsPanel';
 import DropSlot from '~/components/Dock/DropSlot';
 import PalettePanel from '~/components/PalettePanel';
 import { newOtbm, openOtbm, closeMap } from '~/adapter/map';
+import { getSetting, setSetting } from '~/adapter/settings';
 import DockablePanel from '~/components/Dock/DockablePanel';
 import { ActiveBrush, PaletteData } from '~/domain/palette';
 import { MIN_ZOOM, MAX_ZOOM, snapZoom } from '~/usecase/zoom';
@@ -66,6 +67,7 @@ const App = () => {
   const [palette, setPalette] = React.useState<PaletteData | null>(null);
   const [activeBrush, setActiveBrush] = React.useState<ActiveBrush | null>(null);
   const [activeTool, setActiveTool] = React.useState<ToolId>('select');
+  const [automagic, setAutomagic] = React.useState(true);
   const [status, setStatus] = React.useState('Loading client assets...');
   const [error, setError] = React.useState<string | null>(null);
   const [tabs, setTabs] = React.useState<MapTab[]>([]);
@@ -189,6 +191,17 @@ const App = () => {
   }, []);
 
   React.useEffect(() => {
+    void getSetting('automagic', true).then(setAutomagic);
+  }, []);
+
+  const toggleAutomagic = () =>
+    setAutomagic((v) => {
+      const next = !v;
+      void setSetting('automagic', next);
+      return next;
+    });
+
+  React.useEffect(() => {
     setSelectedItem(null);
   }, [activeId]);
 
@@ -306,7 +319,15 @@ const App = () => {
 
   function renderPanel(id: PanelId, handle?: DragHandleProps) {
     if (id === 'tools') {
-      return <ToolsPanel dragHandle={handle} activeTool={activeTool} onSelectTool={setActiveTool} />;
+      return (
+        <ToolsPanel
+          dragHandle={handle}
+          automagic={automagic}
+          activeTool={activeTool}
+          onSelectTool={setActiveTool}
+          onToggleAutomagic={toggleAutomagic}
+        />
+      );
     }
     if (id === 'palette' && assets && palette) {
       return (
@@ -396,6 +417,7 @@ const App = () => {
                   maxZoom={MAX_ZOOM}
                   onHover={setHover}
                   items={assets.items}
+                  automagic={automagic}
                   floorZ={active.floorZ}
                   onZoomChange={setZoom}
                   activeTool={activeTool}

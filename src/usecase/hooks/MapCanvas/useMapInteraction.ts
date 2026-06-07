@@ -41,8 +41,20 @@ export function useMapInteraction(deps: InteractionDeps) {
     const key = `${pos.x},${pos.y},${pos.z}`;
     if (key === scene.lastPaintKey.current) return;
     scene.lastPaintKey.current = key;
-    paintTiles(inputs.current.map.id, pos.z, [pos.x], [pos.y], brush.serverId, brush.isGround)
-      .then(() => tiles.queueRefetch(pos.x, pos.y, pos.z))
+    paintTiles(
+      inputs.current.map.id,
+      pos.z,
+      [pos.x],
+      [pos.y],
+      brush.serverId,
+      brush.isGround,
+      brush.kind === 'doodad',
+      inputs.current.automagic
+    )
+      .then((touched) => {
+        if (touched.length === 0) tiles.queueRefetch(pos.x, pos.y, pos.z);
+        for (const key of touched) tiles.queueRefetch((key >>> 16) * CHUNK, (key & 0xffff) * CHUNK, pos.z);
+      })
       .catch((err) => console.error('Failed to paint tile', err));
   }
 
@@ -50,8 +62,11 @@ export function useMapInteraction(deps: InteractionDeps) {
     const key = `${pos.x},${pos.y},${pos.z}`;
     if (key === scene.lastPaintKey.current) return;
     scene.lastPaintKey.current = key;
-    deleteItem(inputs.current.map.id, pos.z, pos.x, pos.y)
-      .then(() => tiles.queueRefetch(pos.x, pos.y, pos.z))
+    deleteItem(inputs.current.map.id, pos.z, pos.x, pos.y, inputs.current.automagic)
+      .then((touched) => {
+        if (touched.length === 0) tiles.queueRefetch(pos.x, pos.y, pos.z);
+        for (const key of touched) tiles.queueRefetch((key >>> 16) * CHUNK, (key & 0xffff) * CHUNK, pos.z);
+      })
       .catch((err) => console.error('Failed to erase tile', err));
   }
 
@@ -62,6 +77,10 @@ export function useMapInteraction(deps: InteractionDeps) {
     const res = await fetchMapChunks(inputs.current.map.id, z, [packChunkKey(cx, cy)]);
     tiles.store(key, res.get(`${cx},${cy}`) ?? null, scene.frameTick.current);
     meshes.forget(key);
+  }
+
+  async function refetchKeysNow(keys: number[], z: number) {
+    await Promise.all(keys.map((k) => refetchChunkNow((k >>> 16) * CHUNK, (k & 0xffff) * CHUNK, z)));
   }
 
   function hoverAt(pos: Position): HoverInfo {
@@ -112,8 +131,8 @@ export function useMapInteraction(deps: InteractionDeps) {
       dest.x - from.x,
       dest.y - from.y
     );
-    moveItem(inputs.current.map.id, from.z, from.x, from.y, dest.x, dest.y)
-      .then(() => Promise.all([refetchChunkNow(from.x, from.y, from.z), refetchChunkNow(dest.x, dest.y, dest.z)]))
+    moveItem(inputs.current.map.id, from.z, from.x, from.y, dest.x, dest.y, inputs.current.automagic)
+      .then((touched) => refetchKeysNow(touched, from.z))
       .then(() => {
         selection.selectTile(dest, false);
         atlas.version.current++;
@@ -128,10 +147,9 @@ export function useMapInteraction(deps: InteractionDeps) {
   function deleteSelected() {
     const selTiles = [...selection.entries.current.values()];
     if (selTiles.length === 0) return;
-    const chunks = new Map<string, Position>();
-    for (const t of selTiles) chunks.set(`${t.z},${Math.floor(t.x / CHUNK)},${Math.floor(t.y / CHUNK)}`, t);
-    Promise.all(selTiles.map((t) => deleteItem(inputs.current.map.id, t.z, t.x, t.y)))
-      .then(() => Promise.all([...chunks.values()].map((t) => refetchChunkNow(t.x, t.y, t.z))))
+    const z = selTiles[0].z;
+    Promise.all(selTiles.map((t) => deleteItem(inputs.current.map.id, t.z, t.x, t.y, inputs.current.automagic)))
+      .then((results) => refetchKeysNow([...new Set(results.flat())], z))
       .then(() => {
         atlas.version.current++;
         inputs.current.onSelect(hoverAt(selTiles[0]).item);

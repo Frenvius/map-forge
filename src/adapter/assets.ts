@@ -83,6 +83,7 @@ export async function loadAssets(dir = DEFAULT_DATA_DIR, version = DEFAULT_VERSI
   const sprPath = `${dir}/${otfi.spritesFile ?? 'Tibia.spr'}`;
 
   const otbItemCount = await invoke<number>('load_otb', { path: `${dir}/items.otb` });
+  await invoke<number>('load_materials', { dataDir: dir }).catch((err) => console.error('Failed to load materials', err));
   const itemNames = await loadItemNames(dir);
 
   const datResponse = await invoke<Uint8Array | ArrayBuffer>('parse_dat_file_bin', { path: datPath, version });

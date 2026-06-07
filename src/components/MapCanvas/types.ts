@@ -64,4 +64,5 @@ export interface MapCanvasProps {
   onToolChange: (tool: ToolId) => void;
   activeBrush: ActiveBrush | null;
   activeTool: ToolId;
+  automagic: boolean;
 }
