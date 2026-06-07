@@ -55,7 +55,9 @@ const MapCanvas = ({
   onHover,
   onSelect,
   onSelectBrush,
-  activeBrush
+  onToolChange,
+  activeBrush,
+  activeTool
 }: MapCanvasProps) => {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const fpsRef = React.useRef<HTMLSpanElement>(null);
@@ -105,8 +107,10 @@ const MapCanvas = ({
     onHover,
     onSelect,
     onSelectBrush,
+    onToolChange,
     floorZ,
-    activeBrush
+    activeBrush,
+    activeTool
   });
   inputs.current = {
     map,
@@ -122,12 +126,15 @@ const MapCanvas = ({
     onHover,
     onSelect,
     onSelectBrush,
+    onToolChange,
     floorZ,
-    activeBrush
+    activeBrush,
+    activeTool
   };
 
   const lastHoverKey = React.useRef<string | null>(null);
   const painting = React.useRef(false);
+  const erasing = React.useRef(false);
   const lastPaintKey = React.useRef<string | null>(null);
   const hoveredTile = React.useRef<Position | null>(null);
   const ghostRef = React.useRef<HTMLImageElement>(null);
@@ -140,8 +147,14 @@ const MapCanvas = ({
   const [panning, setPanning] = React.useState(false);
   const [moving, setMoving] = React.useState(false);
 
-  const paintable = activeBrush != null && activeBrush.serverId != null;
-  const canvasCursor = paintable ? DRAW_CURSOR : panning ? 'grabbing' : moving ? 'grabbing' : 'default';
+  const paintable = activeTool === 'brush' && activeBrush != null && activeBrush.serverId != null;
+  const canvasCursor = paintable
+    ? DRAW_CURSOR
+    : activeTool === 'eraser'
+      ? 'crosshair'
+      : panning || moving
+        ? 'grabbing'
+        : 'default';
 
   const [menu, setMenu] = React.useState<null | {
     clientX: number;
@@ -579,6 +592,15 @@ const MapCanvas = ({
       .catch((err) => console.error('Failed to paint tile', err));
   }
 
+  function eraseAt(pos: Position) {
+    const key = `${pos.x},${pos.y},${pos.z}`;
+    if (key === lastPaintKey.current) return;
+    lastPaintKey.current = key;
+    deleteItem(inputs.current.map.id, pos.z, pos.x, pos.y)
+      .then(() => refetchChunk(pos.x, pos.y, pos.z))
+      .catch((err) => console.error('Failed to erase tile', err));
+  }
+
   function refetchChunk(x: number, y: number, z: number) {
     const cx = Math.floor(x / CHUNK);
     const cy = Math.floor(y / CHUNK);
@@ -594,7 +616,7 @@ const MapCanvas = ({
 
     const brush = inputs.current.activeBrush;
     const tile = hoveredTile.current;
-    if (!brush || brush.serverId == null || !tile) {
+    if (inputs.current.activeTool !== 'brush' || !brush || brush.serverId == null || !tile) {
       ghost.style.display = 'none';
       outline.style.display = 'none';
       return;
@@ -689,11 +711,18 @@ const MapCanvas = ({
     }
     if (e.button !== 0) return;
 
+    const tool = inputs.current.activeTool;
     const brush = inputs.current.activeBrush;
-    if (brush && brush.serverId != null) {
+    if (tool === 'brush' && brush && brush.serverId != null) {
       painting.current = true;
       lastPaintKey.current = null;
       paintAt(tileUnderCursor(e));
+      return;
+    }
+    if (tool === 'eraser') {
+      erasing.current = true;
+      lastPaintKey.current = null;
+      eraseAt(tileUnderCursor(e));
       return;
     }
 
@@ -706,6 +735,8 @@ const MapCanvas = ({
   function onMouseMove(e: React.MouseEvent) {
     if (painting.current) {
       paintAt(tileUnderCursor(e));
+    } else if (erasing.current) {
+      eraseAt(tileUnderCursor(e));
     } else if (drag.current) {
       const z = zoomRef.current;
       camera.current = {
@@ -736,6 +767,7 @@ const MapCanvas = ({
     finishMove();
     drag.current = null;
     painting.current = false;
+    erasing.current = false;
     lastPaintKey.current = null;
     setPanning(false);
   }
@@ -743,6 +775,7 @@ const MapCanvas = ({
     finishMove();
     drag.current = null;
     painting.current = false;
+    erasing.current = false;
     lastPaintKey.current = null;
     lastHoverKey.current = null;
     hoveredTile.current = null;
@@ -858,6 +891,7 @@ const MapCanvas = ({
     e.preventDefault();
     if (!canvasRef.current) return;
     if (inputs.current.activeBrush) inputs.current.onSelectBrush(null);
+    if (inputs.current.activeTool !== 'select') inputs.current.onToolChange('select');
     const tile = tileUnderCursor(e);
     const info = hoverAt(tile);
     selected.current = tile;

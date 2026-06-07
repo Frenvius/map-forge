@@ -19,6 +19,9 @@ mod otbm;
 use otb::{parse_otb, OtbItems};
 use otbm::{read_otbm, OtbmVisitor};
 
+mod settings;
+use settings::{read_settings, write_settings};
+
 type OtbState = Arc<Mutex<Option<OtbItems>>>;
 
 #[derive(Serialize, Deserialize)]
@@ -623,7 +626,9 @@ pub fn run() {
 			move_item,
 			delete_item,
 			get_map_chunks,
-			set_window_acrylic
+			set_window_acrylic,
+			read_settings,
+			write_settings
 		])
 		.setup(move |app| {
 			#[cfg(target_os = "macos")]

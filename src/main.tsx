@@ -1,27 +1,28 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { open } from '@tauri-apps/plugin-dialog';
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import {
   useSensor,
   DndContext,
   useSensors,
   DragOverlay,
   DragEndEvent,
+  DragMoveEvent,
   pointerWithin,
-  DragOverEvent,
   PointerSensor,
   DragStartEvent
 } from '@dnd-kit/core';
 
 import { MapMeta } from '~/domain/map';
-import { cn } from '~/usecase/classNames';
+import { ToolId } from '~/domain/tools';
 import Toolbar from '~/components/Toolbar';
 import MapTabs from '~/components/MapTabs';
 import StatusBar from '~/components/StatusBar';
 import MapCanvas from '~/components/MapCanvas';
+import Resizer from '~/components/Dock/Resizer';
 import { loadPalette } from '~/adapter/palette';
-import DropZone from '~/components/Dock/DropZone';
+import ToolsPanel from '~/components/ToolsPanel';
+import DropSlot from '~/components/Dock/DropSlot';
 import PalettePanel from '~/components/PalettePanel';
 import { newOtbm, openOtbm, closeMap } from '~/adapter/map';
 import DockablePanel from '~/components/Dock/DockablePanel';
@@ -32,14 +33,17 @@ import { HoverInfo, HoverItem } from '~/components/MapCanvas/types';
 import { loadAssets, LoadedAssets, DEFAULT_DATA_DIR } from '~/adapter/assets';
 import { PANELS, PanelId, DockZone, FloatRect, DockLayout, DEFAULT_FLOAT_WIDTH, DEFAULT_FLOAT_HEIGHT } from '~/domain/dock';
 import {
-  dockPanel,
-  floatPanel,
-  dockZoneOf,
+  zoneOf,
+  dockAt,
+  indexOf,
+  widthOf,
+  floatAt,
+  resizeAt,
+  isFloating,
   floatRectOf,
-  panelsInZone,
-  floatingPanels,
   loadDockLayout,
-  saveDockLayout
+  saveDockLayout,
+  defaultDockLayout
 } from '~/usecase/dock';
 
 import './styles/index.css';
@@ -57,19 +61,11 @@ interface MapTab {
 
 let tabSeq = 0;
 
-const ResizeHandle = () => (
-  <PanelResizeHandle className="group relative w-1.5 flex-shrink-0 outline-none">
-    <div
-      style={{ background: 'linear-gradient(to bottom, transparent 0%, hsl(var(--primary)) 50%, transparent 100%)' }}
-      className="pointer-events-none absolute inset-y-2 left-1/2 w-px -translate-x-1/2 rounded-full opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-data-[resize-handle-state=hover]:opacity-100 group-data-[resize-handle-state=drag]:opacity-100"
-    />
-  </PanelResizeHandle>
-);
-
 const App = () => {
   const [assets, setAssets] = React.useState<LoadedAssets | null>(null);
   const [palette, setPalette] = React.useState<PaletteData | null>(null);
   const [activeBrush, setActiveBrush] = React.useState<ActiveBrush | null>(null);
+  const [activeTool, setActiveTool] = React.useState<ToolId>('select');
   const [status, setStatus] = React.useState('Loading client assets...');
   const [error, setError] = React.useState<string | null>(null);
   const [tabs, setTabs] = React.useState<MapTab[]>([]);
@@ -78,10 +74,10 @@ const App = () => {
   const [progress, setProgress] = React.useState<{ value: number; label: string } | null>(null);
   const [hover, setHover] = React.useState<HoverInfo | null>(null);
   const [selectedItem, setSelectedItem] = React.useState<HoverItem | null>(null);
-  const [layout, setLayout] = React.useState<DockLayout>(() => loadDockLayout());
+  const [layout, setLayout] = React.useState<DockLayout>(defaultDockLayout);
   const [dragging, setDragging] = React.useState<PanelId | null>(null);
   const [dragSize, setDragSize] = React.useState<{ width: number; height: number } | null>(null);
-  const [hoverZone, setHoverZone] = React.useState<DockZone | null>(null);
+  const [dropTarget, setDropTarget] = React.useState<{ zone: DockZone; index: number } | null>(null);
   const [dragSettled, setDragSettled] = React.useState(false);
 
   const workspaceRef = React.useRef<HTMLDivElement>(null);
@@ -90,9 +86,7 @@ const App = () => {
 
   const active = tabs.find((t) => t.id === activeId) ?? null;
 
-  function zoneFromId(id: unknown): DockZone | null {
-    return id === 'zone-left' ? 'left' : id === 'zone-right' ? 'right' : null;
-  }
+  const GAP = 6;
 
   function handleDragStart(event: DragStartEvent) {
     const id = event.active.id as PanelId;
@@ -101,20 +95,78 @@ const App = () => {
     dragOrigin.current = { left: rect?.left ?? 0, top: rect?.top ?? 0 };
     setDragSize(rect ? { width: rect.width, height: rect.height } : null);
     setDragging(id);
-    setHoverZone(dockZoneOf(layout, id));
+    const zone = zoneOf(layout, id);
+    setDropTarget(zone ? { zone, index: indexOf(layout, id) } : null);
   }
 
-  function handleDragOver(event: DragOverEvent) {
-    setHoverZone(zoneFromId(event.over?.id));
+  function handleDragMove(event: DragMoveEvent) {
+    setDropTarget(findDropTarget(layout, event.active.id as PanelId, event.delta));
   }
 
   function handleDragEnd(event: DragEndEvent) {
     const id = event.active.id as PanelId;
-    const zone = zoneFromId(event.over?.id);
+    const target = findDropTarget(layout, id, event.delta);
     setDragging(null);
-    setHoverZone(null);
+    setDropTarget(null);
     setLayout((prev) => {
-      const next = zone ? dockPanel(prev, id, zone) : floatPanel(prev, id, dropRect(prev, id, event.delta));
+      const next = target ? dockAt(prev, id, target.zone, target.index) : floatAt(prev, id, dropRect(prev, id, event.delta));
+      saveDockLayout(next);
+      return next;
+    });
+  }
+
+  function findDropTarget(lay: DockLayout, dragId: PanelId, delta: { x: number; y: number }) {
+    const ws = workspaceRef.current?.getBoundingClientRect();
+    if (!ws) return null;
+    const dragW = dragSize?.width ?? DEFAULT_FLOAT_WIDTH;
+    const center = dragOrigin.current.left + delta.x + dragW / 2;
+    const SNAP = 110;
+
+    const itemWidth = (id: PanelId) => {
+      const r = document.querySelector(`[data-panel-id="${id}"]`)?.getBoundingClientRect();
+      return r ? r.width : widthOf(lay, id);
+    };
+
+    const leftIds = lay.left.filter((id) => id !== dragId);
+    const rightIds = lay.right.filter((id) => id !== dragId);
+    const sumW = (ids: PanelId[]) => ids.reduce((s, id) => s + itemWidth(id), 0);
+    const contentWidth = ws.width - GAP * 2;
+    const nonMap = sumW(leftIds) + sumW(rightIds) + leftIds.length * GAP + rightIds.length * GAP;
+    const mapW = Math.max(120, contentWidth - nonMap);
+
+    type Slot = { zone: DockZone; index: number; x: number };
+    const slots: Slot[] = [];
+    let x = ws.left + GAP;
+    for (let i = 0; i <= leftIds.length; i++) {
+      const base = i === 0 ? 0 : GAP;
+      slots.push({ zone: 'left', index: i, x: x + base / 2 });
+      x += base;
+      if (i < leftIds.length) x += itemWidth(leftIds[i]);
+    }
+    x += mapW;
+    for (let i = 0; i <= rightIds.length; i++) {
+      const base = i === rightIds.length ? 0 : GAP;
+      slots.push({ zone: 'right', index: i, x: x + base / 2 });
+      x += base;
+      if (i < rightIds.length) x += itemWidth(rightIds[i]);
+    }
+
+    let best: Slot | null = null;
+    let bestDist = SNAP;
+    for (const slot of slots) {
+      const d = Math.abs(center - slot.x);
+      if (d < bestDist) {
+        bestDist = d;
+        best = slot;
+      }
+    }
+    return best ? { zone: best.zone, index: best.index } : null;
+  }
+
+  function resizeDockPanel(id: PanelId, dx: number) {
+    const dir = zoneOf(layout, id) === 'left' ? 1 : -1;
+    setLayout((prev) => {
+      const next = resizeAt(prev, id, widthOf(prev, id) + dir * dx);
       saveDockLayout(next);
       return next;
     });
@@ -131,6 +183,10 @@ const App = () => {
     const y = Math.max(0, Math.min(rawY, (ws?.height ?? height) - height));
     return { x, y, width, height };
   }
+
+  React.useEffect(() => {
+    void loadDockLayout().then(setLayout);
+  }, []);
 
   React.useEffect(() => {
     setSelectedItem(null);
@@ -235,18 +291,23 @@ const App = () => {
     }
   }
 
-  const isRenderable = (id: PanelId) => id !== dragging && (id === 'palette' ? !!(assets && palette) : false);
-  const leftPanels = panelsInZone(layout, 'left').filter(isRenderable);
-  const rightPanels = panelsInZone(layout, 'right').filter(isRenderable);
-  const floating = floatingPanels(layout).filter(isRenderable);
+  const isRenderable = (id: PanelId) => id !== dragging && (id === 'tools' || !!(assets && palette));
+  const isStrip = (id: PanelId) => PANELS[id].variant === 'strip';
+  const leftIds = layout.left.filter(isRenderable);
+  const rightIds = layout.right.filter(isRenderable);
+  const floating = (Object.keys(PANELS) as PanelId[]).filter((id) => isFloating(layout, id) && isRenderable(id));
 
-  const slotSpace = (dragSize?.width ?? 0) + 6;
-  const mapStyle = {
-    marginLeft: hoverZone === 'left' ? slotSpace : undefined,
-    marginRight: hoverZone === 'right' ? slotSpace : undefined
-  };
+  const dragW = dragSize?.width ?? 0;
+
+  function selectBrush(brush: ActiveBrush | null) {
+    setActiveBrush(brush);
+    setActiveTool(brush ? 'brush' : 'select');
+  }
 
   function renderPanel(id: PanelId, handle?: DragHandleProps) {
+    if (id === 'tools') {
+      return <ToolsPanel dragHandle={handle} activeTool={activeTool} onSelectTool={setActiveTool} />;
+    }
     if (id === 'palette' && assets && palette) {
       return (
         <PalettePanel
@@ -255,7 +316,7 @@ const App = () => {
           items={assets.items}
           outfits={assets.outfits}
           sprPath={assets.sprPath}
-          onSelectBrush={setActiveBrush}
+          onSelectBrush={selectBrush}
           transparency={assets.transparency}
         />
       );
@@ -263,16 +324,42 @@ const App = () => {
     return null;
   }
 
-  function renderZone(ids: PanelId[]) {
+  function renderItem(zone: DockZone, id: PanelId) {
+    if (isStrip(id)) {
+      return (
+        <DockablePanel key={id} meta={PANELS[id]} className="h-full flex-shrink-0">
+          {(handle) => renderPanel(id, handle)}
+        </DockablePanel>
+      );
+    }
     return (
-      <div className="flex h-full min-h-0 flex-col gap-1.5">
-        {ids.map((id) => (
-          <DockablePanel key={id} meta={PANELS[id]}>
-            {(handle) => renderPanel(id, handle)}
-          </DockablePanel>
-        ))}
+      <div key={id} style={{ width: widthOf(layout, id) }} className="relative h-full min-h-0 flex-shrink-0">
+        <DockablePanel meta={PANELS[id]} className="h-full">
+          {(handle) => renderPanel(id, handle)}
+        </DockablePanel>
+        <Resizer side={zone === 'left' ? 'right' : 'left'} onResize={(dx) => resizeDockPanel(id, dx)} />
       </div>
     );
+  }
+
+  function renderSide(zone: DockZone) {
+    const ids = zone === 'left' ? leftIds : rightIds;
+    const cells: React.ReactNode[] = [];
+    for (let i = 0; i <= ids.length; i++) {
+      const edge = zone === 'left' ? i === 0 : i === ids.length;
+      cells.push(
+        <DropSlot
+          width={dragW}
+          base={edge ? 0 : GAP}
+          key={`slot-${zone}-${i}`}
+          animate={!!dragging && dragSettled}
+          align={edge ? (zone === 'left' ? 'start' : 'end') : 'center'}
+          active={!!dragging && dropTarget?.zone === zone && dropTarget.index === i}
+        />
+      );
+      if (i < ids.length) cells.push(renderItem(zone, ids[i]));
+    }
+    return cells;
   }
 
   return (
@@ -282,89 +369,67 @@ const App = () => {
       <DndContext
         sensors={sensors}
         onDragEnd={handleDragEnd}
-        onDragOver={handleDragOver}
+        onDragMove={handleDragMove}
         onDragStart={handleDragStart}
         collisionDetection={pointerWithin}
       >
         <div ref={workspaceRef} className="relative flex min-h-0 flex-1 overflow-hidden bg-toolbar-bg p-1.5">
-          <PanelGroup direction="horizontal" autoSaveId="nosbor-main-layout">
-            {leftPanels.length > 0 && (
-              <>
-                <Panel order={1} minSize={12} maxSize={40} id="dock-left" defaultSize={18}>
-                  {renderZone(leftPanels)}
-                </Panel>
-                <ResizeHandle />
-              </>
-            )}
+          {renderSide('left')}
 
-            <Panel id="map" order={2} minSize={30}>
-              <div
-                style={mapStyle}
-                className={cn(
-                  'relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-card shadow-island',
-                  dragging && dragSettled && 'transition-[margin] duration-200 ease-out'
-                )}
-              >
-                <MapTabs
-                  tabs={tabs}
-                  onNew={handleNew}
-                  onClose={closeTab}
-                  activeId={activeId}
-                  onSelect={setActiveId}
-                  disabled={busy || !assets}
+          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-card shadow-island">
+            <MapTabs
+              tabs={tabs}
+              onNew={handleNew}
+              onClose={closeTab}
+              activeId={activeId}
+              onSelect={setActiveId}
+              disabled={busy || !assets}
+            />
+
+            <div className="relative min-h-0 flex-1">
+              {active && assets ? (
+                <MapCanvas
+                  key={active.id}
+                  map={active.map}
+                  zoom={active.zoom}
+                  minZoom={MIN_ZOOM}
+                  maxZoom={MAX_ZOOM}
+                  onHover={setHover}
+                  items={assets.items}
+                  floorZ={active.floorZ}
+                  onZoomChange={setZoom}
+                  activeTool={activeTool}
+                  sprPath={assets.sprPath}
+                  activeBrush={activeBrush}
+                  onFloorChange={setFloorZ}
+                  onSelect={setSelectedItem}
+                  onSelectBrush={selectBrush}
+                  onToolChange={setActiveTool}
+                  itemNames={assets.itemNames}
+                  transparency={assets.transparency}
                 />
-
-                <div className="relative min-h-0 flex-1">
-                  {active && assets ? (
-                    <MapCanvas
-                      key={active.id}
-                      map={active.map}
-                      zoom={active.zoom}
-                      minZoom={MIN_ZOOM}
-                      maxZoom={MAX_ZOOM}
-                      onHover={setHover}
-                      items={assets.items}
-                      floorZ={active.floorZ}
-                      onZoomChange={setZoom}
-                      sprPath={assets.sprPath}
-                      activeBrush={activeBrush}
-                      onFloorChange={setFloorZ}
-                      onSelect={setSelectedItem}
-                      itemNames={assets.itemNames}
-                      onSelectBrush={setActiveBrush}
-                      transparency={assets.transparency}
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">
-                      {error ?? status}
-                    </div>
-                  )}
-
-                  {progress && (
-                    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur-sm">
-                      <div className="text-sm text-muted-foreground">{progress.label}</div>
-                      <div className="h-2 w-72 overflow-hidden rounded-full bg-secondary">
-                        <div
-                          style={{ width: `${Math.round(progress.value * 100)}%` }}
-                          className="h-full rounded-full bg-primary transition-[width] duration-150 ease-out"
-                        />
-                      </div>
-                      <div className="font-mono text-xs text-muted-foreground">{Math.round(progress.value * 100)}%</div>
-                    </div>
-                  )}
+              ) : (
+                <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">
+                  {error ?? status}
                 </div>
-              </div>
-            </Panel>
+              )}
 
-            {rightPanels.length > 0 && (
-              <>
-                <ResizeHandle />
-                <Panel order={3} minSize={12} maxSize={40} id="dock-right" defaultSize={18}>
-                  {renderZone(rightPanels)}
-                </Panel>
-              </>
-            )}
-          </PanelGroup>
+              {progress && (
+                <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur-sm">
+                  <div className="text-sm text-muted-foreground">{progress.label}</div>
+                  <div className="h-2 w-72 overflow-hidden rounded-full bg-secondary">
+                    <div
+                      style={{ width: `${Math.round(progress.value * 100)}%` }}
+                      className="h-full rounded-full bg-primary transition-[width] duration-150 ease-out"
+                    />
+                  </div>
+                  <div className="font-mono text-xs text-muted-foreground">{Math.round(progress.value * 100)}%</div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {renderSide('right')}
 
           {floating.map((id) => {
             const rect = floatRectOf(layout, id);
@@ -381,14 +446,6 @@ const App = () => {
               </div>
             );
           })}
-
-          {dragging && (
-            <div className="pointer-events-none absolute inset-0 z-30 flex p-1.5">
-              <DropZone zone="left" width={dragSize?.width} active={hoverZone === 'left'} />
-              <div className="flex-1" />
-              <DropZone zone="right" width={dragSize?.width} active={hoverZone === 'right'} />
-            </div>
-          )}
         </div>
 
         <DragOverlay dropAnimation={null}>

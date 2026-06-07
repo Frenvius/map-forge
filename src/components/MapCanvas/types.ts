@@ -1,4 +1,5 @@
 import { MapMeta } from '~/domain/map';
+import { ToolId } from '~/domain/tools';
 import { ThingType } from '~/domain/tibia';
 import { ActiveBrush } from '~/domain/palette';
 
@@ -32,5 +33,7 @@ export interface MapCanvasProps {
   onHover: (info: HoverInfo | null) => void;
   onSelect: (item: HoverItem | null) => void;
   onSelectBrush: (brush: ActiveBrush | null) => void;
+  onToolChange: (tool: ToolId) => void;
   activeBrush: ActiveBrush | null;
+  activeTool: ToolId;
 }
