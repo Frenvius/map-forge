@@ -77,6 +77,65 @@ export function useMapCamera(
     return () => canvas.removeEventListener('wheel', onWheel);
   }, []);
 
+  React.useEffect(() => {
+    const dirs: Record<string, [number, number]> = {
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1],
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0]
+    };
+    const held = new Set<string>();
+    const speed = 900;
+    let raf = 0;
+    let last = 0;
+
+    const step = (now: number) => {
+      if (held.size === 0) {
+        raf = 0;
+        return;
+      }
+      const dt = last ? (now - last) / 1000 : 0;
+      last = now;
+      let dx = 0;
+      let dy = 0;
+      for (const k of held) {
+        dx += dirs[k][0];
+        dy += dirs[k][1];
+      }
+      if (dx || dy) {
+        const z = zoomRef.current;
+        ref.current = { x: ref.current.x + (dx * speed * dt) / z, y: ref.current.y + (dy * speed * dt) / z };
+      }
+      raf = requestAnimationFrame(step);
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.key in dirs)) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+      e.preventDefault();
+      if (!held.has(e.key)) {
+        held.add(e.key);
+        if (!raf) {
+          last = 0;
+          raf = requestAnimationFrame(step);
+        }
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => held.delete(e.key);
+    const onBlur = () => held.clear();
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
   function beginPan(e: React.MouseEvent) {
     drag.current = { startX: e.clientX, startY: e.clientY, camX: ref.current.x, camY: ref.current.y };
     setPanning(true);
