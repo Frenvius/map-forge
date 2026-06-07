@@ -1,0 +1,14 @@
+export const TILE = 32;
+export const MAX_ELEVATION = 24;
+export const LOWER_FLOOR_DIM = 0.5;
+export const CHUNK = 32;
+export const CHUNK_WORLD = CHUNK * TILE;
+export const SPRITE_CACHE_MAX = 12288;
+export const SPRITE_CACHE_LOW = 9216;
+export const TILE_CACHE_MAX = 8192;
+export const TILE_CACHE_LOW = 6144;
+export const MESH_CACHE_MAX = 4096;
+export const MESH_CACHE_LOW = 3072;
+export const BUILD_BUDGET_MS = 12;
+export const BUILD_BUDGET_MAX = 256;
+export const MOVE_THRESHOLD_SQ = 16;

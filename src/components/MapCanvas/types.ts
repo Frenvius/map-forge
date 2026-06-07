@@ -1,7 +1,27 @@
-import { MapMeta } from '~/domain/map';
 import { ToolId } from '~/domain/tools';
 import { ThingType } from '~/domain/tibia';
 import { ActiveBrush } from '~/domain/palette';
+import { MapMeta, Position } from '~/domain/map';
+
+export interface Camera {
+  x: number;
+  y: number;
+}
+
+export interface MeshInfo {
+  count: number;
+  version: number;
+  epoch: number;
+  complete: boolean;
+  lastUsed: number;
+}
+
+export interface SelTile {
+  x: number;
+  y: number;
+  z: number;
+  all: boolean;
+}
 
 export interface HoverItem {
   serverId: number;
@@ -15,6 +35,14 @@ export interface HoverInfo {
   y: number;
   z: number;
   hasTile: boolean;
+  item: HoverItem | null;
+}
+
+export interface ContextMenuState {
+  clientX: number;
+  clientY: number;
+  tile: Position;
+  dest: Position | null;
   item: HoverItem | null;
 }
 
