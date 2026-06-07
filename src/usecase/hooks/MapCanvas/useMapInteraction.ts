@@ -7,12 +7,12 @@ import { moveItem, deleteItem, paintTiles, packChunkKey, fetchMapChunks } from '
 import { HoverInfo, HoverItem, MapCanvasProps, ContextMenuState } from '~/components/MapCanvas/types';
 
 import { MapScene } from './useMapScene';
-import { Selection } from './useSelection';
 import { MapCamera } from './useMapCamera';
 import { SpriteAtlas } from './useSpriteAtlas';
 import { buildTopItemMesh } from './meshBuilder';
 import { ChunkTilesCache } from './useChunkTiles';
 import { ChunkMeshCache } from './useChunkMeshes';
+import { Selection, BoxSelection } from './useSelection';
 
 export interface InteractionDeps {
   canvasRef: React.RefObject<HTMLCanvasElement>;
@@ -56,6 +56,49 @@ export function useMapInteraction(deps: InteractionDeps) {
         for (const key of touched) tiles.queueRefetch((key >>> 16) * CHUNK, (key & 0xffff) * CHUNK, pos.z);
       })
       .catch((err) => console.error('Failed to paint tile', err));
+  }
+
+  function boxTiles(bs: BoxSelection) {
+    const minX = Math.min(bs.startTile.x, bs.curTile.x);
+    const maxX = Math.max(bs.startTile.x, bs.curTile.x);
+    const minY = Math.min(bs.startTile.y, bs.curTile.y);
+    const maxY = Math.max(bs.startTile.y, bs.curTile.y);
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        xs.push(x);
+        ys.push(y);
+      }
+    }
+    return { xs, ys };
+  }
+
+  function paintBox(bs: BoxSelection) {
+    const brush = inputs.current.activeBrush;
+    if (!brush || brush.serverId == null) return;
+    const z = bs.startTile.z;
+    const { xs, ys } = boxTiles(bs);
+    paintTiles(
+      inputs.current.map.id,
+      z,
+      xs,
+      ys,
+      brush.serverId,
+      brush.isGround,
+      brush.kind === 'doodad',
+      inputs.current.automagic
+    )
+      .then((touched) => refetchKeysNow(touched, z))
+      .catch((err) => console.error('Failed to paint box', err));
+  }
+
+  function eraseBox(bs: BoxSelection) {
+    const z = bs.startTile.z;
+    const { xs, ys } = boxTiles(bs);
+    Promise.all(xs.map((x, i) => deleteItem(inputs.current.map.id, z, x, ys[i], inputs.current.automagic)))
+      .then((results) => refetchKeysNow([...new Set(results.flat())], z))
+      .catch((err) => console.error('Failed to erase box', err));
   }
 
   function eraseAt(pos: Position) {
@@ -167,13 +210,14 @@ export function useMapInteraction(deps: InteractionDeps) {
 
     const tool = inputs.current.activeTool;
     const brush = inputs.current.activeBrush;
-    if (tool === 'select' && e.shiftKey) {
+    const canBrush = tool === 'brush' && brush != null && brush.serverId != null;
+    if (e.shiftKey && (tool === 'select' || tool === 'eraser' || canBrush)) {
       const pos = tileAt(e);
       selection.box.current = { startTile: pos, curTile: pos, additive: e.ctrlKey };
       setBoxing(true);
       return;
     }
-    if (tool === 'brush' && brush && brush.serverId != null) {
+    if (canBrush) {
       scene.painting.current = true;
       scene.lastPaintKey.current = null;
       paintAt(tileAt(e));
@@ -228,8 +272,15 @@ export function useMapInteraction(deps: InteractionDeps) {
     if (bs) {
       selection.box.current = null;
       setBoxing(false);
-      selection.selectBox(bs.startTile.z, bs.startTile.x, bs.startTile.y, bs.curTile.x, bs.curTile.y, bs.additive);
-      inputs.current.onSelect(hoverAt(bs.curTile).item);
+      const tool = inputs.current.activeTool;
+      if (tool === 'brush') {
+        paintBox(bs);
+      } else if (tool === 'eraser') {
+        eraseBox(bs);
+      } else {
+        selection.selectBox(bs.startTile.z, bs.startTile.x, bs.startTile.y, bs.curTile.x, bs.curTile.y, bs.additive);
+        inputs.current.onSelect(hoverAt(bs.curTile).item);
+      }
     }
     finishMove();
     camera.endPan();
