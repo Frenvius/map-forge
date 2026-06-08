@@ -23,6 +23,7 @@ import Resizer from '~/components/Dock/Resizer';
 import { loadPalette } from '~/adapter/palette';
 import ToolsPanel from '~/components/ToolsPanel';
 import DropSlot from '~/components/Dock/DropSlot';
+import Preferences from '~/components/Preferences';
 import PalettePanel from '~/components/PalettePanel';
 import { newOtbm, openOtbm, closeMap } from '~/adapter/map';
 import { getSetting, setSetting } from '~/adapter/settings';
@@ -73,6 +74,7 @@ const App = () => {
   const [error, setError] = React.useState<string | null>(null);
   const [tabs, setTabs] = React.useState<MapTab[]>([]);
   const [recent, setRecent] = React.useState<string[]>([]);
+  const [preferencesOpen, setPreferencesOpen] = React.useState(false);
   const [activeId, setActiveId] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [progress, setProgress] = React.useState<{ value: number; label: string } | null>(null);
@@ -228,6 +230,9 @@ const App = () => {
       } else if (key === 'w' && activeId) {
         e.preventDefault();
         closeTab(activeId);
+      } else if (key === ',') {
+        e.preventDefault();
+        setPreferencesOpen(true);
       }
     }
     window.addEventListener('keydown', onKey);
@@ -428,7 +433,10 @@ const App = () => {
         onClearRecent={clearRecent}
         onOpenRecent={(path) => void openPath(path)}
         onCloseMap={() => activeId && closeTab(activeId)}
+        onOpenPreferences={() => setPreferencesOpen(true)}
       />
+
+      <Preferences open={preferencesOpen} onOpenChange={setPreferencesOpen} />
 
       <DndContext
         sensors={sensors}

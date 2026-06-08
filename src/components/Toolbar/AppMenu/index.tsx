@@ -24,12 +24,23 @@ interface AppMenuProps {
   onOpen: () => void;
   onCloseMap: () => void;
   onClearRecent: () => void;
+  onOpenPreferences: () => void;
   onOpenRecent: (path: string) => void;
 }
 
 const basename = (path: string) => path.split(/[\\/]/).pop() ?? path;
 
-const AppMenu = ({ loading, hasActive, recent, onNew, onOpen, onCloseMap, onClearRecent, onOpenRecent }: AppMenuProps) => {
+const AppMenu = ({
+  loading,
+  hasActive,
+  recent,
+  onNew,
+  onOpen,
+  onCloseMap,
+  onClearRecent,
+  onOpenRecent,
+  onOpenPreferences
+}: AppMenuProps) => {
   const [value, setValue] = React.useState('');
   const [revealed, setRevealed] = React.useState(false);
   const hamburgerRef = React.useRef<HTMLButtonElement>(null);
@@ -96,46 +107,58 @@ const AppMenu = ({ loading, hasActive, recent, onNew, onOpen, onCloseMap, onClea
       )}
 
       {revealed && (
-        <MenubarMenu value="file">
-          <MenubarTrigger onMouseDown={stop}>File</MenubarTrigger>
-          <MenubarContent onMouseDown={stop} onInteractOutside={keepOpenOnHamburger}>
-            <MenubarItem onSelect={onNew} disabled={loading}>
-              <FilePlus className="mr-2 h-3.5 w-3.5" />
-              New Map
-              <MenubarShortcut>Ctrl+N</MenubarShortcut>
-            </MenubarItem>
-            <MenubarItem onSelect={onOpen} disabled={loading}>
-              <FolderOpen className="mr-2 h-3.5 w-3.5" />
-              Open Map...
-              <MenubarShortcut>Ctrl+O</MenubarShortcut>
-            </MenubarItem>
-            <MenubarSub>
-              <MenubarSubTrigger disabled={loading}>Open Recent</MenubarSubTrigger>
-              <MenubarSubContent>
-                {recent.length === 0 ? (
-                  <MenubarItem disabled>No recent maps</MenubarItem>
-                ) : (
-                  <>
-                    {recent.map((path) => (
-                      <MenubarItem key={path} title={path} onSelect={() => onOpenRecent(path)}>
-                        {basename(path)}
-                      </MenubarItem>
-                    ))}
-                    <MenubarSeparator />
-                    <MenubarItem onSelect={onClearRecent}>Clear Recent</MenubarItem>
-                  </>
-                )}
-              </MenubarSubContent>
-            </MenubarSub>
-            <MenubarSeparator />
-            <MenubarItem disabled={!hasActive} onSelect={onCloseMap}>
-              Close Map
-              <MenubarShortcut>Ctrl+W</MenubarShortcut>
-            </MenubarItem>
-            <MenubarSeparator />
-            <MenubarItem onSelect={() => void getCurrentWindow().close()}>Exit</MenubarItem>
-          </MenubarContent>
-        </MenubarMenu>
+        <>
+          <MenubarMenu value="file">
+            <MenubarTrigger onMouseDown={stop}>File</MenubarTrigger>
+            <MenubarContent onMouseDown={stop} onInteractOutside={keepOpenOnHamburger}>
+              <MenubarItem onSelect={onNew} disabled={loading}>
+                <FilePlus className="mr-2 h-3.5 w-3.5" />
+                New Map
+                <MenubarShortcut>Ctrl+N</MenubarShortcut>
+              </MenubarItem>
+              <MenubarItem onSelect={onOpen} disabled={loading}>
+                <FolderOpen className="mr-2 h-3.5 w-3.5" />
+                Open Map...
+                <MenubarShortcut>Ctrl+O</MenubarShortcut>
+              </MenubarItem>
+              <MenubarSub>
+                <MenubarSubTrigger disabled={loading}>Open Recent</MenubarSubTrigger>
+                <MenubarSubContent>
+                  {recent.length === 0 ? (
+                    <MenubarItem disabled>No recent maps</MenubarItem>
+                  ) : (
+                    <>
+                      {recent.map((path) => (
+                        <MenubarItem key={path} title={path} onSelect={() => onOpenRecent(path)}>
+                          {basename(path)}
+                        </MenubarItem>
+                      ))}
+                      <MenubarSeparator />
+                      <MenubarItem onSelect={onClearRecent}>Clear Recent</MenubarItem>
+                    </>
+                  )}
+                </MenubarSubContent>
+              </MenubarSub>
+              <MenubarSeparator />
+              <MenubarItem disabled={!hasActive} onSelect={onCloseMap}>
+                Close Map
+                <MenubarShortcut>Ctrl+W</MenubarShortcut>
+              </MenubarItem>
+              <MenubarSeparator />
+              <MenubarItem onSelect={() => void getCurrentWindow().close()}>Exit</MenubarItem>
+            </MenubarContent>
+          </MenubarMenu>
+
+          <MenubarMenu value="edit">
+            <MenubarTrigger onMouseDown={stop}>Edit</MenubarTrigger>
+            <MenubarContent onMouseDown={stop} onInteractOutside={keepOpenOnHamburger}>
+              <MenubarItem onSelect={onOpenPreferences}>
+                Preferences...
+                <MenubarShortcut>Ctrl+,</MenubarShortcut>
+              </MenubarItem>
+            </MenubarContent>
+          </MenubarMenu>
+        </>
       )}
     </Menubar>
   );

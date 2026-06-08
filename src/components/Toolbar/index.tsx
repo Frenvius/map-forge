@@ -11,10 +11,21 @@ interface ToolbarProps {
   onOpen: () => void;
   onCloseMap: () => void;
   onClearRecent: () => void;
+  onOpenPreferences: () => void;
   onOpenRecent: (path: string) => void;
 }
 
-const Toolbar = ({ loading, hasActive, recent, onNew, onOpen, onCloseMap, onClearRecent, onOpenRecent }: ToolbarProps) => {
+const Toolbar = ({
+  loading,
+  hasActive,
+  recent,
+  onNew,
+  onOpen,
+  onCloseMap,
+  onClearRecent,
+  onOpenRecent,
+  onOpenPreferences
+}: ToolbarProps) => {
   const win = getCurrentWindow();
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
@@ -32,6 +43,7 @@ const Toolbar = ({ loading, hasActive, recent, onNew, onOpen, onCloseMap, onClea
         onCloseMap={onCloseMap}
         onOpenRecent={onOpenRecent}
         onClearRecent={onClearRecent}
+        onOpenPreferences={onOpenPreferences}
       />
 
       <div className="-mr-3 ml-auto flex items-center">
