@@ -12,7 +12,7 @@ export interface SpriteAtlas {
   epoch: React.MutableRefObject<number>;
   slotFor: (id: number, data: LoadedSprite) => number;
   loadMissing: (sprPath: string, missing: Iterable<number>, transparency: boolean) => void;
-  evict: () => void;
+  evict: (tick: number) => void;
 }
 
 export function useSpriteAtlas(gl: React.MutableRefObject<GLRenderer | null>): SpriteAtlas {
@@ -51,12 +51,14 @@ export function useSpriteAtlas(gl: React.MutableRefObject<GLRenderer | null>): S
       });
   }
 
-  function evict() {
+  function evict(tick: number) {
     if (data.current.size <= SPRITE_CACHE_MAX) return;
     const ids = [...data.current.keys()].sort((a, b) => (lastUsed.current.get(a) ?? 0) - (lastUsed.current.get(b) ?? 0));
     const toRemove = data.current.size - SPRITE_CACHE_LOW;
-    for (let i = 0; i < toRemove; i++) {
+    let removed = 0;
+    for (let i = 0; i < ids.length && removed < toRemove; i++) {
       const id = ids[i];
+      if (lastUsed.current.get(id) === tick) break;
       data.current.delete(id);
       lastUsed.current.delete(id);
       requested.current.delete(id);
@@ -65,8 +67,9 @@ export function useSpriteAtlas(gl: React.MutableRefObject<GLRenderer | null>): S
         slot.current.delete(id);
         freeSlots.current.push(s);
       }
+      removed++;
     }
-    epoch.current++;
+    if (removed > 0) epoch.current++;
   }
 
   return { data, lastUsed, version, epoch, slotFor, loadMissing, evict };

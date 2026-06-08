@@ -10,7 +10,7 @@ export interface ChunkMeshCache {
   forget: (key: string) => void;
   discardAt: (x: number, y: number, z: number) => void;
   discardTiles: (tiles: Iterable<{ x: number; y: number; z: number }>) => void;
-  evict: () => void;
+  evict: (tick: number) => void;
   clear: () => void;
 }
 
@@ -41,11 +41,16 @@ export function useChunkMeshes(gl: React.MutableRefObject<GLRenderer | null>): C
     for (const key of keys) discard(key);
   }
 
-  function evict() {
+  function evict(tick: number) {
     if (data.current.size <= MESH_CACHE_MAX) return;
     const keys = [...data.current.keys()].sort((a, b) => data.current.get(a)!.lastUsed - data.current.get(b)!.lastUsed);
     const toRemove = data.current.size - MESH_CACHE_LOW;
-    for (let i = 0; i < toRemove; i++) discard(keys[i]);
+    let removed = 0;
+    for (let i = 0; i < keys.length && removed < toRemove; i++) {
+      if (data.current.get(keys[i])!.lastUsed === tick) break;
+      discard(keys[i]);
+      removed++;
+    }
   }
 
   function clear() {

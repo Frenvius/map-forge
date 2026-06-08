@@ -12,7 +12,7 @@ export interface ChunkTilesCache {
   request: (cx: number, cy: number, z: number) => void;
   queueRefetch: (x: number, y: number, z: number) => void;
   store: (key: string, tiles: ChunkTiles | null, tick: number) => void;
-  evict: () => void;
+  evict: (tick: number) => void;
   clear: () => void;
 }
 
@@ -48,15 +48,18 @@ export function useChunkTiles(): ChunkTilesCache {
     requested.current.add(key);
   }
 
-  function evict() {
+  function evict(tick: number) {
     if (data.current.size <= TILE_CACHE_MAX) return;
     const keys = [...data.current.keys()].sort((a, b) => (lastUsed.current.get(a) ?? 0) - (lastUsed.current.get(b) ?? 0));
     const toRemove = data.current.size - TILE_CACHE_LOW;
-    for (let i = 0; i < toRemove; i++) {
+    let removed = 0;
+    for (let i = 0; i < keys.length && removed < toRemove; i++) {
       const k = keys[i];
+      if (lastUsed.current.get(k) === tick) break;
       data.current.delete(k);
       lastUsed.current.delete(k);
       requested.current.delete(k);
+      removed++;
     }
   }
 

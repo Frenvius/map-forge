@@ -415,9 +415,9 @@ export function useMapRenderer(deps: RendererDeps) {
     flushTileRequests();
     atlas.loadMissing(sprPath, missing, transparency);
 
-    atlas.evict();
-    tiles.evict();
-    meshes.evict();
+    atlas.evict(frameTick.current);
+    tiles.evict(frameTick.current);
+    meshes.evict(frameTick.current);
   }
 
   React.useEffect(() => {
