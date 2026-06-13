@@ -1,8 +1,14 @@
+import React from 'react';
 import { Layers, ZoomIn, ZoomOut } from 'lucide-react';
 
 import { stepZoom } from '~/usecase/zoom';
 import { Slider } from '~/components/commons/ui/slider';
 import { HoverInfo, HoverItem } from '~/components/MapCanvas/types';
+
+export interface StatusBarApi {
+  setHover: (hover: HoverInfo | null) => void;
+  setSelectedItem: (item: HoverItem | null) => void;
+}
 
 interface StatusBarProps {
   status: string;
@@ -10,8 +16,7 @@ interface StatusBarProps {
   zoom: number;
   minZoom: number;
   maxZoom: number;
-  hover: HoverInfo | null;
-  selectedItem: HoverItem | null;
+  apiRef: React.MutableRefObject<StatusBarApi | null>;
   onFloorChange: (z: number) => void;
   onZoomChange: (zoom: number) => void;
 }
@@ -40,7 +45,12 @@ const SelectedDescription = ({ item }: { item: HoverItem }) => {
   );
 };
 
-const StatusBar = ({ status, hover, selectedItem, floorZ, zoom, onFloorChange, onZoomChange }: StatusBarProps) => {
+const StatusBar = ({ status, apiRef, floorZ, zoom, onFloorChange, onZoomChange }: StatusBarProps) => {
+  const [hover, setHover] = React.useState<HoverInfo | null>(null);
+  const [selectedItem, setSelectedItem] = React.useState<HoverItem | null>(null);
+
+  React.useImperativeHandle(apiRef, () => ({ setHover, setSelectedItem }), []);
+
   return (
     <div className="flex h-8 flex-shrink-0 items-stretch border-t border-border/50 bg-toolbar-bg text-xs text-muted-foreground">
       <div className="flex min-w-0 flex-1 items-center px-3">

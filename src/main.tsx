@@ -6,7 +6,6 @@ import { ToolId } from '~/domain/tools';
 import { cornerOf } from '~/usecase/dock';
 import Toolbar from '~/components/Toolbar';
 import MapTabs from '~/components/MapTabs';
-import StatusBar from '~/components/StatusBar';
 import MapCanvas from '~/components/MapCanvas';
 import Workspace from '~/components/Workspace';
 import { PANELS, PanelId } from '~/domain/dock';
@@ -19,6 +18,7 @@ import { getSetting, setSetting } from '~/adapter/settings';
 import PanelDockMenu from '~/components/Dock/PanelDockMenu';
 import { useDock } from '~/usecase/hooks/Workspace/useDock';
 import { useAssets } from '~/usecase/hooks/Workspace/useAssets';
+import StatusBar, { StatusBarApi } from '~/components/StatusBar';
 import { ActiveBrush, PaletteCategoryId } from '~/domain/palette';
 import { useMapTabs } from '~/usecase/hooks/Workspace/useMapTabs';
 import { DragHandleProps } from '~/components/Dock/DockablePanel';
@@ -35,13 +35,15 @@ const App = () => {
   const [automagic, setAutomagic] = React.useState(true);
   const [minimapOpen, setMinimapOpen] = React.useState(false);
   const [preferencesOpen, setPreferencesOpen] = React.useState(false);
-  const [hover, setHover] = React.useState<HoverInfo | null>(null);
-  const [selectedItem, setSelectedItem] = React.useState<HoverItem | null>(null);
   const [copyPositionFormat, setCopyPositionFormat] = React.useState(defaultGeneralConfig.copyPositionFormat);
 
   const mapViewRef = React.useRef<MapView | null>(null);
+  const statusApiRef = React.useRef<StatusBarApi | null>(null);
   const minimapApiRef = React.useRef<MinimapApi | null>(null);
   const mapCenterRef = React.useRef<((x: number, y: number) => void) | null>(null);
+
+  const handleHover = React.useCallback((info: HoverInfo | null) => statusApiRef.current?.setHover(info), []);
+  const handleSelect = React.useCallback((item: HoverItem | null) => statusApiRef.current?.setSelectedItem(item), []);
 
   const { assets, palette, status, error, minimapColors, setStatus, setError } = useAssets();
   const {
@@ -120,7 +122,7 @@ const App = () => {
   React.useEffect(reloadGeneral, [reloadGeneral]);
 
   React.useEffect(() => {
-    setSelectedItem(null);
+    statusApiRef.current?.setSelectedItem(null);
   }, [activeId]);
 
   const panelMenu = (id: PanelId) => {
@@ -222,18 +224,18 @@ const App = () => {
             zoom={active.zoom}
             minZoom={MIN_ZOOM}
             maxZoom={MAX_ZOOM}
-            onHover={setHover}
             items={assets.items}
             viewRef={mapViewRef}
+            onHover={handleHover}
             automagic={automagic}
             floorZ={active.floorZ}
             onZoomChange={setZoom}
             activeTool={activeTool}
+            onSelect={handleSelect}
             sprPath={assets.sprPath}
             centerRef={mapCenterRef}
             activeBrush={activeBrush}
             onFloorChange={setFloorZ}
-            onSelect={setSelectedItem}
             onSelectBrush={selectBrush}
             onToolChange={setActiveTool}
             itemNames={assets.itemNames}
@@ -250,14 +252,13 @@ const App = () => {
       </Workspace>
 
       <StatusBar
-        hover={hover}
         minZoom={MIN_ZOOM}
         maxZoom={MAX_ZOOM}
+        apiRef={statusApiRef}
         onZoomChange={setZoom}
         zoom={active?.zoom ?? 1}
         status={error ?? status}
         onFloorChange={setFloorZ}
-        selectedItem={selectedItem}
         floorZ={active?.floorZ ?? 7}
       />
     </div>
