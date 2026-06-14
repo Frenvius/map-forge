@@ -8,6 +8,7 @@ import { Camera } from '~/components/MapCanvas/types';
 import { TILE } from '~/components/MapCanvas/constants';
 
 const EDGE = 2;
+const LAND_TOL = 80;
 
 function warpCursor(x: number, y: number) {
   try {
@@ -41,7 +42,7 @@ export function useMapCamera(
   const ref = React.useRef<Camera>({ x: 0, y: 0 });
   const zoomRef = React.useRef(zoom);
   const appliedZoom = React.useRef(zoom);
-  const drag = React.useRef<null | { lastX: number; lastY: number }>(null);
+  const drag = React.useRef<null | { lastX: number; lastY: number; warp: { x: number; y: number } | null }>(null);
   const [panning, setPanning] = React.useState(false);
 
   const onZoomChangeRef = React.useRef(onZoomChange);
@@ -176,18 +177,24 @@ export function useMapCamera(
 
   const applyPan = React.useCallback(
     (clientX: number, clientY: number) => {
-      if (!drag.current) return;
+      const d = drag.current;
+      if (!d) return;
+
+      if (d.warp) {
+        if (Math.abs(clientX - d.warp.x) < LAND_TOL && Math.abs(clientY - d.warp.y) < LAND_TOL) {
+          drag.current = { lastX: clientX, lastY: clientY, warp: null };
+          return;
+        }
+      }
+
       const z = zoomRef.current;
-      ref.current = {
-        x: ref.current.x - (clientX - drag.current.lastX) / z,
-        y: ref.current.y - (clientY - drag.current.lastY) / z
-      };
+      ref.current = { x: ref.current.x - (clientX - d.lastX) / z, y: ref.current.y - (clientY - d.lastY) / z };
 
       const canvas = canvasRef.current;
       let nx = clientX;
       let ny = clientY;
       let wrapped = false;
-      if (canvas) {
+      if (canvas && !d.warp) {
         const r = canvas.getBoundingClientRect();
         if (clientX <= r.left + EDGE) {
           nx = r.right - EDGE - 1;
@@ -204,8 +211,12 @@ export function useMapCamera(
           wrapped = true;
         }
       }
-      if (wrapped) warpCursor(nx, ny);
-      drag.current = { lastX: nx, lastY: ny };
+      if (wrapped) {
+        warpCursor(nx, ny);
+        drag.current = { lastX: clientX, lastY: clientY, warp: { x: nx, y: ny } };
+      } else {
+        drag.current = { lastX: clientX, lastY: clientY, warp: d.warp };
+      }
     },
     [canvasRef]
   );
@@ -225,7 +236,7 @@ export function useMapCamera(
   }, [scheduleSave]);
 
   function beginPan(e: React.MouseEvent) {
-    drag.current = { lastX: e.clientX, lastY: e.clientY };
+    drag.current = { lastX: e.clientX, lastY: e.clientY, warp: null };
     setPanning(true);
     const mv = (ev: MouseEvent) => applyPan(ev.clientX, ev.clientY);
     const up = () => endPan();
