@@ -1,9 +1,23 @@
 import React from 'react';
+import { LogicalPosition } from '@tauri-apps/api/dpi';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 import { stepZoom } from '~/usecase/zoom';
 import { MapMeta, Position } from '~/domain/map';
 import { Camera } from '~/components/MapCanvas/types';
 import { TILE } from '~/components/MapCanvas/constants';
+
+const EDGE = 2;
+
+function warpCursor(x: number, y: number) {
+  try {
+    void getCurrentWindow()
+      .setCursorPosition(new LogicalPosition(x, y))
+      .catch(() => undefined);
+  } catch {
+    /* not running under tauri */
+  }
+}
 
 export interface MapCamera {
   ref: React.MutableRefObject<Camera>;
@@ -27,7 +41,7 @@ export function useMapCamera(
   const ref = React.useRef<Camera>({ x: 0, y: 0 });
   const zoomRef = React.useRef(zoom);
   const appliedZoom = React.useRef(zoom);
-  const drag = React.useRef<null | { startX: number; startY: number; camX: number; camY: number }>(null);
+  const drag = React.useRef<null | { lastX: number; lastY: number }>(null);
   const [panning, setPanning] = React.useState(false);
 
   const onZoomChangeRef = React.useRef(onZoomChange);
@@ -160,26 +174,72 @@ export function useMapCamera(
     };
   }, [scheduleSave]);
 
-  function beginPan(e: React.MouseEvent) {
-    drag.current = { startX: e.clientX, startY: e.clientY, camX: ref.current.x, camY: ref.current.y };
-    setPanning(true);
-  }
+  const applyPan = React.useCallback(
+    (clientX: number, clientY: number) => {
+      if (!drag.current) return;
+      const z = zoomRef.current;
+      ref.current = {
+        x: ref.current.x - (clientX - drag.current.lastX) / z,
+        y: ref.current.y - (clientY - drag.current.lastY) / z
+      };
 
-  function panMove(e: React.MouseEvent): boolean {
-    if (!drag.current) return false;
-    const z = zoomRef.current;
-    ref.current = {
-      x: drag.current.camX - (e.clientX - drag.current.startX) / z,
-      y: drag.current.camY - (e.clientY - drag.current.startY) / z
-    };
-    return true;
-  }
+      const canvas = canvasRef.current;
+      let nx = clientX;
+      let ny = clientY;
+      let wrapped = false;
+      if (canvas) {
+        const r = canvas.getBoundingClientRect();
+        if (clientX <= r.left + EDGE) {
+          nx = r.right - EDGE - 1;
+          wrapped = true;
+        } else if (clientX >= r.right - EDGE) {
+          nx = r.left + EDGE + 1;
+          wrapped = true;
+        }
+        if (clientY <= r.top + EDGE) {
+          ny = r.bottom - EDGE - 1;
+          wrapped = true;
+        } else if (clientY >= r.bottom - EDGE) {
+          ny = r.top + EDGE + 1;
+          wrapped = true;
+        }
+      }
+      if (wrapped) warpCursor(nx, ny);
+      drag.current = { lastX: nx, lastY: ny };
+    },
+    [canvasRef]
+  );
 
-  function endPan() {
+  const winMove = React.useRef<((e: MouseEvent) => void) | null>(null);
+  const winUp = React.useRef<(() => void) | null>(null);
+
+  const endPan = React.useCallback(() => {
+    if (!drag.current) return;
     drag.current = null;
     setPanning(false);
+    if (winMove.current) window.removeEventListener('mousemove', winMove.current);
+    if (winUp.current) window.removeEventListener('mouseup', winUp.current);
+    winMove.current = null;
+    winUp.current = null;
     scheduleSave();
+  }, [scheduleSave]);
+
+  function beginPan(e: React.MouseEvent) {
+    drag.current = { lastX: e.clientX, lastY: e.clientY };
+    setPanning(true);
+    const mv = (ev: MouseEvent) => applyPan(ev.clientX, ev.clientY);
+    const up = () => endPan();
+    winMove.current = mv;
+    winUp.current = up;
+    window.addEventListener('mousemove', mv);
+    window.addEventListener('mouseup', up);
   }
+
+  function panMove(): boolean {
+    return drag.current != null;
+  }
+
+  React.useEffect(() => endPan, [endPan]);
 
   function tileUnderCursor(e: React.MouseEvent, floorZ: number): Position {
     const canvas = canvasRef.current!;

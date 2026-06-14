@@ -456,11 +456,11 @@ export function useMapInteraction(deps: InteractionDeps) {
 
   function onMouseLeave() {
     if (menu) return;
+    if (camera.panning) return;
     selection.box.current = null;
     setBoxing(false);
     clearBoxPreview();
     finishMove();
-    camera.endPan();
     scene.painting.current = false;
     scene.erasing.current = false;
     scene.lastPaintKey.current = null;
