@@ -63,6 +63,7 @@ const Minimap = ({ mapId, floorZ, paletteReady, onClose, headerMenu, dragHandle,
   const offVersionRef = React.useRef(0);
   const reqWinRef = React.useRef<Window | null>(null);
   const fetchTimerRef = React.useRef<number | null>(null);
+  const dragPtrRef = React.useRef<{ x: number; y: number } | null>(null);
   const [cellPx, setCellPx] = React.useState(DEFAULT_CELL_PX);
   const cellPxRef = React.useRef(cellPx);
 
@@ -253,7 +254,7 @@ const Minimap = ({ mapId, floorZ, paletteReady, onClose, headerMenu, dragHandle,
     return () => canvas.removeEventListener('wheel', onWheel);
   }, [zoomBy]);
 
-  const navigate = (e: React.PointerEvent) => {
+  const jumpTo = (e: React.PointerEvent) => {
     const canvas = canvasRef.current;
     const m = mappingRef.current;
     const meta = metaRef.current;
@@ -270,11 +271,26 @@ const Minimap = ({ mapId, floorZ, paletteReady, onClose, headerMenu, dragHandle,
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    navigate(e);
+    dragPtrRef.current = { x: e.clientX, y: e.clientY };
+    jumpTo(e);
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (e.buttons & 1) navigate(e);
+    if (!(e.buttons & 1) || !dragPtrRef.current) return;
+    const m = mappingRef.current;
+    const v = viewRef.current;
+    if (!m || !v || v.zoom <= 0) return;
+    const dpr = window.devicePixelRatio || 1;
+    const dtx = ((e.clientX - dragPtrRef.current.x) * dpr) / m.scale;
+    const dty = ((e.clientY - dragPtrRef.current.y) * dpr) / m.scale;
+    dragPtrRef.current = { x: e.clientX, y: e.clientY };
+    const cx = (v.camX + v.vw / (2 * v.zoom)) / TILE + dtx;
+    const cy = (v.camY + v.vh / (2 * v.zoom)) / TILE + dty;
+    centerRef.current?.(cx, cy);
+  };
+
+  const onPointerUp = () => {
+    dragPtrRef.current = null;
   };
 
   return (
@@ -306,8 +322,10 @@ const Minimap = ({ mapId, floorZ, paletteReady, onClose, headerMenu, dragHandle,
       <div className="relative min-h-0 flex-1 bg-[#11151c] p-1">
         <canvas
           ref={canvasRef}
+          onPointerUp={onPointerUp}
           onPointerMove={onPointerMove}
           onPointerDown={onPointerDown}
+          onPointerCancel={onPointerUp}
           className="h-full w-full cursor-pointer"
           style={{ display: 'block', imageRendering: 'pixelated' }}
         />
