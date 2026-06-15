@@ -1,5 +1,5 @@
+import { Brush, Eraser, Crosshair, MousePointer2, GripHorizontal } from 'lucide-react';
 import { IconFlag3, IconSpider, IconViewfinder, IconScanLetterA } from '@tabler/icons-react';
-import { Brush, Eraser, Crosshair, SquarePlus, MousePointer2, GripHorizontal } from 'lucide-react';
 
 import { cn } from '~/usecase/classNames';
 import { TOOLS, ToolId } from '~/domain/tools';
@@ -17,14 +17,12 @@ interface ToolsPanelProps {
   activeTool: ToolId;
   showSpawns: boolean;
   showCreatures: boolean;
-  autoCreateSpawn: boolean;
   showWaypoints: boolean;
   dragHandle?: DragHandleProps;
   onSelectTool: (tool: ToolId) => void;
   onToggleSpawns: () => void;
   onToggleAutomagic: () => void;
   onToggleCreatures: () => void;
-  onToggleAutoSpawn: () => void;
   onToggleWaypoints: () => void;
 }
 
@@ -33,14 +31,12 @@ const ToolsPanel = ({
   activeTool,
   showSpawns,
   showCreatures,
-  autoCreateSpawn,
   showWaypoints,
   dragHandle,
   onSelectTool,
   onToggleSpawns,
   onToggleAutomagic,
   onToggleCreatures,
-  onToggleAutoSpawn,
   onToggleWaypoints
 }: ToolsPanelProps) => {
   return (
@@ -93,16 +89,6 @@ const ToolsPanel = ({
           )}
         >
           <IconViewfinder className="h-[18px] w-[18px]" />
-        </button>
-        <button
-          onClick={onToggleAutoSpawn}
-          title="Auto-create spawn when placing a creature"
-          className={cn(
-            'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded transition-colors',
-            autoCreateSpawn ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-item-hover hover:text-foreground'
-          )}
-        >
-          <SquarePlus className="h-[18px] w-[18px]" />
         </button>
         <button
           title="Show waypoints"

@@ -2,21 +2,26 @@ import React from 'react';
 
 import { cn } from '~/usecase/classNames';
 import { Button } from '~/components/commons/ui/button';
+import EditorTab from '~/components/Preferences/EditorTab';
 import GeneralTab from '~/components/Preferences/GeneralTab';
 import ClientVersionTab from '~/components/Preferences/ClientVersionTab';
 import { Dialog, DialogTitle, DialogHeader, DialogFooter, DialogContent } from '~/components/commons/ui/dialog';
 import {
   ClientConfig,
+  EditorConfig,
   GeneralConfig,
   loadClientConfig,
+  loadEditorConfig,
   saveClientConfig,
+  saveEditorConfig,
   loadGeneralConfig,
   saveGeneralConfig,
   defaultClientConfig,
+  defaultEditorConfig,
   defaultGeneralConfig
 } from '~/adapter/preferences';
 
-type TabId = 'general' | 'client';
+type TabId = 'general' | 'editor' | 'client';
 
 interface PreferencesProps {
   open: boolean;
@@ -27,6 +32,7 @@ interface PreferencesProps {
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'general', label: 'General' },
+  { id: 'editor', label: 'Editor' },
   { id: 'client', label: 'Client Version' }
 ];
 
@@ -34,16 +40,19 @@ const Preferences = ({ open, onSaved, onResetLayout, onOpenChange }: Preferences
   const [tab, setTab] = React.useState<TabId>('general');
   const [config, setConfig] = React.useState<ClientConfig>(defaultClientConfig);
   const [general, setGeneral] = React.useState<GeneralConfig>(defaultGeneralConfig);
+  const [editor, setEditor] = React.useState<EditorConfig>(defaultEditorConfig);
 
   React.useEffect(() => {
     if (!open) return;
     void loadClientConfig().then(setConfig);
     void loadGeneralConfig().then(setGeneral);
+    void loadEditorConfig().then(setEditor);
   }, [open]);
 
   const save = () => {
     void saveClientConfig(config);
     void saveGeneralConfig(general);
+    void saveEditorConfig(editor);
     onSaved?.();
     onOpenChange(false);
   };
@@ -69,11 +78,9 @@ const Preferences = ({ open, onSaved, onResetLayout, onOpenChange }: Preferences
           ))}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          {tab === 'general' ? (
-            <GeneralTab config={general} onChange={setGeneral} onResetLayout={() => onResetLayout?.()} />
-          ) : (
-            <ClientVersionTab config={config} onChange={setConfig} />
-          )}
+          {tab === 'general' && <GeneralTab config={general} onChange={setGeneral} onResetLayout={() => onResetLayout?.()} />}
+          {tab === 'editor' && <EditorTab config={editor} onChange={setEditor} />}
+          {tab === 'client' && <ClientVersionTab config={config} onChange={setConfig} />}
         </div>
         <DialogFooter>
           <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)}>

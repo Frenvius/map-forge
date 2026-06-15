@@ -5,6 +5,7 @@ import { DEFAULT_COPY_POSITION_FORMAT } from '~/usecase/positionFormat';
 
 const KEY = 'clientConfig';
 const GENERAL_KEY = 'generalConfig';
+const EDITOR_KEY = 'editorConfig';
 
 export interface ClientConfig {
   defaultVersion: number;
@@ -52,4 +53,21 @@ export async function loadGeneralConfig(): Promise<GeneralConfig> {
 
 export async function saveGeneralConfig(config: GeneralConfig): Promise<void> {
   await setSetting(GENERAL_KEY, config);
+}
+
+export interface EditorConfig {
+  autoCreateSpawn: boolean;
+}
+
+export const defaultEditorConfig: EditorConfig = {
+  autoCreateSpawn: true
+};
+
+export async function loadEditorConfig(): Promise<EditorConfig> {
+  const stored = await getSetting<Partial<EditorConfig>>(EDITOR_KEY, {});
+  return { ...defaultEditorConfig, ...stored };
+}
+
+export async function saveEditorConfig(config: EditorConfig): Promise<void> {
+  await setSetting(EDITOR_KEY, config);
 }

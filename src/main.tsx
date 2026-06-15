@@ -39,7 +39,7 @@ import { useMapSpawns } from '~/usecase/hooks/Workspace/useMapSpawns';
 import { addWaypoint, nextWaypointName } from '~/usecase/waypointEdits';
 import { useMapWaypoints } from '~/usecase/hooks/Workspace/useMapWaypoints';
 import { useAppShortcuts } from '~/usecase/hooks/Workspace/useAppShortcuts';
-import { loadGeneralConfig, defaultGeneralConfig } from '~/adapter/preferences';
+import { loadEditorConfig, loadGeneralConfig, defaultEditorConfig, defaultGeneralConfig } from '~/adapter/preferences';
 
 import './styles/index.css';
 
@@ -62,7 +62,7 @@ const App = () => {
   const [minimapOpen, setMinimapOpen] = React.useState(false);
   const [showCreatures, setShowCreatures] = React.useState(true);
   const [showSpawns, setShowSpawns] = React.useState(true);
-  const [autoCreateSpawn, setAutoCreateSpawn] = React.useState(true);
+  const [autoCreateSpawn, setAutoCreateSpawn] = React.useState(defaultEditorConfig.autoCreateSpawn);
   const [spawnSize, setSpawnSize] = React.useState(SPAWN_RADIUS_DEFAULT);
   const [spawnTime, setSpawnTime] = React.useState(SPAWN_TIME_DEFAULT);
   const [showWaypoints, setShowWaypoints] = React.useState(true);
@@ -216,13 +216,6 @@ const App = () => {
       return next;
     });
 
-  const toggleAutoSpawn = () =>
-    setAutoCreateSpawn((v) => {
-      const next = !v;
-      void setSetting('autoCreateSpawn', next);
-      return next;
-    });
-
   const toggleWaypoints = () =>
     setShowWaypoints((v) => {
       const next = !v;
@@ -321,10 +314,6 @@ const App = () => {
   }, []);
 
   React.useEffect(() => {
-    void getSetting('autoCreateSpawn', true).then(setAutoCreateSpawn);
-  }, []);
-
-  React.useEffect(() => {
     void getSetting('showWaypoints', true).then(setShowWaypoints);
   }, []);
 
@@ -336,7 +325,14 @@ const App = () => {
     });
   }, []);
 
+  const reloadEditor = React.useCallback(() => {
+    void loadEditorConfig().then((e) => {
+      setAutoCreateSpawn(e.autoCreateSpawn);
+    });
+  }, []);
+
   React.useEffect(reloadGeneral, [reloadGeneral]);
+  React.useEffect(reloadEditor, [reloadEditor]);
 
   React.useEffect(() => {
     statusApiRef.current?.setSelectedItem(null);
@@ -368,10 +364,8 @@ const App = () => {
           showCreatures={showCreatures}
           onToggleSpawns={toggleSpawns}
           showWaypoints={showWaypoints}
-          autoCreateSpawn={autoCreateSpawn}
           onToggleAutomagic={toggleAutomagic}
           onToggleCreatures={toggleCreatures}
-          onToggleAutoSpawn={toggleAutoSpawn}
           onToggleWaypoints={toggleWaypoints}
         />
       );
@@ -451,6 +445,7 @@ const App = () => {
         onSaved={() => {
           dock.reloadConfig();
           reloadGeneral();
+          reloadEditor();
         }}
       />
 
