@@ -11,9 +11,12 @@ export interface SpriteAtlas {
   version: React.MutableRefObject<number>;
   epoch: React.MutableRefObject<number>;
   slotFor: (id: number, data: LoadedSprite) => number;
+  compositeId: (key: string) => number;
   loadMissing: (sprPath: string, missing: Iterable<number>, transparency: boolean) => void;
   evict: (tick: number) => void;
 }
+
+const COMPOSITE_BASE = 0x40000000;
 
 export function useSpriteAtlas(gl: React.MutableRefObject<GLRenderer | null>): SpriteAtlas {
   const data = React.useRef(new Map<number, LoadedSprite>());
@@ -25,6 +28,17 @@ export function useSpriteAtlas(gl: React.MutableRefObject<GLRenderer | null>): S
   const slot = React.useRef(new Map<number, number>());
   const freeSlots = React.useRef<number[]>([]);
   const nextSlot = React.useRef(0);
+  const composites = React.useRef(new Map<string, number>());
+  const nextComposite = React.useRef(COMPOSITE_BASE);
+
+  function compositeId(key: string): number {
+    let id = composites.current.get(key);
+    if (id === undefined) {
+      id = nextComposite.current++;
+      composites.current.set(key, id);
+    }
+    return id;
+  }
 
   function slotFor(id: number, sprite: LoadedSprite): number {
     let s = slot.current.get(id);
@@ -72,5 +86,5 @@ export function useSpriteAtlas(gl: React.MutableRefObject<GLRenderer | null>): S
     if (removed > 0) epoch.current++;
   }
 
-  return { data, lastUsed, version, epoch, slotFor, loadMissing, evict };
+  return { data, lastUsed, version, epoch, slotFor, compositeId, loadMissing, evict };
 }

@@ -23,6 +23,10 @@ export interface CreaturePlacement {
   name: string;
   isNpc: boolean;
   lookType: number;
+  head: number;
+  body: number;
+  legs: number;
+  feet: number;
   spawntime: number;
   direction: number;
 }

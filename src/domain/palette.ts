@@ -50,6 +50,10 @@ export interface ActiveBrush {
   rows?: number;
   lookType?: number;
   isNpc?: boolean;
+  head?: number;
+  body?: number;
+  legs?: number;
+  feet?: number;
 }
 
 export type PaletteData = Record<PaletteCategoryId, PaletteTileset[]>;

@@ -181,7 +181,11 @@ const PalettePanel = ({
         kind: brush.kind,
         isGround: false,
         lookType: brush.lookType,
-        isNpc: brush.isNpc
+        isNpc: brush.isNpc,
+        head: brush.creature?.head,
+        body: brush.creature?.body,
+        legs: brush.creature?.legs,
+        feet: brush.creature?.feet
       });
       return;
     }

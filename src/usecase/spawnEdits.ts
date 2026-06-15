@@ -5,6 +5,10 @@ export interface CreatureLookInput {
   name: string;
   isNpc: boolean;
   lookType: number;
+  head: number;
+  body: number;
+  legs: number;
+  feet: number;
 }
 
 const covers = (a: SpawnArea, x: number, y: number, z: number): boolean =>
@@ -31,6 +35,10 @@ export function placeCreature(
     name: look.name,
     isNpc: look.isNpc,
     lookType: look.lookType,
+    head: look.head,
+    body: look.body,
+    legs: look.legs,
+    feet: look.feet,
     spawntime,
     direction: 2
   });

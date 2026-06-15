@@ -161,7 +161,15 @@ export function useMapInteraction(deps: InteractionDeps) {
     const next = placeCreature(
       base,
       pos,
-      { name: b.name, isNpc: !!b.isNpc, lookType: b.lookType },
+      {
+        name: b.name,
+        isNpc: !!b.isNpc,
+        lookType: b.lookType,
+        head: b.head ?? 0,
+        body: b.body ?? 0,
+        legs: b.legs ?? 0,
+        feet: b.feet ?? 0
+      },
       inputs.current.spawnTime,
       inputs.current.spawnRadius,
       inputs.current.autoCreateSpawn
@@ -936,7 +944,11 @@ export function useMapInteraction(deps: InteractionDeps) {
       kind: 'creature',
       isGround: false,
       lookType: c.lookType,
-      isNpc: c.isNpc
+      isNpc: c.isNpc,
+      head: c.head,
+      body: c.body,
+      legs: c.legs,
+      feet: c.feet
     });
     inputs.current.onRevealBrush?.('creature', 0, c.name);
     setMenu(null);

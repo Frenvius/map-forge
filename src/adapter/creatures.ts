@@ -40,6 +40,14 @@ export async function loadCreatureDb(dir: string): Promise<Map<string, CreatureL
   return db;
 }
 
+const MISSING_OUTFIT = { lookType: 130, head: 0, body: 0, legs: 0, feet: 0 };
+
+function resolveOutfit(name: string, db: Map<string, CreatureLook>) {
+  const look = db.get(name.toLowerCase());
+  if (!look || !look.lookType) return MISSING_OUTFIT;
+  return { lookType: look.lookType, head: look.head, body: look.body, legs: look.legs, feet: look.feet };
+}
+
 const intAttr = (el: Element, name: string): number => Number(el.getAttribute(name) ?? 0);
 
 export async function loadSpawns(spawnPath: string, db: Map<string, CreatureLook>): Promise<MapSpawns> {
@@ -64,13 +72,18 @@ export async function loadSpawns(spawnPath: string, db: Map<string, CreatureLook
       const tag = child.tagName.toLowerCase();
       if (tag !== 'monster' && tag !== 'npc') continue;
       const name = child.getAttribute('name') ?? '';
+      const outfit = resolveOutfit(name, db);
       placements.push({
         x: cx + intAttr(child, 'x'),
         y: cy + intAttr(child, 'y'),
         z: intAttr(child, 'z'),
         name,
         isNpc: tag === 'npc',
-        lookType: db.get(name.toLowerCase())?.lookType ?? 0,
+        lookType: outfit.lookType,
+        head: outfit.head,
+        body: outfit.body,
+        legs: outfit.legs,
+        feet: outfit.feet,
         spawntime: intAttr(child, 'spawntime') || 60,
         direction: child.getAttribute('direction') != null ? intAttr(child, 'direction') : 2
       });

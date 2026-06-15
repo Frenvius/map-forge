@@ -1,6 +1,8 @@
 import { Position } from '~/domain/map';
 import { slotUV } from '~/usecase/glRenderer';
+import { LoadedSprite } from '~/domain/sprite';
 import { SpawnArea, CreaturePlacement } from '~/domain/creature';
+import { isColorized, OutfitColors, colorizeOutfit } from '~/domain/outfit';
 import { TILE, CHUNK, MAX_ELEVATION } from '~/components/MapCanvas/constants';
 import { ThingType, isCountStack, getSpriteIndex, stackSpriteIndex } from '~/domain/tibia';
 
@@ -42,6 +44,51 @@ export interface MeshContext {
   atlas: SpriteAtlas;
 }
 
+type OutfitResolve = { id: number; data: LoadedSprite } | null | 'incomplete';
+
+function resolveOutfitSprite(
+  thing: ThingType,
+  w: number,
+  h: number,
+  dir: number,
+  colors: OutfitColors,
+  atlas: SpriteAtlas,
+  missing: Set<number>
+): OutfitResolve {
+  const baseSid = thing.spriteIndex[getSpriteIndex(thing, w, h, 0, dir, 0, 0, 0)];
+  if (!baseSid) return null;
+  if (thing.layers < 2 || !isColorized(colors)) {
+    const data = atlas.data.current.get(baseSid);
+    if (!data) {
+      missing.add(baseSid);
+      return 'incomplete';
+    }
+    return { id: baseSid, data };
+  }
+
+  const cid = atlas.compositeId(`${baseSid}:${colors.head}:${colors.body}:${colors.legs}:${colors.feet}`);
+  const cached = atlas.data.current.get(cid);
+  if (cached) return { id: cid, data: cached };
+
+  const base = atlas.data.current.get(baseSid);
+  if (!base) {
+    missing.add(baseSid);
+    return 'incomplete';
+  }
+  const maskSid = thing.spriteIndex[getSpriteIndex(thing, w, h, 1, dir, 0, 0, 0)];
+  if (!maskSid) return { id: baseSid, data: base };
+  const mask = atlas.data.current.get(maskSid);
+  if (!mask) {
+    missing.add(maskSid);
+    return 'incomplete';
+  }
+  if (base.empty || mask.empty) return { id: baseSid, data: base };
+
+  const composite: LoadedSprite = { id: cid, empty: false, rgba: colorizeOutfit(base.rgba, mask.rgba, colors) };
+  atlas.data.current.set(cid, composite);
+  return { id: cid, data: composite };
+}
+
 export function appendCreatures(
   inst: number[],
   placements: CreaturePlacement[],
@@ -60,19 +107,18 @@ export function appendCreatures(
     const dir = Math.min(Math.max(0, c.direction), Math.max(0, thing.patternX - 1));
     const ox = thing.offsetX || 0;
     const oy = thing.offsetY || 0;
+    const colors: OutfitColors = { head: c.head, body: c.body, legs: c.legs, feet: c.feet };
     for (let h = 0; h < thing.height; h++) {
       for (let w = 0; w < thing.width; w++) {
-        const sid = thing.spriteIndex[getSpriteIndex(thing, w, h, 0, dir, 0, 0, 0)];
-        if (!sid) continue;
-        const data = atlas.data.current.get(sid);
-        if (!data) {
-          missing.add(sid);
+        const res = resolveOutfitSprite(thing, w, h, dir, colors, atlas, missing);
+        if (res === 'incomplete') {
           complete = false;
           continue;
         }
-        atlas.lastUsed.current.set(sid, tick);
-        if (data.empty) continue;
-        const slot = atlas.slotFor(sid, data);
+        if (!res) continue;
+        atlas.lastUsed.current.set(res.id, tick);
+        if (res.data.empty) continue;
+        const slot = atlas.slotFor(res.id, res.data);
         if (slot < 0) {
           complete = false;
           continue;
@@ -93,13 +139,14 @@ export function buildCreatureGhost(
   outfits: Map<number, ThingType>,
   atlas: SpriteAtlas,
   tick: number,
-  missing: Set<number>
+  missing: Set<number>,
+  colors: OutfitColors = { head: 0, body: 0, legs: 0, feet: 0 }
 ): Float32Array | null {
   if (!lookType) return null;
   const inst: number[] = [];
   appendCreatures(
     inst,
-    [{ x, y, z, name: '', isNpc: false, lookType, spawntime: 0, direction: 2 }],
+    [{ x, y, z, name: '', isNpc: false, lookType, ...colors, spawntime: 0, direction: 2 }],
     outfits,
     atlas,
     tick,
