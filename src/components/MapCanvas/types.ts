@@ -3,6 +3,7 @@ import React from 'react';
 import { ToolId } from '~/domain/tools';
 import { ThingType } from '~/domain/tibia';
 import { MapSpawns } from '~/domain/creature';
+import { MapWaypoints } from '~/domain/waypoint';
 import { MapView, MapMeta, Position } from '~/domain/map';
 import { ActiveBrush, PaletteCategoryId } from '~/domain/palette';
 
@@ -50,6 +51,7 @@ export interface ContextMenuState {
   ground: HoverItem | null;
   spawn: Position | null;
   creature: Position | null;
+  waypoint: Position | null;
   hasSelection: boolean;
   canPaste: boolean;
 }
@@ -71,6 +73,13 @@ export interface CreatureForm {
   direction: number;
 }
 
+export interface WaypointForm {
+  x: number;
+  y: number;
+  z: number;
+  name: string;
+}
+
 export interface MapCanvasProps {
   map: MapMeta;
   items: Map<number, ThingType>;
@@ -84,6 +93,13 @@ export interface MapCanvasProps {
   spawnRadius: number;
   autoCreateSpawn: boolean;
   onEditSpawns: (next: MapSpawns) => void;
+  waypoints: MapWaypoints | null;
+  showWaypoints: boolean;
+  waypointMarkerClientId: number;
+  onEditWaypoints: (next: MapWaypoints) => void;
+  waypointEditRef?: React.MutableRefObject<((next: MapWaypoints) => void) | null>;
+  placingWaypoint: string | null;
+  onPlaceWaypoint: () => void;
   sprPath: string;
   transparency: boolean;
   floorZ: number;

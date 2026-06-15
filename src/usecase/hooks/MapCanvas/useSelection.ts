@@ -16,9 +16,11 @@ export interface Selection {
   box: React.MutableRefObject<BoxSelection | null>;
   spawn: React.MutableRefObject<Position | null>;
   creature: React.MutableRefObject<Position | null>;
+  waypoint: React.MutableRefObject<Position | null>;
   selectTile: (pos: Position, all: boolean) => void;
   selectSpawn: (pos: Position | null) => void;
   selectCreature: (pos: Position | null) => void;
+  selectWaypoint: (pos: Position | null) => void;
   selectBox: (z: number, ax: number, ay: number, bx: number, by: number, additive: boolean) => void;
   clear: () => void;
 }
@@ -28,6 +30,7 @@ export function useSelection(meshes: ChunkMeshCache): Selection {
   const box = React.useRef<BoxSelection | null>(null);
   const spawn = React.useRef<Position | null>(null);
   const creature = React.useRef<Position | null>(null);
+  const waypoint = React.useRef<Position | null>(null);
 
   function selectMarker(ref: React.MutableRefObject<Position | null>, pos: Position | null) {
     const prev = ref.current;
@@ -46,9 +49,14 @@ export function useSelection(meshes: ChunkMeshCache): Selection {
     selectMarker(creature, pos);
   }
 
+  function selectWaypoint(pos: Position | null) {
+    selectMarker(waypoint, pos);
+  }
+
   function clear() {
     selectSpawn(null);
     selectCreature(null);
+    selectWaypoint(null);
     if (entries.current.size === 0) return;
     meshes.discardTiles(entries.current.values());
     entries.current.clear();
@@ -77,5 +85,17 @@ export function useSelection(meshes: ChunkMeshCache): Selection {
     meshes.discardTiles(added);
   }
 
-  return { entries, box, spawn, creature, selectTile, selectSpawn, selectCreature, selectBox, clear };
+  return {
+    entries,
+    box,
+    spawn,
+    creature,
+    waypoint,
+    selectTile,
+    selectSpawn,
+    selectCreature,
+    selectWaypoint,
+    selectBox,
+    clear
+  };
 }

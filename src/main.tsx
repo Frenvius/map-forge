@@ -20,6 +20,9 @@ import PalettePanel from '~/components/PalettePanel';
 import MapProperties from '~/components/MapProperties';
 import MapStatistics from '~/components/MapStatistics';
 import { serializeSpawnXml } from '~/usecase/spawnEdits';
+import { formatPosition } from '~/usecase/positionFormat';
+import { Waypoint, MapWaypoints } from '~/domain/waypoint';
+import { serializeWaypointXml } from '~/adapter/waypoints';
 import Minimap, { MinimapApi } from '~/components/Minimap';
 import { getSetting, setSetting } from '~/adapter/settings';
 import PanelDockMenu from '~/components/Dock/PanelDockMenu';
@@ -33,6 +36,8 @@ import { DragHandleProps } from '~/components/Dock/DockablePanel';
 import { getMapProperties, setMapProperties } from '~/adapter/map';
 import { HoverInfo, HoverItem } from '~/components/MapCanvas/types';
 import { useMapSpawns } from '~/usecase/hooks/Workspace/useMapSpawns';
+import { addWaypoint, nextWaypointName } from '~/usecase/waypointEdits';
+import { useMapWaypoints } from '~/usecase/hooks/Workspace/useMapWaypoints';
 import { useAppShortcuts } from '~/usecase/hooks/Workspace/useAppShortcuts';
 import { loadGeneralConfig, defaultGeneralConfig } from '~/adapter/preferences';
 
@@ -60,6 +65,8 @@ const App = () => {
   const [autoCreateSpawn, setAutoCreateSpawn] = React.useState(true);
   const [spawnSize, setSpawnSize] = React.useState(SPAWN_RADIUS_DEFAULT);
   const [spawnTime, setSpawnTime] = React.useState(SPAWN_TIME_DEFAULT);
+  const [showWaypoints, setShowWaypoints] = React.useState(true);
+  const [placingWaypoint, setPlacingWaypoint] = React.useState<string | null>(null);
   const [townsOpen, setTownsOpen] = React.useState(false);
   const [mapPropsOpen, setMapPropsOpen] = React.useState(false);
   const [statsOpen, setStatsOpen] = React.useState(false);
@@ -73,6 +80,9 @@ const App = () => {
   const mapCenterRef = React.useRef<((x: number, y: number) => void) | null>(null);
   const spawnsRef = React.useRef<MapSpawns | null>(null);
   const spawnsDirty = React.useRef(false);
+  const waypointsRef = React.useRef<MapWaypoints | null>(null);
+  const waypointsDirty = React.useRef(false);
+  const waypointEditRef = React.useRef<((next: MapWaypoints) => void) | null>(null);
 
   const handleHover = React.useCallback((info: HoverInfo | null) => statusApiRef.current?.setHover(info), []);
   const handleSelect = React.useCallback((item: HoverItem | null) => statusApiRef.current?.setSelectedItem(item), []);
@@ -97,6 +107,21 @@ const App = () => {
     spawnsDirty.current = false;
   }, []);
 
+  const persistWaypoints = React.useCallback(async (path: string) => {
+    if (!waypointsDirty.current || !waypointsRef.current) return;
+    const file = (path.split(/[\\/]/).pop() ?? 'map.otbm').replace(/\.otbm$/i, '-waypoint.xml');
+    await invoke('write_file_text', { path: dirOf(path) + file, contents: serializeWaypointXml(waypointsRef.current) });
+    waypointsDirty.current = false;
+  }, []);
+
+  const persistSidecars = React.useCallback(
+    async (mapId: number, path: string) => {
+      await persistSpawns(mapId, path);
+      await persistWaypoints(path);
+    },
+    [persistSpawns, persistWaypoints]
+  );
+
   const { assets, palette, status, error, minimapReady, setStatus, setError } = useAssets();
   const {
     tabs,
@@ -117,7 +142,7 @@ const App = () => {
     setFloorZ,
     setZoom,
     setView
-  } = useMapTabs(assets, { setStatus, setError, onAfterSave: persistSpawns });
+  } = useMapTabs(assets, { setStatus, setError, onAfterSave: persistSidecars });
 
   const { spawns, setSpawns } = useMapSpawns(
     active ? { id: active.id, path: active.path, mapId: active.map.id } : null,
@@ -131,6 +156,24 @@ const App = () => {
       spawnsDirty.current = true;
     },
     [setSpawns]
+  );
+
+  const markWaypointsMigrated = React.useCallback(() => {
+    waypointsDirty.current = true;
+  }, []);
+
+  const { waypoints, setWaypoints } = useMapWaypoints(
+    active ? { id: active.id, path: active.path, mapId: active.map.id } : null,
+    markWaypointsMigrated
+  );
+  waypointsRef.current = waypoints;
+
+  const handleEditWaypoints = React.useCallback(
+    (next: MapWaypoints) => {
+      setWaypoints(next);
+      waypointsDirty.current = true;
+    },
+    [setWaypoints]
   );
 
   const isContentReady = (id: PanelId) => {
@@ -179,6 +222,36 @@ const App = () => {
       void setSetting('autoCreateSpawn', next);
       return next;
     });
+
+  const toggleWaypoints = () =>
+    setShowWaypoints((v) => {
+      const next = !v;
+      void setSetting('showWaypoints', next);
+      return next;
+    });
+
+  const editWaypoints = (next: MapWaypoints) => (waypointEditRef.current ?? handleEditWaypoints)(next);
+
+  const gotoWaypoint = (wp: Waypoint) => gotoPosition(wp.x, wp.y, wp.z);
+
+  const copyWaypointPosition = (wp: Waypoint) =>
+    navigator.clipboard?.writeText(formatPosition(copyPositionFormat, { x: wp.x, y: wp.y, z: wp.z })).catch(() => undefined);
+
+  const addWaypointAtCenter = () => {
+    if (!active) return;
+    const v = mapViewRef.current;
+    const pos = v
+      ? {
+          x: Math.floor((v.camX + v.vw / (2 * v.zoom)) / 32),
+          y: Math.floor((v.camY + v.vh / (2 * v.zoom)) / 32),
+          z: active.floorZ
+        }
+      : { x: active.center.x, y: active.center.y, z: active.floorZ };
+    const wps = waypointsRef.current ?? { list: [], byChunk: new Map() };
+    const name = nextWaypointName(wps);
+    editWaypoints(addWaypoint(wps, name, pos));
+    setPlacingWaypoint(name);
+  };
 
   const selectBrush = (brush: ActiveBrush | null) => {
     setActiveBrush(brush);
@@ -251,6 +324,10 @@ const App = () => {
     void getSetting('autoCreateSpawn', true).then(setAutoCreateSpawn);
   }, []);
 
+  React.useEffect(() => {
+    void getSetting('showWaypoints', true).then(setShowWaypoints);
+  }, []);
+
   const reloadGeneral = React.useCallback(() => {
     void loadGeneralConfig().then((g) => {
       setCopyPositionFormat(g.copyPositionFormat);
@@ -264,6 +341,8 @@ const App = () => {
   React.useEffect(() => {
     statusApiRef.current?.setSelectedItem(null);
     spawnsDirty.current = false;
+    waypointsDirty.current = false;
+    setPlacingWaypoint(null);
   }, [activeId]);
 
   const panelMenu = (id: PanelId) => {
@@ -288,10 +367,12 @@ const App = () => {
           onSelectTool={setActiveTool}
           showCreatures={showCreatures}
           onToggleSpawns={toggleSpawns}
+          showWaypoints={showWaypoints}
           autoCreateSpawn={autoCreateSpawn}
           onToggleAutomagic={toggleAutomagic}
           onToggleCreatures={toggleCreatures}
           onToggleAutoSpawn={toggleAutoSpawn}
+          onToggleWaypoints={toggleWaypoints}
         />
       );
     }
@@ -302,10 +383,15 @@ const App = () => {
           reveal={reveal}
           dragHandle={handle}
           items={assets.items}
+          waypoints={waypoints}
           outfits={assets.outfits}
           sprPath={assets.sprPath}
           onSelectBrush={selectBrush}
+          onGotoWaypoint={gotoWaypoint}
+          onEditWaypoints={editWaypoints}
           transparency={assets.transparency}
+          onAddWaypoint={addWaypointAtCenter}
+          onCopyWaypointPosition={copyWaypointPosition}
         />
       );
     }
@@ -389,6 +475,7 @@ const App = () => {
             onHover={handleHover}
             automagic={automagic}
             spawnTime={spawnTime}
+            waypoints={waypoints}
             floorZ={active.floorZ}
             onZoomChange={setZoom}
             onViewChange={setView}
@@ -406,13 +493,19 @@ const App = () => {
             itemNames={assets.itemNames}
             showCreatures={showCreatures}
             initialCenter={active.center}
+            showWaypoints={showWaypoints}
             onRevealBrush={revealInPalette}
             onEditSpawns={handleEditSpawns}
             autoCreateSpawn={autoCreateSpawn}
+            waypointEditRef={waypointEditRef}
+            placingWaypoint={placingWaypoint}
             transparency={assets.transparency}
+            onEditWaypoints={handleEditWaypoints}
             copyPositionFormat={copyPositionFormat}
+            onPlaceWaypoint={() => setPlacingWaypoint(null)}
             spawnMarkerClientId={assets.spawnMarkerClientId}
             onEdit={(z) => minimapApiRef.current?.markDirty(z)}
+            waypointMarkerClientId={assets.waypointMarkerClientId}
           />
         ) : (
           <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">

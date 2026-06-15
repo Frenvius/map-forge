@@ -4,8 +4,18 @@ import { Position } from '~/domain/map';
 import { buildItemPreview } from '~/usecase/itemPreview';
 import { formatPosition } from '~/usecase/positionFormat';
 import { MapSpawns, emptyMapSpawns } from '~/domain/creature';
+import { waypointAt, MapWaypoints, emptyMapWaypoints } from '~/domain/waypoint';
 import { TILE, CHUNK, MOVE_THRESHOLD_SQ } from '~/components/MapCanvas/constants';
-import { HoverInfo, HoverItem, SpawnForm, CreatureForm, MapCanvasProps, ContextMenuState } from '~/components/MapCanvas/types';
+import { addWaypoint, moveWaypoint, removeWaypoint, renameWaypoint, nextWaypointName } from '~/usecase/waypointEdits';
+import {
+  HoverInfo,
+  HoverItem,
+  SpawnForm,
+  CreatureForm,
+  WaypointForm,
+  MapCanvasProps,
+  ContextMenuState
+} from '~/components/MapCanvas/types';
 import {
   moveSpawn,
   placeSpawn,
@@ -40,7 +50,10 @@ import { ChunkTilesCache } from './useChunkTiles';
 import { ChunkMeshCache } from './useChunkMeshes';
 import { Selection, BoxSelection } from './useSelection';
 
-type EditEntry = { kind: 'item' } | { kind: 'spawn'; before: MapSpawns; after: MapSpawns };
+type EditEntry =
+  | { kind: 'item' }
+  | { kind: 'spawn'; before: MapSpawns; after: MapSpawns }
+  | { kind: 'waypoint'; before: MapWaypoints; after: MapWaypoints };
 
 export interface InteractionDeps {
   canvasRef: React.RefObject<HTMLCanvasElement>;
@@ -62,9 +75,10 @@ export function useMapInteraction(deps: InteractionDeps) {
   const [gotoForm, setGotoForm] = React.useState<Position | null>(null);
   const [spawnForm, setSpawnForm] = React.useState<SpawnForm | null>(null);
   const [creatureForm, setCreatureForm] = React.useState<CreatureForm | null>(null);
+  const [waypointForm, setWaypointForm] = React.useState<WaypointForm | null>(null);
   const clipboardCount = React.useRef(0);
   const modalOpen = React.useRef(false);
-  modalOpen.current = spawnForm !== null || creatureForm !== null;
+  modalOpen.current = spawnForm !== null || creatureForm !== null || waypointForm !== null;
 
   const undoTimeline = React.useRef<EditEntry[]>([]);
   const redoTimeline = React.useRef<EditEntry[]>([]);
@@ -78,6 +92,12 @@ export function useMapInteraction(deps: InteractionDeps) {
     undoTimeline.current.push({ kind: 'spawn', before: inputs.current.spawns ?? emptyMapSpawns(), after: next });
     redoTimeline.current = [];
     inputs.current.onEditSpawns(next);
+  }
+
+  function editWaypoints(next: MapWaypoints) {
+    undoTimeline.current.push({ kind: 'waypoint', before: inputs.current.waypoints ?? emptyMapWaypoints(), after: next });
+    redoTimeline.current = [];
+    inputs.current.onEditWaypoints(next);
   }
 
   const tileAt = (e: React.MouseEvent) => camera.tileUnderCursor(e, inputs.current.floorZ);
@@ -105,10 +125,20 @@ export function useMapInteraction(deps: InteractionDeps) {
     return areas?.find((a) => a.x === pos.x && a.y === pos.y)?.radius ?? 0;
   };
 
+  const waypointHere = (pos: Position): boolean => {
+    const wps = inputs.current.waypoints;
+    return !!wps && inputs.current.showWaypoints && !!waypointAt(wps, pos.x, pos.y, pos.z);
+  };
+
   function selectByPriority(pos: Position): boolean {
     if (spawnCenterAt(pos)) {
       selection.clear();
       selection.selectSpawn(pos);
+      return true;
+    }
+    if (waypointHere(pos)) {
+      selection.clear();
+      selection.selectWaypoint(pos);
       return true;
     }
     if (creatureAt(pos)) {
@@ -158,7 +188,7 @@ export function useMapInteraction(deps: InteractionDeps) {
   }
 
   function beginMarkerDrag(e: React.MouseEvent, pos: Position) {
-    const kind = selection.spawn.current ? 'spawn' : 'creature';
+    const kind = selection.spawn.current ? 'spawn' : selection.waypoint.current ? 'waypoint' : 'creature';
     const lookType = kind === 'creature' ? creatureLookAt(pos) : 0;
     const radius = kind === 'spawn' ? spawnRadiusAt(pos) : 0;
     scene.markerDrag.current = { kind, from: pos, lookType, radius, startX: e.clientX, startY: e.clientY, active: false };
@@ -193,6 +223,15 @@ export function useMapInteraction(deps: InteractionDeps) {
     if (!md) return;
     setMoving(false);
     if (!md.active || !dest || (dest.x === md.from.x && dest.y === md.from.y)) return;
+    if (md.kind === 'waypoint') {
+      const wps = inputs.current.waypoints ?? emptyMapWaypoints();
+      const wp = waypointAt(wps, md.from.x, md.from.y, md.from.z);
+      if (wp) {
+        editWaypoints(moveWaypoint(wps, wp.name, dest));
+        selection.selectWaypoint(dest);
+      }
+      return;
+    }
     const base = inputs.current.spawns ?? emptyMapSpawns();
     if (md.kind === 'creature') {
       editSpawns(moveCreature(base, md.from, dest));
@@ -283,6 +322,31 @@ export function useMapInteraction(deps: InteractionDeps) {
     const base = inputs.current.spawns ?? emptyMapSpawns();
     editSpawns(updateCreature(base, { x: form.x, y: form.y, z: form.z }, form.spawntime, form.direction));
     setCreatureForm(null);
+  }
+
+  function openWaypointProperties(pos: Position) {
+    const wp = inputs.current.waypoints ? waypointAt(inputs.current.waypoints, pos.x, pos.y, pos.z) : undefined;
+    if (!wp) return;
+    setWaypointForm({ x: pos.x, y: pos.y, z: pos.z, name: wp.name });
+    setMenu(null);
+  }
+
+  function submitWaypointForm(form: WaypointForm) {
+    const wps = inputs.current.waypoints ?? emptyMapWaypoints();
+    const wp = waypointAt(wps, form.x, form.y, form.z);
+    if (wp && form.name.trim() && form.name.trim() !== wp.name) {
+      editWaypoints(renameWaypoint(wps, wp.name, form.name));
+    }
+    setWaypointForm(null);
+  }
+
+  function addWaypointHere(pos: Position) {
+    const wps = inputs.current.waypoints ?? emptyMapWaypoints();
+    const name = nextWaypointName(wps);
+    editWaypoints(addWaypoint(wps, name, pos));
+    selection.clear();
+    selection.selectWaypoint(pos);
+    setMenu(null);
   }
 
   const previewKey = React.useRef<string | null>(null);
@@ -514,6 +578,14 @@ export function useMapInteraction(deps: InteractionDeps) {
       inputs.current.onSelect(null);
       return;
     }
+    if (selection.waypoint.current) {
+      const wps = inputs.current.waypoints ?? emptyMapWaypoints();
+      const wp = waypointAt(wps, selection.waypoint.current.x, selection.waypoint.current.y, selection.waypoint.current.z);
+      if (wp) editWaypoints(removeWaypoint(wps, wp.name));
+      selection.selectWaypoint(null);
+      inputs.current.onSelect(null);
+      return;
+    }
     const selTiles = [...selection.entries.current.values()];
     if (selTiles.length === 0) return;
     const z = selTiles[0].z;
@@ -607,6 +679,11 @@ export function useMapInteraction(deps: InteractionDeps) {
         inputs.current.onEditSpawns(e.before);
         return;
       }
+      if (e.kind === 'waypoint') {
+        redoTimeline.current.push(e);
+        inputs.current.onEditWaypoints(e.before);
+        return;
+      }
       try {
         const touched = await undoEdit(inputs.current.map.id);
         if (touched.length > 0) {
@@ -627,6 +704,11 @@ export function useMapInteraction(deps: InteractionDeps) {
       if (e.kind === 'spawn') {
         undoTimeline.current.push(e);
         inputs.current.onEditSpawns(e.after);
+        return;
+      }
+      if (e.kind === 'waypoint') {
+        undoTimeline.current.push(e);
+        inputs.current.onEditWaypoints(e.after);
         return;
       }
       try {
@@ -651,6 +733,16 @@ export function useMapInteraction(deps: InteractionDeps) {
       return;
     }
     if (e.button !== 0) return;
+
+    if (inputs.current.placingWaypoint) {
+      const pos = tileAt(e);
+      const wps = inputs.current.waypoints ?? emptyMapWaypoints();
+      editWaypoints(moveWaypoint(wps, inputs.current.placingWaypoint, pos));
+      selection.clear();
+      selection.selectWaypoint(pos);
+      inputs.current.onPlaceWaypoint();
+      return;
+    }
 
     const tool = inputs.current.activeTool;
     const brush = inputs.current.activeBrush;
@@ -797,7 +889,8 @@ export function useMapInteraction(deps: InteractionDeps) {
     const dest = inputs.current.map.teleports.get(`${tile.x},${tile.y},${tile.z}`) ?? null;
     const spawnSel = selection.spawn.current;
     const creatureSel = selection.creature.current;
-    const onMarker = !!spawnSel || !!creatureSel;
+    const waypointSel = selection.waypoint.current;
+    const onMarker = !!spawnSel || !!creatureSel || !!waypointSel;
     setMenu({
       clientX: e.clientX,
       clientY: e.clientY,
@@ -807,7 +900,12 @@ export function useMapInteraction(deps: InteractionDeps) {
       ground: onMarker ? null : groundAt(tile),
       spawn: spawnSel ? { x: spawnSel.x, y: spawnSel.y, z: spawnSel.z } : null,
       creature: creatureSel ? { x: creatureSel.x, y: creatureSel.y, z: creatureSel.z } : null,
-      hasSelection: selection.entries.current.size > 0 || !!selection.spawn.current || !!selection.creature.current,
+      waypoint: waypointSel ? { x: waypointSel.x, y: waypointSel.y, z: waypointSel.z } : null,
+      hasSelection:
+        selection.entries.current.size > 0 ||
+        !!selection.spawn.current ||
+        !!selection.creature.current ||
+        !!selection.waypoint.current,
       canPaste: clipboardCount.current > 0
     });
   }
@@ -859,6 +957,10 @@ export function useMapInteraction(deps: InteractionDeps) {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+      if (e.key === 'Escape' && inputs.current.placingWaypoint) {
+        inputs.current.onPlaceWaypoint();
+        return;
+      }
       if (modalOpen.current) return;
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
@@ -888,7 +990,13 @@ export function useMapInteraction(deps: InteractionDeps) {
         if (t) pasteAt(t);
         return;
       }
-      if (e.key === 'Delete' && (selection.entries.current.size > 0 || selection.spawn.current || selection.creature.current)) {
+      if (
+        e.key === 'Delete' &&
+        (selection.entries.current.size > 0 ||
+          selection.spawn.current ||
+          selection.creature.current ||
+          selection.waypoint.current)
+      ) {
         e.preventDefault();
         deleteSelected();
       }
@@ -913,6 +1021,12 @@ export function useMapInteraction(deps: InteractionDeps) {
     closeCreatureForm: () => setCreatureForm(null),
     creatureProperties: openCreatureProperties,
     selectCreature: selectCreatureBrush,
+    waypointForm,
+    submitWaypointForm,
+    closeWaypointForm: () => setWaypointForm(null),
+    waypointProperties: openWaypointProperties,
+    addWaypointHere,
+    editWaypoints,
     selectRaw,
     selectGround,
     goTo,

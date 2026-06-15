@@ -5,6 +5,8 @@ const OTBM_ITEM: u8 = 6;
 const OTBM_TOWNS: u8 = 12;
 const OTBM_TOWN: u8 = 13;
 const OTBM_HOUSETILE: u8 = 14;
+const OTBM_WAYPOINTS: u8 = 15;
+const OTBM_WAYPOINT: u8 = 16;
 
 const NODE_START: u8 = 0xFE;
 const NODE_END: u8 = 0xFF;
@@ -47,6 +49,7 @@ pub trait OtbmVisitor {
 	fn house_file(&mut self, _name: String) {}
 	fn house_tile(&mut self, _x: u16, _y: u16, _z: u8) {}
 	fn town(&mut self, _id: u32, _name: String, _x: u16, _y: u16, _z: u8) {}
+	fn waypoint(&mut self, _name: String, _x: u16, _y: u16, _z: u8) {}
 }
 
 struct Reader<'a> {
@@ -194,6 +197,8 @@ impl<'a, V: OtbmVisitor> Parser<'a, V> {
 				p.tile_area()
 			} else if kind == OTBM_TOWNS {
 				p.towns()
+			} else if kind == OTBM_WAYPOINTS {
+				p.waypoints()
 			} else {
 				p.skip_subtree()?;
 				p.v.other_child(node_start, p.r.pos);
@@ -213,6 +218,21 @@ impl<'a, V: OtbmVisitor> Parser<'a, V> {
 				let y = p.r.data_u16().ok_or("otbm: town missing temple y")?;
 				let z = p.r.data_u8().ok_or("otbm: town missing temple z")?;
 				p.v.town(id, name, x, y, z);
+			}
+			p.skip_subtree()
+		})
+	}
+
+	fn waypoints(&mut self) -> Result<(), String> {
+		self.r.skip_to_structural();
+		self.each_child(|p| {
+			let kind = p.r.data_u8().ok_or("otbm: missing node type")?;
+			if kind == OTBM_WAYPOINT {
+				let name = p.r.data_string().ok_or("otbm: waypoint missing name")?;
+				let x = p.r.data_u16().ok_or("otbm: waypoint missing x")?;
+				let y = p.r.data_u16().ok_or("otbm: waypoint missing y")?;
+				let z = p.r.data_u8().ok_or("otbm: waypoint missing z")?;
+				p.v.waypoint(name, x, y, z);
 			}
 			p.skip_subtree()
 		})

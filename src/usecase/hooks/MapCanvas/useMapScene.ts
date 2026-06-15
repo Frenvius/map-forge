@@ -10,7 +10,7 @@ export interface MoveDrag {
 }
 
 export interface MarkerDrag {
-  kind: 'creature' | 'spawn';
+  kind: 'creature' | 'spawn' | 'waypoint';
   from: Position;
   lookType: number;
   radius: number;

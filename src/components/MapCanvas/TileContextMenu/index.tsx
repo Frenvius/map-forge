@@ -19,6 +19,8 @@ interface TileContextMenuProps {
   onSpawnProperties: (center: Position) => void;
   onCreatureProperties: (pos: Position) => void;
   onSelectCreature: (pos: Position) => void;
+  onWaypointProperties: (pos: Position) => void;
+  onAddWaypoint: (pos: Position) => void;
 }
 
 interface ItemProps {
@@ -70,9 +72,11 @@ const TileContextMenu = ({
   onSelectGround,
   onSpawnProperties,
   onCreatureProperties,
-  onSelectCreature
+  onSelectCreature,
+  onWaypointProperties,
+  onAddWaypoint
 }: TileContextMenuProps) => {
-  const { item, ground, dest, tile, spawn, creature, hasSelection, canPaste } = menu;
+  const { item, ground, dest, tile, spawn, creature, waypoint, hasSelection, canPaste } = menu;
 
   const ref = React.useRef<HTMLDivElement>(null);
   const [pos, setPos] = React.useState({ left: menu.clientX, top: menu.clientY });
@@ -132,10 +136,13 @@ const TileContextMenu = ({
       <Item label="Delete" shortcut="Del" onClick={onDelete} disabled={!hasSelection} />
 
       <Separator />
+      <Item label="Add Waypoint Here" onClick={() => onAddWaypoint(tile)} />
       {spawn ? (
         <Item label="Spawn Properties..." onClick={() => onSpawnProperties(spawn)} />
       ) : creature ? (
         <Item label="Creature Properties..." onClick={() => onCreatureProperties(creature)} />
+      ) : waypoint ? (
+        <Item label="Waypoint Properties..." onClick={() => onWaypointProperties(waypoint)} />
       ) : (
         <Item disabled label="Properties" />
       )}

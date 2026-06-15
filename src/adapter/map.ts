@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 
+import { Waypoint } from '~/domain/waypoint';
 import { Town, MapMeta, Position, ChunkTiles, PreviewTile, OtbmProgress, MapProperties, MapStatistics } from '~/domain/map';
 
 export const packChunkKey = (cx: number, cy: number): number => (cx << 16) | cy;
@@ -110,6 +111,10 @@ export async function getTowns(mapId: number): Promise<Town[]> {
 
 export async function setTowns(mapId: number, towns: Town[]): Promise<void> {
   await invoke('set_towns', { mapId, towns });
+}
+
+export async function getWaypoints(mapId: number): Promise<Waypoint[]> {
+  return invoke<Waypoint[]>('get_waypoints', { mapId });
 }
 
 export async function getMapProperties(mapId: number): Promise<MapProperties> {

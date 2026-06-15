@@ -183,7 +183,7 @@ export async function loadPalette(dir = DEFAULT_DATA_DIR): Promise<PaletteData> 
   indexBrushes(wallsDoc, 'wall', index);
   indexBrushes(doodadsDoc, 'doodad', index);
 
-  const data: PaletteData = { terrain: [], doodad: [], item: [], raw: [], creature: [] };
+  const data: PaletteData = { terrain: [], doodad: [], item: [], raw: [], creature: [], waypoints: [] };
   const claimed = new Set<number>();
 
   for (const tsEl of topLevel(tilesetsDoc, 'tileset')) {

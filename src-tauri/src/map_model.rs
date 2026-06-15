@@ -22,6 +22,15 @@ pub struct Town {
 	pub z: u8,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Waypoint {
+	pub name: String,
+	pub x: u16,
+	pub y: u16,
+	pub z: u8,
+}
+
 pub(crate) const ACTION_PAINT: u8 = 1;
 pub(crate) const ACTION_ERASE: u8 = 2;
 pub(crate) const ACTION_MOVE: u8 = 3;
@@ -76,6 +85,7 @@ pub struct MapModel {
 	pub(crate) items_major: u32,
 	pub(crate) items_minor: u32,
 	pub(crate) towns: Vec<Town>,
+	pub(crate) waypoints: Vec<Waypoint>,
 	pub(crate) house_tile_count: u32,
 	history: History,
 }
@@ -202,6 +212,7 @@ pub(crate) fn build_map_model(
 		items_major: 0,
 		items_minor: 0,
 		towns: Vec::new(),
+		waypoints: Vec::new(),
 		house_tile_count: 0,
 		history: History::default(),
 	}
@@ -628,6 +639,7 @@ pub(crate) fn empty_model(width: u16, height: u16) -> MapModel {
 		items_major: 3,
 		items_minor: 860,
 		towns: Vec::new(),
+		waypoints: Vec::new(),
 		house_tile_count: 0,
 		history: History::default(),
 	}
@@ -678,6 +690,7 @@ pub(crate) fn lazy_model(width: u16, height: u16, idx: &MapIndex, source: std::p
 		items_major: idx.items_major,
 		items_minor: idx.items_minor,
 		towns: idx.towns.clone(),
+		waypoints: Vec::new(),
 		house_tile_count: idx.house_tile_count,
 		history: History::default(),
 	}

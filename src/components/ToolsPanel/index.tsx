@@ -1,4 +1,4 @@
-import { Cat, Brush, Eraser, Target, Crosshair, SquarePlus, MousePointer2, GripHorizontal } from 'lucide-react';
+import { Cat, Brush, MapPin, Eraser, Target, Crosshair, SquarePlus, MousePointer2, GripHorizontal } from 'lucide-react';
 
 import { cn } from '~/usecase/classNames';
 import { TOOLS, ToolId } from '~/domain/tools';
@@ -17,12 +17,14 @@ interface ToolsPanelProps {
   showSpawns: boolean;
   showCreatures: boolean;
   autoCreateSpawn: boolean;
+  showWaypoints: boolean;
   dragHandle?: DragHandleProps;
   onSelectTool: (tool: ToolId) => void;
   onToggleSpawns: () => void;
   onToggleAutomagic: () => void;
   onToggleCreatures: () => void;
   onToggleAutoSpawn: () => void;
+  onToggleWaypoints: () => void;
 }
 
 const ToolsPanel = ({
@@ -31,12 +33,14 @@ const ToolsPanel = ({
   showSpawns,
   showCreatures,
   autoCreateSpawn,
+  showWaypoints,
   dragHandle,
   onSelectTool,
   onToggleSpawns,
   onToggleAutomagic,
   onToggleCreatures,
-  onToggleAutoSpawn
+  onToggleAutoSpawn,
+  onToggleWaypoints
 }: ToolsPanelProps) => {
   return (
     <div className="flex h-full flex-col items-center gap-0.5 overflow-y-auto rounded-lg bg-card p-1 shadow-island">
@@ -98,6 +102,16 @@ const ToolsPanel = ({
           )}
         >
           <SquarePlus className="h-[18px] w-[18px]" />
+        </button>
+        <button
+          title="Show waypoints"
+          onClick={onToggleWaypoints}
+          className={cn(
+            'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded transition-colors',
+            showWaypoints ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-item-hover hover:text-foreground'
+          )}
+        >
+          <MapPin className="h-[18px] w-[18px]" />
         </button>
         <button
           onClick={onToggleAutomagic}

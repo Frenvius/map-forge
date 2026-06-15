@@ -1,7 +1,7 @@
 import React from 'react';
 
-import { DRAW_CURSOR } from '~/usecase/cursors';
 import { GLRenderer } from '~/usecase/glRenderer';
+import { DRAW_CURSOR, WAYPOINT_CURSOR } from '~/usecase/cursors';
 import { useMapScene } from '~/usecase/hooks/MapCanvas/useMapScene';
 import { useSelection } from '~/usecase/hooks/MapCanvas/useSelection';
 import { useMapCamera } from '~/usecase/hooks/MapCanvas/useMapCamera';
@@ -17,6 +17,7 @@ import TileContextMenu from './TileContextMenu';
 import GotoPositionForm from './GotoPositionForm';
 import SpawnPropertiesForm from './SpawnPropertiesForm';
 import CreaturePropertiesForm from './CreaturePropertiesForm';
+import WaypointPropertiesForm from './WaypointPropertiesForm';
 
 const SPAWN_HANDLES = [
   { key: 'nw', left: '0%', top: '0%', cursor: 'nwse-resize' },
@@ -67,6 +68,8 @@ const MapCanvas = (props: MapCanvasProps) => {
 
   const interaction = useMapInteraction({ canvasRef, camera, inputs, atlas, tiles, meshes, selection, scene });
 
+  if (props.waypointEditRef) props.waypointEditRef.current = interaction.editWaypoints;
+
   React.useEffect(() => {
     const ref = props.centerRef;
     if (!ref) return;
@@ -100,7 +103,7 @@ const MapCanvas = (props: MapCanvasProps) => {
 
   React.useEffect(() => {
     meshes.clear();
-  }, [props.spawns, props.showSpawns, props.showCreatures]);
+  }, [props.spawns, props.showSpawns, props.showCreatures, props.waypoints, props.showWaypoints]);
 
   React.useEffect(() => {
     const el = document.documentElement;
@@ -109,13 +112,15 @@ const MapCanvas = (props: MapCanvasProps) => {
   }, [camera.panning]);
 
   const paintable = activeTool === 'brush' && activeBrush != null && activeBrush.serverId != null;
-  const canvasCursor = paintable
-    ? DRAW_CURSOR
-    : activeTool === 'eraser' || activeTool === 'spawn' || interaction.boxing
-      ? 'crosshair'
-      : camera.panning || interaction.moving
-        ? 'grabbing'
-        : 'default';
+  const canvasCursor = props.placingWaypoint
+    ? WAYPOINT_CURSOR
+    : paintable
+      ? DRAW_CURSOR
+      : activeTool === 'eraser' || activeTool === 'spawn' || interaction.boxing
+        ? 'crosshair'
+        : camera.panning || interaction.moving
+          ? 'grabbing'
+          : 'default';
 
   return (
     <div className="relative h-full w-full">
@@ -185,9 +190,11 @@ const MapCanvas = (props: MapCanvasProps) => {
           onDelete={interaction.deleteSelected}
           onCopyPosition={interaction.copyPosition}
           onSelectGround={interaction.selectGround}
+          onAddWaypoint={interaction.addWaypointHere}
           onSelectCreature={interaction.selectCreature}
           onSpawnProperties={interaction.spawnProperties}
           onCreatureProperties={interaction.creatureProperties}
+          onWaypointProperties={interaction.waypointProperties}
         />
       )}
 
@@ -208,6 +215,14 @@ const MapCanvas = (props: MapCanvasProps) => {
           initial={interaction.creatureForm}
           onCancel={interaction.closeCreatureForm}
           onSubmit={interaction.submitCreatureForm}
+        />
+      )}
+
+      {interaction.waypointForm && (
+        <WaypointPropertiesForm
+          initial={interaction.waypointForm}
+          onCancel={interaction.closeWaypointForm}
+          onSubmit={interaction.submitWaypointForm}
         />
       )}
     </div>

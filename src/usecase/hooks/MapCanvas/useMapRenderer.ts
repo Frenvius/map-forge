@@ -250,6 +250,41 @@ export function useMapRenderer(deps: RendererDeps) {
       if (!appendCreatures(inst, arr, outfits, atlas, frameTick.current, missing, cSel)) complete = false;
     }
 
+    const chunkWaypoints = inputs.current.showWaypoints ? inputs.current.waypoints?.byChunk.get(key) : undefined;
+    const wpThing =
+      chunkWaypoints?.length && inputs.current.waypointMarkerClientId
+        ? items.get(inputs.current.waypointMarkerClientId)
+        : undefined;
+    if (wpThing && chunkWaypoints) {
+      const selWp = selection.waypoint.current;
+      for (const wp of chunkWaypoints) {
+        const tint = selWp && selWp.z === z && selWp.x === wp.x && selWp.y === wp.y ? 1 : 0;
+        for (let l = 0; l < wpThing.layers; l++) {
+          for (let h = 0; h < wpThing.height; h++) {
+            for (let w = 0; w < wpThing.width; w++) {
+              const sid = wpThing.spriteIndex[getSpriteIndex(wpThing, w, h, l, 0, 0, 0, 0)];
+              if (!sid) continue;
+              const data = atlas.data.current.get(sid);
+              if (!data) {
+                missing.add(sid);
+                complete = false;
+                continue;
+              }
+              atlas.lastUsed.current.set(sid, frameTick.current);
+              if (data.empty) continue;
+              const slot = atlas.slotFor(sid, data);
+              if (slot < 0) {
+                complete = false;
+                continue;
+              }
+              const { u0, v0 } = slotUV(slot);
+              inst.push((wp.x - w) * TILE, (wp.y - h) * TILE, u0, v0, tint, 1);
+            }
+          }
+        }
+      }
+    }
+
     meshes.store(key, new Float32Array(inst), {
       count: inst.length / 6,
       version: atlas.version.current,
@@ -561,6 +596,10 @@ export function useMapRenderer(deps: RendererDeps) {
           missing
         );
         if (ghost) renderer.drawGhost(ghost, camX, camY, scale, 0.55);
+      } else if (mk.kind === 'waypoint') {
+        const markerThing = inputs.current.items.get(inputs.current.waypointMarkerClientId);
+        const flame = markerThing ? buildThingGhost(markerThing, d.x, d.y, atlas, frameTick.current, missing) : null;
+        if (flame) renderer.drawGhost(flame, camX, camY, scale, 0.5);
       } else {
         const ctx = { items: inputs.current.items, tiles, atlas };
         const area = buildSpawnAreaGhost(ctx, d.x, d.y, floorZ, mk.radius, frameTick.current, missing);
@@ -569,6 +608,14 @@ export function useMapRenderer(deps: RendererDeps) {
         const flame = markerThing ? buildThingGhost(markerThing, d.x, d.y, atlas, frameTick.current, missing) : null;
         if (flame) renderer.drawGhost(flame, camX, camY, scale, 0.5);
       }
+    }
+
+    const placing = inputs.current.placingWaypoint;
+    const hover = scene.hoveredTile.current;
+    if (placing && hover && hover.z === floorZ && inputs.current.waypointMarkerClientId) {
+      const markerThing = inputs.current.items.get(inputs.current.waypointMarkerClientId);
+      const ghost = markerThing ? buildThingGhost(markerThing, hover.x, hover.y, atlas, frameTick.current, missing) : null;
+      if (ghost) renderer.drawGhost(ghost, camX, camY, scale, 0.6);
     }
 
     const previewTiles = scene.boxGhostTiles.current;

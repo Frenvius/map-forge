@@ -5,11 +5,13 @@ import { ThingType } from '~/domain/tibia';
 import { LoadedSprite } from '~/domain/sprite';
 import { loadSprites } from '~/adapter/sprites';
 import { mapClientIds } from '~/adapter/assets';
+import { Waypoint, MapWaypoints } from '~/domain/waypoint';
 import { DragHandleProps } from '~/components/Dock/DockablePanel';
 import { brushSpriteLayout, BrushSpriteLayout, resolveBrushThing } from '~/usecase/brushSprite';
 import { Select, SelectItem, SelectValue, SelectContent, SelectTrigger } from '~/components/commons/ui/select';
 import { ActiveBrush, PaletteData, PaletteBrush, PaletteCategoryId, PALETTE_CATEGORIES } from '~/domain/palette';
 
+import WaypointsList from './WaypointsList';
 import BrushThumbnail from './BrushThumbnail';
 
 const CELL_SIZE = 32;
@@ -39,6 +41,11 @@ interface PalettePanelProps {
   dragHandle?: DragHandleProps;
   onSelectBrush: (brush: ActiveBrush | null) => void;
   reveal?: { category: PaletteCategoryId; serverId: number; name?: string; nonce: number } | null;
+  waypoints: MapWaypoints | null;
+  onGotoWaypoint: (wp: Waypoint) => void;
+  onCopyWaypointPosition: (wp: Waypoint) => void;
+  onEditWaypoints: (next: MapWaypoints) => void;
+  onAddWaypoint: () => void;
 }
 
 interface PendingReveal {
@@ -55,7 +62,21 @@ interface Tile {
 const SHARED_SPRITE_CACHE = new Map<number, LoadedSprite>();
 const SHARED_SERVER_TO_CLIENT = new Map<number, number>();
 
-const PalettePanel = ({ data, items, outfits, sprPath, transparency, dragHandle, onSelectBrush, reveal }: PalettePanelProps) => {
+const PalettePanel = ({
+  data,
+  items,
+  outfits,
+  sprPath,
+  transparency,
+  dragHandle,
+  onSelectBrush,
+  reveal,
+  waypoints,
+  onGotoWaypoint,
+  onCopyWaypointPosition,
+  onEditWaypoints,
+  onAddWaypoint
+}: PalettePanelProps) => {
   const spriteCache = React.useRef(SHARED_SPRITE_CACHE);
   const serverToClient = React.useRef(SHARED_SERVER_TO_CLIENT);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
@@ -180,6 +201,8 @@ const PalettePanel = ({ data, items, outfits, sprPath, transparency, dragHandle,
     });
   }
 
+  const isWaypoints = category === 'waypoints';
+
   return (
     <div className="flex h-full w-full flex-col overflow-hidden rounded-lg bg-card shadow-island">
       <div
@@ -192,7 +215,9 @@ const PalettePanel = ({ data, items, outfits, sprPath, transparency, dragHandle,
         )}
       >
         <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground">Palette</h2>
-        <span className="ml-auto font-mono text-[10px] text-muted-foreground">{tiles.length}</span>
+        <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+          {isWaypoints ? (waypoints?.list.length ?? 0) : tiles.length}
+        </span>
       </div>
 
       <div className="flex flex-shrink-0 flex-col gap-2 border-b border-border/50 p-2">
@@ -209,45 +234,57 @@ const PalettePanel = ({ data, items, outfits, sprPath, transparency, dragHandle,
           </SelectContent>
         </Select>
 
-        <div className="flex flex-col gap-1">
-          <span className="px-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">Tileset</span>
-          <Select value={current?.name ?? ''} onValueChange={setTilesetName} disabled={tilesets.length === 0}>
-            <SelectTrigger>
-              <SelectValue placeholder="No tilesets" />
-            </SelectTrigger>
-            <SelectContent>
-              {tilesets.map((t) => (
-                <SelectItem key={t.name} value={t.name}>
-                  {t.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-2">
-        {tiles.length === 0 ? (
-          <div className="px-1 py-6 text-center text-xs text-muted-foreground">No brushes in this tileset.</div>
-        ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(2.25rem,1fr))] gap-1">
-            {tiles.map((tile) => (
-              <button
-                key={tile.brush.key}
-                title={tile.brush.name}
-                data-brush-key={tile.brush.key}
-                onClick={() => handleSelect(tile)}
-                className={cn(
-                  'flex aspect-square items-center justify-center rounded border bg-muted/40 p-0.5 transition-colors hover:bg-item-hover',
-                  selectedKey === tile.brush.key ? 'border-primary bg-primary/15' : 'border-border/50'
-                )}
-              >
-                <BrushThumbnail size={CELL_SIZE} layout={tile.layout} version={renderVersion} cache={spriteCache.current} />
-              </button>
-            ))}
+        {!isWaypoints && (
+          <div className="flex flex-col gap-1">
+            <span className="px-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">Tileset</span>
+            <Select value={current?.name ?? ''} onValueChange={setTilesetName} disabled={tilesets.length === 0}>
+              <SelectTrigger>
+                <SelectValue placeholder="No tilesets" />
+              </SelectTrigger>
+              <SelectContent>
+                {tilesets.map((t) => (
+                  <SelectItem key={t.name} value={t.name}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
       </div>
+
+      {isWaypoints ? (
+        <WaypointsList
+          waypoints={waypoints}
+          onAdd={onAddWaypoint}
+          onGoto={onGotoWaypoint}
+          onEdit={onEditWaypoints}
+          onCopyPosition={onCopyWaypointPosition}
+        />
+      ) : (
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-2">
+          {tiles.length === 0 ? (
+            <div className="px-1 py-6 text-center text-xs text-muted-foreground">No brushes in this tileset.</div>
+          ) : (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(2.25rem,1fr))] gap-1">
+              {tiles.map((tile) => (
+                <button
+                  key={tile.brush.key}
+                  title={tile.brush.name}
+                  data-brush-key={tile.brush.key}
+                  onClick={() => handleSelect(tile)}
+                  className={cn(
+                    'flex aspect-square items-center justify-center rounded border bg-muted/40 p-0.5 transition-colors hover:bg-item-hover',
+                    selectedKey === tile.brush.key ? 'border-primary bg-primary/15' : 'border-border/50'
+                  )}
+                >
+                  <BrushThumbnail size={CELL_SIZE} layout={tile.layout} version={renderVersion} cache={spriteCache.current} />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

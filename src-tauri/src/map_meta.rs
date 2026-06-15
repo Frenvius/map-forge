@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::map_model::Town;
+use crate::map_model::{Town, Waypoint};
 use crate::{MapState, OtbState};
 
 #[derive(Serialize)]
@@ -93,6 +93,13 @@ pub fn set_towns(map_id: u32, towns: Vec<Town>, map_state: tauri::State<MapState
 	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
 	m.towns = towns;
 	Ok(())
+}
+
+#[tauri::command]
+pub fn get_waypoints(map_id: u32, map_state: tauri::State<MapState>) -> Result<Vec<Waypoint>, String> {
+	let guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get(&map_id).ok_or("map not loaded")?;
+	Ok(m.waypoints.clone())
 }
 
 #[tauri::command]

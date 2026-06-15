@@ -9,6 +9,7 @@ export const DEFAULT_DATA_DIR = 'D:/workspace/projects/nosbor/data/860';
 export const DEFAULT_VERSION = 860;
 
 const SPAWN_MARKER_SERVER_ID = 1507;
+const WAYPOINT_MARKER_SERVER_ID = 1397;
 
 export interface LoadedAssets {
   items: Map<number, ThingType>;
@@ -16,6 +17,7 @@ export interface LoadedAssets {
   itemNames: Map<number, string>;
   creatures: Map<string, CreatureLook>;
   spawnMarkerClientId: number;
+  waypointMarkerClientId: number;
   sprPath: string;
   transparency: boolean;
   spritesCount: number;
@@ -92,7 +94,7 @@ export async function loadAssets(dir = DEFAULT_DATA_DIR, version = DEFAULT_VERSI
   await invoke<number>('load_materials', { dataDir: dir }).catch((err) => console.error('Failed to load materials', err));
   const itemNames = await loadItemNames(dir);
   const creatures = await loadCreatureDb(dir);
-  const spawnMarkerClientId = (await mapClientIds([SPAWN_MARKER_SERVER_ID]))[0] ?? 0;
+  const [spawnMarkerClientId, waypointMarkerClientId] = await mapClientIds([SPAWN_MARKER_SERVER_ID, WAYPOINT_MARKER_SERVER_ID]);
 
   const datResponse = await invoke<Uint8Array | ArrayBuffer>('parse_dat_file_bin', { path: datPath, version });
   const datBuf = datResponse instanceof Uint8Array ? datResponse : new Uint8Array(datResponse);
@@ -105,7 +107,8 @@ export async function loadAssets(dir = DEFAULT_DATA_DIR, version = DEFAULT_VERSI
     outfits: dat.outfits,
     itemNames,
     creatures,
-    spawnMarkerClientId,
+    spawnMarkerClientId: spawnMarkerClientId ?? 0,
+    waypointMarkerClientId: waypointMarkerClientId ?? 0,
     sprPath,
     transparency,
     spritesCount: sprHeader.sprite_count,
