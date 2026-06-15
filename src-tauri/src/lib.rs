@@ -161,9 +161,9 @@ mod tests {
 			self.height = height;
 		}
 		fn progress(&mut self, _pos: usize, _total: usize) {}
-		fn tile(&mut self, _x: u16, _y: u16, _z: u8, items: &[u16]) {
+		fn tile(&mut self, _x: u16, _y: u16, _z: u8, items: &[(u16, u8)]) {
 			self.tiles += 1;
-			self.item_sids.extend_from_slice(items);
+			self.item_sids.extend(items.iter().map(|&(id, _)| id));
 		}
 		fn teleport(&mut self, _sx: u16, _sy: u16, _sz: u8, dx: u16, dy: u16, dz: u8) {
 			self.teleports += 1;

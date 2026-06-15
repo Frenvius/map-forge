@@ -67,6 +67,7 @@ pub struct MapModel {
 	pub(crate) item_off: Vec<u32>,
 	pub(crate) client_ids: Vec<u16>,
 	pub(crate) server_ids: Vec<u16>,
+	pub(crate) subtypes: Vec<u8>,
 	pub(crate) floors: HashMap<u8, HashMap<u32, (u32, u32)>>,
 	pub(crate) teleports: Vec<u8>,
 	pub(crate) teleport_count: u32,
@@ -119,6 +120,7 @@ pub(crate) fn build_map_model(
 	item_count: &[u16],
 	client_ids: &[u16],
 	server_ids: &[u16],
+	subtypes: &[u8],
 	teleports: Vec<u8>,
 	teleport_count: u32,
 ) -> MapModel {
@@ -151,6 +153,7 @@ pub(crate) fn build_map_model(
 	item_off.push(0);
 	let mut client_col: Vec<u16> = Vec::with_capacity(client_ids.len());
 	let mut server_col: Vec<u16> = Vec::with_capacity(server_ids.len());
+	let mut subtype_col: Vec<u8> = Vec::with_capacity(subtypes.len());
 	let mut acc: u32 = 0;
 	for &oi in &order {
 		let i = oi as usize;
@@ -160,6 +163,7 @@ pub(crate) fn build_map_model(
 		tile_y.push(ys[i]);
 		client_col.extend_from_slice(&client_ids[s..s + c]);
 		server_col.extend_from_slice(&server_ids[s..s + c]);
+		subtype_col.extend_from_slice(&subtypes[s..s + c]);
 		acc += c as u32;
 		item_off.push(acc);
 	}
@@ -194,6 +198,7 @@ pub(crate) fn build_map_model(
 		item_off,
 		client_ids: client_col,
 		server_ids: server_col,
+		subtypes: subtype_col,
 		floors,
 		teleports,
 		teleport_count,
@@ -251,7 +256,7 @@ pub(crate) fn serialize_chunks(m: &MapModel, z: u8, keys: &[u32]) -> Vec<u8> {
 		let base_range = floor.and_then(|f| f.get(&k).copied());
 		let edits_chunk = efloor.and_then(|c| c.get(&k));
 
-		let mut tiles: Vec<(u16, u16, Vec<(u16, u16)>)> = Vec::new();
+		let mut tiles: Vec<(u16, u16, Vec<(u16, u16, u8)>)> = Vec::new();
 		if let Some((start, end)) = base_range {
 			for t in start as usize..end as usize {
 				let pos = (m.tile_x[t] as u32) << 16 | m.tile_y[t] as u32;
@@ -260,7 +265,7 @@ pub(crate) fn serialize_chunks(m: &MapModel, z: u8, keys: &[u32]) -> Vec<u8> {
 				}
 				let s = m.item_off[t] as usize;
 				let e = m.item_off[t + 1] as usize;
-				let items = (s..e).map(|j| (m.client_ids[j], m.server_ids[j])).collect();
+				let items = (s..e).map(|j| (m.client_ids[j], m.server_ids[j], m.subtypes[j])).collect();
 				tiles.push((m.tile_x[t], m.tile_y[t], items));
 			}
 		}
@@ -269,7 +274,8 @@ pub(crate) fn serialize_chunks(m: &MapModel, z: u8, keys: &[u32]) -> Vec<u8> {
 				if stack.is_empty() {
 					continue;
 				}
-				tiles.push(((pos >> 16) as u16, (pos & 0xFFFF) as u16, stack.clone()));
+				let items = stack.iter().map(|&(cl, sv)| (cl, sv, 1u8)).collect();
+				tiles.push(((pos >> 16) as u16, (pos & 0xFFFF) as u16, items));
 			}
 		}
 		if tiles.is_empty() {
@@ -284,9 +290,10 @@ pub(crate) fn serialize_chunks(m: &MapModel, z: u8, keys: &[u32]) -> Vec<u8> {
 			push_u16(&mut out, *x);
 			push_u16(&mut out, *y);
 			push_u16(&mut out, items.len() as u16);
-			for (c, s) in items {
+			for (c, s, sub) in items {
 				push_u16(&mut out, *c);
 				push_u16(&mut out, *s);
+				out.push(*sub);
 			}
 		}
 		chunk_count += 1;
@@ -480,6 +487,7 @@ impl MapModel {
 				item_count: Vec::new(),
 				client_ids: Vec::new(),
 				server_ids: Vec::new(),
+				subtypes: Vec::new(),
 			};
 			read_otbm_floor(&slice, &mut col)?;
 			self.append_chunk(z, key, &col);
@@ -506,6 +514,7 @@ impl MapModel {
 			self.tile_y.push(col.ys[i]);
 			self.client_ids.extend_from_slice(&col.client_ids[s..s + c]);
 			self.server_ids.extend_from_slice(&col.server_ids[s..s + c]);
+			self.subtypes.extend_from_slice(&col.subtypes[s..s + c]);
 			acc += c as u32;
 			self.item_off.push(acc);
 		}
@@ -621,6 +630,7 @@ pub(crate) fn empty_model(width: u16, height: u16) -> MapModel {
 		item_off: vec![0],
 		client_ids: Vec::new(),
 		server_ids: Vec::new(),
+		subtypes: Vec::new(),
 		floors: HashMap::new(),
 		teleports: Vec::new(),
 		teleport_count: 0,
@@ -672,6 +682,7 @@ pub(crate) fn lazy_model(width: u16, height: u16, idx: &MapIndex, source: std::p
 		item_off: vec![0],
 		client_ids: Vec::new(),
 		server_ids: Vec::new(),
+		subtypes: Vec::new(),
 		floors: HashMap::new(),
 		teleports: idx.teleports.clone(),
 		teleport_count: idx.teleport_count,
@@ -704,20 +715,22 @@ struct FloorCollector<'a> {
 	item_count: Vec<u16>,
 	client_ids: Vec<u16>,
 	server_ids: Vec<u16>,
+	subtypes: Vec<u8>,
 }
 
 impl OtbmVisitor for FloorCollector<'_> {
 	fn header(&mut self, _w: u16, _h: u16) {}
 	fn progress(&mut self, _pos: usize, _total: usize) {}
 	fn teleport(&mut self, _sx: u16, _sy: u16, _sz: u8, _dx: u16, _dy: u16, _dz: u8) {}
-	fn tile(&mut self, x: u16, y: u16, _z: u8, items: &[u16]) {
+	fn tile(&mut self, x: u16, y: u16, _z: u8, items: &[(u16, u8)]) {
 		let start = self.client_ids.len() as u32;
 		let mut n: u16 = 0;
-		for &sid in items {
+		for &(sid, sub) in items {
 			if let Some(cid) = self.otb.client_id(sid) {
 				if cid != 0 {
 					self.client_ids.push(cid);
 					self.server_ids.push(sid);
+					self.subtypes.push(sub);
 					n += 1;
 				}
 			}
@@ -820,7 +833,8 @@ mod tests {
 		let item_count = vec![1u16, 1, 2, 1];
 		let client_ids = vec![100u16, 101, 102, 103, 104];
 		let server_ids = vec![900u16, 901, 902, 903, 904];
-		build_map_model(10, 20, &xs, &ys, &zs, &item_start, &item_count, &client_ids, &server_ids, Vec::new(), 0)
+		let subtypes = vec![1u8, 1, 1, 1, 1];
+		build_map_model(10, 20, &xs, &ys, &zs, &item_start, &item_count, &client_ids, &server_ids, &subtypes, Vec::new(), 0)
 	}
 
 	#[test]
@@ -865,11 +879,12 @@ mod tests {
 		assert_eq!(u16_at(&buf, o + 4), 1);
 		assert_eq!(u16_at(&buf, o + 6), 100);
 		assert_eq!(u16_at(&buf, o + 8), 900);
-		o += 10;
+		assert_eq!(buf[o + 10], 1);
+		o += 11;
 		assert_eq!(u16_at(&buf, o), 33);
 		assert_eq!(u16_at(&buf, o + 2), 5);
 		assert_eq!(u16_at(&buf, o + 4), 2);
 		assert_eq!(u16_at(&buf, o + 6), 102);
-		assert_eq!(u16_at(&buf, o + 10), 103);
+		assert_eq!(u16_at(&buf, o + 11), 103);
 	}
 }

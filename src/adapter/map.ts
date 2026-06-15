@@ -255,6 +255,7 @@ export async function fetchMapChunks(mapId: number, z: number, keys: number[]): 
     const itemOffset = new Uint32Array(tileCount + 1);
     const clientList: number[] = [];
     const serverList: number[] = [];
+    const countList: number[] = [];
     let acc = 0;
     for (let t = 0; t < tileCount; t++) {
       tileX[t] = view.getUint16(o, true);
@@ -269,6 +270,8 @@ export async function fetchMapChunks(mapId: number, z: number, keys: number[]): 
         o += 2;
         serverList.push(view.getUint16(o, true));
         o += 2;
+        countList.push(view.getUint8(o));
+        o += 1;
       }
       acc += nItems;
     }
@@ -278,7 +281,8 @@ export async function fetchMapChunks(mapId: number, z: number, keys: number[]): 
       tileY,
       itemOffset,
       clientIds: Uint16Array.from(clientList),
-      serverIds: Uint16Array.from(serverList)
+      serverIds: Uint16Array.from(serverList),
+      counts: Uint8Array.from(countList)
     });
   }
   return result;

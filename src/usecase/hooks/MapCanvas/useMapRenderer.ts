@@ -1,12 +1,12 @@
 import React from 'react';
 
-import { getSpriteIndex } from '~/domain/tibia';
 import { visibleFloorRange } from '~/usecase/floors';
 import { slotUV, GLRenderer } from '~/usecase/glRenderer';
 import { packChunkKey, fetchMapChunks } from '~/adapter/map';
 import { MapCanvasProps } from '~/components/MapCanvas/types';
 import { SpawnArea, CreaturePlacement } from '~/domain/creature';
 import { Position, ChunkTiles, PreviewTile } from '~/domain/map';
+import { isCountStack, getSpriteIndex, stackSpriteIndex } from '~/domain/tibia';
 import {
   TILE,
   CHUNK,
@@ -172,6 +172,8 @@ export function useMapRenderer(deps: RendererDeps) {
           if (!thing || thing.spriteIndex.length === 0) continue;
           const px = thing.patternX > 0 ? tx % thing.patternX : 0;
           const py = thing.patternY > 0 ? ty % thing.patternY : 0;
+          const countStack = isCountStack(thing);
+          const stackIdx = countStack ? stackSpriteIndex(thing, ct.counts[ii]) : 0;
           const ox = (thing.offsetX || 0) + drawElevation;
           const oy = (thing.offsetY || 0) + drawElevation;
           const tint = selEntry ? (selEntry.all || ii === top ? 1 : 0) : 0;
@@ -180,7 +182,7 @@ export function useMapRenderer(deps: RendererDeps) {
           for (let l = 0; l < thing.layers; l++) {
             for (let h = 0; h < thing.height; h++) {
               for (let w = 0; w < thing.width; w++) {
-                const sid = thing.spriteIndex[getSpriteIndex(thing, w, h, l, px, py, 0, 0)];
+                const sid = thing.spriteIndex[countStack ? stackIdx : getSpriteIndex(thing, w, h, l, px, py, 0, 0)];
                 if (!sid) continue;
                 const data = atlas.data.current.get(sid);
                 if (!data) {

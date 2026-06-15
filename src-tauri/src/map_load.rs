@@ -50,6 +50,7 @@ pub(crate) struct OtbmCollector<'a> {
 	pub(crate) item_count: Vec<u16>,
 	pub(crate) client_ids: Vec<u16>,
 	pub(crate) server_ids: Vec<u16>,
+	pub(crate) subtypes: Vec<u8>,
 	pub(crate) teleports: Vec<u8>,
 	pub(crate) teleport_count: u32,
 	pub(crate) last_step: i32,
@@ -76,6 +77,7 @@ impl OtbmCollector<'_> {
 			&self.item_count,
 			&self.client_ids,
 			&self.server_ids,
+			&self.subtypes,
 			self.teleports,
 			self.teleport_count,
 		);
@@ -110,14 +112,15 @@ impl OtbmVisitor for OtbmCollector<'_> {
 		}
 	}
 
-	fn tile(&mut self, x: u16, y: u16, z: u8, items: &[u16]) {
+	fn tile(&mut self, x: u16, y: u16, z: u8, items: &[(u16, u8)]) {
 		let start = self.client_ids.len() as u32;
 		let mut n: u16 = 0;
-		for &sid in items {
+		for &(sid, sub) in items {
 			if let Some(cid) = self.otb.client_id(sid) {
 				if cid != 0 {
 					self.client_ids.push(cid);
 					self.server_ids.push(sid);
+					self.subtypes.push(sub);
 					n += 1;
 				}
 			}
@@ -203,6 +206,7 @@ pub async fn open_otbm(
 			item_count: Vec::new(),
 			client_ids: Vec::new(),
 			server_ids: Vec::new(),
+			subtypes: Vec::new(),
 			teleports: Vec::new(),
 			teleport_count: 0,
 			last_step: -1,

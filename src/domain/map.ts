@@ -28,6 +28,7 @@ export interface ChunkTiles {
   itemOffset: Uint32Array;
   clientIds: Uint16Array;
   serverIds: Uint16Array;
+  counts: Uint8Array;
 }
 
 export interface PreviewTile {

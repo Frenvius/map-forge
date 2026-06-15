@@ -256,6 +256,28 @@ export function getTextureIndex(
   );
 }
 
+export function stackFrame(count: number): number {
+  if (count <= 1) return 0;
+  if (count <= 2) return 1;
+  if (count <= 3) return 2;
+  if (count <= 4) return 3;
+  if (count < 10) return 4;
+  if (count < 25) return 5;
+  if (count < 50) return 6;
+  return 7;
+}
+
+export function isCountStack(thing: ThingType): boolean {
+  return thing.stackable && thing.width <= 1 && thing.height <= 1 && thing.layers <= 1;
+}
+
+export function stackSpriteIndex(thing: ThingType, count: number): number {
+  const v = stackFrame(count);
+  const n = thing.spriteIndex.length;
+  if (n <= 1) return 0;
+  return v >= n ? v % n : v;
+}
+
 export function getSpriteIndex(
   thing: ThingType,
   width: number,

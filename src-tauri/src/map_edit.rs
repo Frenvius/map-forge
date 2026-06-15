@@ -842,7 +842,7 @@ mod tests {
 		let mut place = HashMap::new();
 		place.insert(grass_client, PlaceFlags { ground: true, top_order: 0 });
 
-		let mut m = build_map_model(100, 100, &[50], &[50], &[7], &[0], &[1], &[grass_client], &[4526], Vec::new(), 0);
+		let mut m = build_map_model(100, 100, &[50], &[50], &[7], &[0], &[1], &[grass_client], &[4526], &[1], Vec::new(), 0);
 
 		let tiles: HashSet<(u16, u16)> = [(50u16, 50u16)].into_iter().collect();
 		borderize(&mut m, &mats, &place, &otb, 7, &tiles, false);
@@ -861,7 +861,7 @@ mod tests {
 		let mut place = HashMap::new();
 		place.insert(grass, PlaceFlags { ground: true, top_order: 0 });
 
-		let mut m = build_map_model(100, 100, &[50, 51], &[50, 50], &[7, 7], &[0, 1], &[1, 1], &[grass, grass], &[4526, 4526], Vec::new(), 0);
+		let mut m = build_map_model(100, 100, &[50, 51], &[50, 50], &[7, 7], &[0, 1], &[1, 1], &[grass, grass], &[4526, 4526], &[1, 1], Vec::new(), 0);
 
 		let both: HashSet<(u16, u16)> = [(50, 50), (51, 50)].into_iter().collect();
 		borderize(&mut m, &mats, &place, &otb, 7, &both, false);
@@ -883,7 +883,7 @@ mod tests {
 		let mut place = HashMap::new();
 		place.insert(grass, PlaceFlags { ground: true, top_order: 0 });
 
-		let mut m = build_map_model(100, 100, &[], &[], &[], &[], &[], &[], &[], Vec::new(), 0);
+		let mut m = build_map_model(100, 100, &[], &[], &[], &[], &[], &[], &[], &[], Vec::new(), 0);
 
 		m.record_begin();
 		insert_ordered(tile_stack_mut(&mut m, 7, 50, 50), &place, Some(&mats), grass, 4526);
@@ -916,7 +916,7 @@ mod tests {
 		assert_eq!(order_class(&place, Some(&mats), border_client, border_server), BORDER_CLASS, "border item");
 		assert_eq!(order_class(&place, Some(&mats), item.0, item.1), NORMAL_CLASS, "synthetic item is normal");
 
-		let mut m = build_map_model(100, 100, &[], &[], &[], &[], &[], &[], &[], Vec::new(), 0);
+		let mut m = build_map_model(100, 100, &[], &[], &[], &[], &[], &[], &[], &[], Vec::new(), 0);
 		let stack = tile_stack_mut(&mut m, 7, 10, 10);
 		*stack = vec![(grass, 4526), (border_client, border_server), item];
 		stack.retain(|&(c, s)| matches!(order_class(&place, Some(&mats), c, s), GROUND_CLASS | BORDER_CLASS));

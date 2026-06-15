@@ -34,7 +34,7 @@ const OTBM_ATTR_TIER: u8 = 41;
 pub trait OtbmVisitor {
 	fn header(&mut self, width: u16, height: u16);
 	fn progress(&mut self, pos: usize, total: usize);
-	fn tile(&mut self, x: u16, y: u16, z: u8, items: &[u16]);
+	fn tile(&mut self, x: u16, y: u16, z: u8, items: &[(u16, u8)]);
 	fn teleport(&mut self, sx: u16, sy: u16, sz: u8, dx: u16, dy: u16, dz: u8);
 
 	fn identifier(&mut self, _start: usize, _end: usize) {}
@@ -120,7 +120,7 @@ struct Parser<'a, V: OtbmVisitor> {
 	r: Reader<'a>,
 	v: &'a mut V,
 	total: usize,
-	scratch: Vec<u16>,
+	scratch: Vec<(u16, u8)>,
 }
 
 impl<'a, V: OtbmVisitor> Parser<'a, V> {
@@ -279,7 +279,7 @@ impl<'a, V: OtbmVisitor> Parser<'a, V> {
 					}
 				}
 				OTBM_ATTR_ITEM => match self.r.data_u16() {
-					Some(id) => self.scratch.push(id),
+					Some(id) => self.scratch.push((id, 1)),
 					None => break,
 				},
 				_ => break,
@@ -304,11 +304,19 @@ impl<'a, V: OtbmVisitor> Parser<'a, V> {
 
 	fn tile_item(&mut self, tile_x: u16, tile_y: u16, base_z: u8) -> Result<(), String> {
 		let id = self.r.data_u16().ok_or("otbm: item missing id")?;
-		self.scratch.push(id);
+		let item_idx = self.scratch.len();
+		self.scratch.push((id, 1));
 
 		while let Some(attr) = self.r.data_u8() {
 			let ok = match attr {
-				OTBM_ATTR_COUNT | OTBM_ATTR_TIER | OTBM_ATTR_HOUSEDOORID | OTBM_ATTR_RUNE_CHARGES => self.r.skip_data(1),
+				OTBM_ATTR_COUNT => match self.r.data_u8() {
+					Some(c) => {
+						self.scratch[item_idx].1 = c.max(1);
+						true
+					}
+					None => false,
+				},
+				OTBM_ATTR_TIER | OTBM_ATTR_HOUSEDOORID | OTBM_ATTR_RUNE_CHARGES => self.r.skip_data(1),
 				OTBM_ATTR_ACTION_ID | OTBM_ATTR_UNIQUE_ID | OTBM_ATTR_CHARGES | OTBM_ATTR_DEPOT_ID => self.r.skip_data(2),
 				OTBM_ATTR_TEXT | OTBM_ATTR_DESC | OTBM_ATTR_DESCRIPTION => match self.r.data_u16() {
 					Some(len) => self.r.skip_data(len as usize),

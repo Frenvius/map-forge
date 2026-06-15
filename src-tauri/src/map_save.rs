@@ -54,7 +54,7 @@ impl Default for SaveScan {
 impl OtbmVisitor for SaveScan {
 	fn header(&mut self, _w: u16, _h: u16) {}
 	fn progress(&mut self, _pos: usize, _total: usize) {}
-	fn tile(&mut self, _x: u16, _y: u16, _z: u8, _items: &[u16]) {}
+	fn tile(&mut self, _x: u16, _y: u16, _z: u8, _items: &[(u16, u8)]) {}
 	fn teleport(&mut self, sx: u16, sy: u16, sz: u8, dx: u16, dy: u16, dz: u8) {
 		self.teleports.extend_from_slice(&sx.to_le_bytes());
 		self.teleports.extend_from_slice(&sy.to_le_bytes());
@@ -404,8 +404,8 @@ mod tests {
 		fn header(&mut self, _w: u16, _h: u16) {}
 		fn progress(&mut self, _p: usize, _t: usize) {}
 		fn teleport(&mut self, _sx: u16, _sy: u16, _sz: u8, _dx: u16, _dy: u16, _dz: u8) {}
-		fn tile(&mut self, x: u16, y: u16, z: u8, items: &[u16]) {
-			self.tiles.insert((x, y, z), items.to_vec());
+		fn tile(&mut self, x: u16, y: u16, z: u8, items: &[(u16, u8)]) {
+			self.tiles.insert((x, y, z), items.iter().map(|&(id, _)| id).collect());
 		}
 	}
 
@@ -522,7 +522,7 @@ mod tests {
 		fn header(&mut self, _w: u16, _h: u16) {}
 		fn progress(&mut self, _p: usize, _t: usize) {}
 		fn teleport(&mut self, _sx: u16, _sy: u16, _sz: u8, _dx: u16, _dy: u16, _dz: u8) {}
-		fn tile(&mut self, _x: u16, _y: u16, _z: u8, _items: &[u16]) {}
+		fn tile(&mut self, _x: u16, _y: u16, _z: u8, _items: &[(u16, u8)]) {}
 		fn map_version(&mut self, otbm: u32, _major: u32, _minor: u32) {
 			self.otbm_version = otbm;
 		}
@@ -579,7 +579,8 @@ mod tests {
 		let item_count = vec![3u16, 1, 1];
 		let client_ids = vec![1u16, 2, 3, 4, 5];
 		let server_ids = vec![100u16, 200, 300, 400, 500];
-		let model = build_map_model(50, 50, &xs, &ys, &zs, &item_start, &item_count, &client_ids, &server_ids, Vec::new(), 0);
+		let subtypes = vec![1u8; client_ids.len()];
+		let model = build_map_model(50, 50, &xs, &ys, &zs, &item_start, &item_count, &client_ids, &server_ids, &subtypes, Vec::new(), 0);
 
 		let out = build_from_model(&model, &mut |_, _| {}).unwrap();
 		let tiles = parse_tiles(&out);
@@ -602,8 +603,9 @@ mod tests {
 		let item_count = vec![1u16, 1, 1];
 		let client_ids = vec![2u16, 3, 4];
 		let server_ids = vec![200u16, 300, 400];
+		let subtypes = vec![1u8; client_ids.len()];
 		let mut model =
-			build_map_model(50, 50, &xs, &ys, &zs, &item_start, &item_count, &client_ids, &server_ids, Vec::new(), 0);
+			build_map_model(50, 50, &xs, &ys, &zs, &item_start, &item_count, &client_ids, &server_ids, &subtypes, Vec::new(), 0);
 
 		let mut palette = vec![0u8; 16];
 		palette[2] = 50;
