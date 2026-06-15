@@ -15,7 +15,7 @@ import {
   SpawnForm,
   CreatureForm,
   WaypointForm,
-  MapCanvasProps,
+  MapCanvasInputs,
   ContextMenuState
 } from '~/components/MapCanvas/types';
 import {
@@ -61,7 +61,7 @@ type EditEntry =
 export interface InteractionDeps {
   canvasRef: React.RefObject<HTMLCanvasElement>;
   camera: MapCamera;
-  inputs: React.MutableRefObject<MapCanvasProps>;
+  inputs: React.MutableRefObject<MapCanvasInputs>;
   atlas: SpriteAtlas;
   tiles: ChunkTilesCache;
   meshes: ChunkMeshCache;

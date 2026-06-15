@@ -2,7 +2,9 @@ import React from 'react';
 
 import { isZoneTool } from '~/domain/tools';
 import { GLRenderer } from '~/usecase/glRenderer';
+import { useTool } from '~/usecase/context/ToolContext';
 import { DRAW_CURSOR, WAYPOINT_CURSOR } from '~/usecase/cursors';
+import { useAssetsBundle } from '~/usecase/context/AssetsContext';
 import { useMapScene } from '~/usecase/hooks/MapCanvas/useMapScene';
 import { useSelection } from '~/usecase/hooks/MapCanvas/useSelection';
 import { useMapCamera } from '~/usecase/hooks/MapCanvas/useMapCamera';
@@ -10,13 +12,14 @@ import { useChunkTiles } from '~/usecase/hooks/MapCanvas/useChunkTiles';
 import { useChunkMeshes } from '~/usecase/hooks/MapCanvas/useChunkMeshes';
 import { useSpriteAtlas } from '~/usecase/hooks/MapCanvas/useSpriteAtlas';
 import { useMapRenderer } from '~/usecase/hooks/MapCanvas/useMapRenderer';
+import { useEditorSettings } from '~/usecase/context/EditorSettingsContext';
 import { useMapInteraction } from '~/usecase/hooks/MapCanvas/useMapInteraction';
 
 import RenderStats from './RenderStats';
-import { MapCanvasProps } from './types';
 import TileContextMenu from './TileContextMenu';
 import GotoPositionForm from './GotoPositionForm';
 import SpawnPropertiesForm from './SpawnPropertiesForm';
+import { MapCanvasProps, MapCanvasInputs } from './types';
 import CreaturePropertiesForm from './CreaturePropertiesForm';
 import WaypointPropertiesForm from './WaypointPropertiesForm';
 
@@ -32,7 +35,12 @@ const SPAWN_HANDLES = [
 ];
 
 const MapCanvas = (props: MapCanvasProps) => {
-  const { map, zoom, onZoomChange, activeBrush, activeTool } = props;
+  const settings = useEditorSettings();
+  const tool = useTool();
+  const { assets } = useAssetsBundle();
+
+  const { map, zoom, onZoomChange } = props;
+  const { activeBrush, activeTool } = tool;
 
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const fpsRef = React.useRef<HTMLSpanElement>(null);
@@ -44,8 +52,31 @@ const MapCanvas = (props: MapCanvasProps) => {
   const gl = React.useRef<GLRenderer | null>(null);
   const [glError, setGlError] = React.useState<string | null>(null);
 
-  const inputs = React.useRef<MapCanvasProps>(props);
-  inputs.current = props;
+  const inputs = React.useRef<MapCanvasInputs>(null as unknown as MapCanvasInputs);
+  inputs.current = {
+    ...props,
+    items: assets!.items,
+    outfits: assets!.outfits,
+    itemNames: assets!.itemNames,
+    sprPath: assets!.sprPath,
+    transparency: assets!.transparency,
+    spawnMarkerClientId: assets!.spawnMarkerClientId,
+    waypointMarkerClientId: assets!.waypointMarkerClientId,
+    showSpawns: settings.showSpawns,
+    showCreatures: settings.showCreatures,
+    showWaypoints: settings.showWaypoints,
+    automagic: settings.automagic,
+    zoneVisibility: settings.zoneVisibility,
+    spawnTime: settings.spawnTime,
+    spawnRadius: settings.spawnSize,
+    autoCreateSpawn: settings.autoCreateSpawn,
+    copyPositionFormat: settings.copyPositionFormat,
+    activeTool: tool.activeTool,
+    activeBrush: tool.activeBrush,
+    onToolChange: tool.setActiveTool,
+    onSelectBrush: tool.selectBrush,
+    onRevealBrush: tool.revealInPalette
+  };
 
   const camera = useMapCamera(canvasRef, map, zoom, onZoomChange, props.initialCenter, props.onViewChange);
   const scene = useMapScene();
@@ -104,7 +135,14 @@ const MapCanvas = (props: MapCanvasProps) => {
 
   React.useEffect(() => {
     meshes.clear();
-  }, [props.spawns, props.showSpawns, props.showCreatures, props.waypoints, props.showWaypoints, props.zoneVisibility]);
+  }, [
+    props.spawns,
+    props.waypoints,
+    settings.showSpawns,
+    settings.showCreatures,
+    settings.showWaypoints,
+    settings.zoneVisibility
+  ]);
 
   React.useEffect(() => {
     const el = document.documentElement;

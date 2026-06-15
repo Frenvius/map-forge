@@ -2,8 +2,8 @@ import React from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Menu, Save, FilePlus, FolderOpen } from 'lucide-react';
 
-import { ZoneVisibility } from '~/domain/zones';
 import { Button } from '~/components/commons/ui/button';
+import { useEditorSettings } from '~/usecase/context/EditorSettingsContext';
 import {
   Menubar,
   MenubarSub,
@@ -22,7 +22,6 @@ interface AppMenuProps {
   loading: boolean;
   hasActive: boolean;
   recent: string[];
-  zoneVisibility: ZoneVisibility;
   onNew: () => void;
   onOpen: () => void;
   onSave: () => void;
@@ -33,7 +32,6 @@ interface AppMenuProps {
   onMapProperties: () => void;
   onMapStatistics: () => void;
   onOpenPreferences: () => void;
-  onToggleZone: (key: keyof ZoneVisibility) => void;
   onOpenRecent: (path: string) => void;
 }
 
@@ -43,7 +41,6 @@ const AppMenu = ({
   loading,
   hasActive,
   recent,
-  zoneVisibility,
   onNew,
   onOpen,
   onSave,
@@ -54,9 +51,9 @@ const AppMenu = ({
   onOpenRecent,
   onMapProperties,
   onMapStatistics,
-  onOpenPreferences,
-  onToggleZone
+  onOpenPreferences
 }: AppMenuProps) => {
+  const { zoneVisibility, toggleZone } = useEditorSettings();
   const [value, setValue] = React.useState('');
   const [revealed, setRevealed] = React.useState(false);
   const hamburgerRef = React.useRef<HTMLButtonElement>(null);
@@ -221,28 +218,28 @@ const AppMenu = ({
               <MenubarCheckboxItem
                 checked={zoneVisibility.pz}
                 onSelect={(e) => e.preventDefault()}
-                onCheckedChange={() => onToggleZone('pz')}
+                onCheckedChange={() => toggleZone('pz')}
               >
                 Show protection zones
               </MenubarCheckboxItem>
               <MenubarCheckboxItem
                 checked={zoneVisibility.nopvp}
                 onSelect={(e) => e.preventDefault()}
-                onCheckedChange={() => onToggleZone('nopvp')}
+                onCheckedChange={() => toggleZone('nopvp')}
               >
                 Show no-PVP zones
               </MenubarCheckboxItem>
               <MenubarCheckboxItem
                 checked={zoneVisibility.nologout}
                 onSelect={(e) => e.preventDefault()}
-                onCheckedChange={() => onToggleZone('nologout')}
+                onCheckedChange={() => toggleZone('nologout')}
               >
                 Show no-logout zones
               </MenubarCheckboxItem>
               <MenubarCheckboxItem
                 checked={zoneVisibility.pvp}
                 onSelect={(e) => e.preventDefault()}
-                onCheckedChange={() => onToggleZone('pvp')}
+                onCheckedChange={() => toggleZone('pvp')}
               >
                 Show PVP zones
               </MenubarCheckboxItem>

@@ -5,7 +5,7 @@ import { visibleZoneBits } from '~/domain/zones';
 import { visibleFloorRange } from '~/usecase/floors';
 import { slotUV, GLRenderer } from '~/usecase/glRenderer';
 import { packChunkKey, fetchMapChunks } from '~/adapter/map';
-import { MapCanvasProps } from '~/components/MapCanvas/types';
+import { MapCanvasInputs } from '~/components/MapCanvas/types';
 import { SpawnArea, CreaturePlacement } from '~/domain/creature';
 import { Position, ChunkTiles, PreviewTile } from '~/domain/map';
 import { isCountStack, getSpriteIndex, stackSpriteIndex } from '~/domain/tibia';
@@ -48,7 +48,7 @@ export interface RendererDeps {
   canvasRef: React.RefObject<HTMLCanvasElement>;
   gl: React.MutableRefObject<GLRenderer | null>;
   camera: MapCamera;
-  inputs: React.MutableRefObject<MapCanvasProps>;
+  inputs: React.MutableRefObject<MapCanvasInputs>;
   atlas: SpriteAtlas;
   tiles: ChunkTilesCache;
   meshes: ChunkMeshCache;

@@ -1,15 +1,16 @@
 import React from 'react';
 
 import { cn } from '~/usecase/classNames';
-import { ThingType } from '~/domain/tibia';
 import { LoadedSprite } from '~/domain/sprite';
 import { loadSprites } from '~/adapter/sprites';
 import { mapClientIds } from '~/adapter/assets';
+import { useTool } from '~/usecase/context/ToolContext';
 import { Waypoint, MapWaypoints } from '~/domain/waypoint';
 import { DragHandleProps } from '~/components/Dock/DockablePanel';
+import { useAssetsBundle } from '~/usecase/context/AssetsContext';
 import { brushSpriteLayout, BrushSpriteLayout, resolveBrushThing } from '~/usecase/brushSprite';
+import { PaletteData, PaletteBrush, PaletteCategoryId, PALETTE_CATEGORIES } from '~/domain/palette';
 import { Select, SelectItem, SelectValue, SelectContent, SelectTrigger } from '~/components/commons/ui/select';
-import { ActiveBrush, PaletteData, PaletteBrush, PaletteCategoryId, PALETTE_CATEGORIES } from '~/domain/palette';
 
 import WaypointsList from './WaypointsList';
 import BrushThumbnail from './BrushThumbnail';
@@ -33,19 +34,12 @@ function makeBrushPreview(layout: BrushSpriteLayout, cache: Map<number, LoadedSp
 }
 
 interface PalettePanelProps {
-  data: PaletteData;
-  sprPath: string;
-  transparency: boolean;
-  items: Map<number, ThingType>;
-  outfits: Map<number, ThingType>;
   dragHandle?: DragHandleProps;
-  onSelectBrush: (brush: ActiveBrush | null) => void;
-  reveal?: { category: PaletteCategoryId; serverId: number; name?: string; nonce: number } | null;
   waypoints: MapWaypoints | null;
-  onGotoWaypoint: (wp: Waypoint) => void;
-  onCopyWaypointPosition: (wp: Waypoint) => void;
-  onEditWaypoints: (next: MapWaypoints) => void;
   onAddWaypoint: () => void;
+  onGotoWaypoint: (wp: Waypoint) => void;
+  onEditWaypoints: (next: MapWaypoints) => void;
+  onCopyWaypointPosition: (wp: Waypoint) => void;
 }
 
 interface PendingReveal {
@@ -63,20 +57,22 @@ const SHARED_SPRITE_CACHE = new Map<number, LoadedSprite>();
 const SHARED_SERVER_TO_CLIENT = new Map<number, number>();
 
 const PalettePanel = ({
-  data,
-  items,
-  outfits,
-  sprPath,
-  transparency,
   dragHandle,
-  onSelectBrush,
-  reveal,
   waypoints,
+  onAddWaypoint,
   onGotoWaypoint,
-  onCopyWaypointPosition,
   onEditWaypoints,
-  onAddWaypoint
+  onCopyWaypointPosition
 }: PalettePanelProps) => {
+  const { assets, palette } = useAssetsBundle();
+  const { reveal, selectBrush } = useTool();
+
+  const data = palette as PaletteData;
+  const items = assets!.items;
+  const outfits = assets!.outfits;
+  const sprPath = assets!.sprPath;
+  const transparency = assets!.transparency;
+
   const spriteCache = React.useRef(SHARED_SPRITE_CACHE);
   const serverToClient = React.useRef(SHARED_SERVER_TO_CLIENT);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
@@ -170,12 +166,12 @@ const PalettePanel = ({
     const brush = tile.brush;
     if (brush.key === selectedKey) {
       setSelectedKey(null);
-      onSelectBrush(null);
+      selectBrush(null);
       return;
     }
     setSelectedKey(brush.key);
     if (brush.kind === 'creature') {
-      onSelectBrush({
+      selectBrush({
         key: brush.key,
         name: brush.name,
         kind: brush.kind,
@@ -193,7 +189,7 @@ const PalettePanel = ({
     const clientId = serverId != null ? serverToClient.current.get(serverId) : undefined;
     const isGround = clientId ? (items.get(clientId)?.isGround ?? false) : false;
     const preview = tile.layout ? makeBrushPreview(tile.layout, spriteCache.current) : null;
-    onSelectBrush({
+    selectBrush({
       key: brush.key,
       name: brush.name,
       kind: brush.kind,

@@ -83,42 +83,19 @@ export interface WaypointForm {
 
 export interface MapCanvasProps {
   map: MapMeta;
-  items: Map<number, ThingType>;
-  outfits: Map<number, ThingType>;
-  itemNames: Map<number, string>;
   spawns: MapSpawns | null;
-  showSpawns: boolean;
-  showCreatures: boolean;
-  spawnMarkerClientId: number;
-  spawnTime: number;
-  spawnRadius: number;
-  autoCreateSpawn: boolean;
   onEditSpawns: (next: MapSpawns) => void;
   waypoints: MapWaypoints | null;
-  showWaypoints: boolean;
-  waypointMarkerClientId: number;
   onEditWaypoints: (next: MapWaypoints) => void;
   waypointEditRef?: React.MutableRefObject<((next: MapWaypoints) => void) | null>;
   placingWaypoint: string | null;
   onPlaceWaypoint: () => void;
-  sprPath: string;
-  transparency: boolean;
   floorZ: number;
   zoom: number;
-  minZoom: number;
-  maxZoom: number;
   onZoomChange: (zoom: number) => void;
   onFloorChange: (z: number) => void;
   onHover: (info: HoverInfo | null) => void;
   onSelect: (item: HoverItem | null) => void;
-  onSelectBrush: (brush: ActiveBrush | null) => void;
-  onRevealBrush?: (category: PaletteCategoryId, serverId: number, name?: string) => void;
-  onToolChange: (tool: ToolId) => void;
-  activeBrush: ActiveBrush | null;
-  activeTool: ToolId;
-  zoneVisibility: ZoneVisibility;
-  automagic: boolean;
-  copyPositionFormat: string;
   onEdit?: (z: number) => void;
   paused?: boolean;
   initialCenter: { x: number; y: number };
@@ -126,3 +103,29 @@ export interface MapCanvasProps {
   viewRef?: React.MutableRefObject<MapView | null>;
   centerRef?: React.MutableRefObject<((x: number, y: number) => void) | null>;
 }
+
+export interface MapCanvasContextInputs {
+  items: Map<number, ThingType>;
+  outfits: Map<number, ThingType>;
+  itemNames: Map<number, string>;
+  sprPath: string;
+  transparency: boolean;
+  spawnMarkerClientId: number;
+  waypointMarkerClientId: number;
+  showSpawns: boolean;
+  showCreatures: boolean;
+  showWaypoints: boolean;
+  automagic: boolean;
+  zoneVisibility: ZoneVisibility;
+  spawnTime: number;
+  spawnRadius: number;
+  autoCreateSpawn: boolean;
+  copyPositionFormat: string;
+  activeTool: ToolId;
+  activeBrush: ActiveBrush | null;
+  onToolChange: (tool: ToolId) => void;
+  onSelectBrush: (brush: ActiveBrush | null) => void;
+  onRevealBrush?: (category: PaletteCategoryId, serverId: number, name?: string) => void;
+}
+
+export type MapCanvasInputs = MapCanvasProps & MapCanvasContextInputs;

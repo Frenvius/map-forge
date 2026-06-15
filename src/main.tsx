@@ -4,7 +4,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
 import { MapView } from '~/domain/map';
-import { ToolId } from '~/domain/tools';
 import { cornerOf } from '~/usecase/dock';
 import Toolbar from '~/components/Toolbar';
 import MapTabs from '~/components/MapTabs';
@@ -19,61 +18,43 @@ import { MIN_ZOOM, MAX_ZOOM } from '~/usecase/zoom';
 import PalettePanel from '~/components/PalettePanel';
 import MapProperties from '~/components/MapProperties';
 import MapStatistics from '~/components/MapStatistics';
+import { useSetting } from '~/usecase/hooks/useSetting';
 import { serializeSpawnXml } from '~/usecase/spawnEdits';
 import { formatPosition } from '~/usecase/positionFormat';
 import { Waypoint, MapWaypoints } from '~/domain/waypoint';
 import { serializeWaypointXml } from '~/adapter/waypoints';
 import Minimap, { MinimapApi } from '~/components/Minimap';
-import { getSetting, setSetting } from '~/adapter/settings';
 import PanelDockMenu from '~/components/Dock/PanelDockMenu';
 import { useDock } from '~/usecase/hooks/Workspace/useDock';
+import { ToolProvider } from '~/usecase/context/ToolContext';
 import SaveProgressModal from '~/components/SaveProgressModal';
-import { useAssets } from '~/usecase/hooks/Workspace/useAssets';
 import StatusBar, { StatusBarApi } from '~/components/StatusBar';
-import { ActiveBrush, PaletteCategoryId } from '~/domain/palette';
 import { useMapTabs } from '~/usecase/hooks/Workspace/useMapTabs';
 import { DragHandleProps } from '~/components/Dock/DockablePanel';
 import { getMapProperties, setMapProperties } from '~/adapter/map';
 import { HoverInfo, HoverItem } from '~/components/MapCanvas/types';
 import { useMapSpawns } from '~/usecase/hooks/Workspace/useMapSpawns';
 import { addWaypoint, nextWaypointName } from '~/usecase/waypointEdits';
-import { ZoneVisibility, DEFAULT_ZONE_VISIBILITY } from '~/domain/zones';
 import { useMapWaypoints } from '~/usecase/hooks/Workspace/useMapWaypoints';
 import { useAppShortcuts } from '~/usecase/hooks/Workspace/useAppShortcuts';
-import { loadEditorConfig, loadGeneralConfig, defaultEditorConfig, defaultGeneralConfig } from '~/adapter/preferences';
+import { AssetsProvider, useAssetsBundle } from '~/usecase/context/AssetsContext';
+import { useEditorSettings, EditorSettingsProvider } from '~/usecase/context/EditorSettingsContext';
 
 import './styles/index.css';
-
-const SPAWN_TIME_DEFAULT = 60;
-const SPAWN_RADIUS_DEFAULT = 3;
 
 const dirOf = (path: string) => path.replace(/[^\\/]+$/, '');
 const spawnFileFallback = (path: string) => (path.split(/[\\/]/).pop() ?? 'map.otbm').replace(/\.otbm$/i, '-spawn.xml');
 
 const App = () => {
-  const [activeBrush, setActiveBrush] = React.useState<ActiveBrush | null>(null);
-  const [reveal, setReveal] = React.useState<{
-    category: PaletteCategoryId;
-    serverId: number;
-    name?: string;
-    nonce: number;
-  } | null>(null);
-  const [activeTool, setActiveTool] = React.useState<ToolId>('select');
-  const [automagic, setAutomagic] = React.useState(true);
-  const [minimapOpen, setMinimapOpen] = React.useState(false);
-  const [showCreatures, setShowCreatures] = React.useState(true);
-  const [showSpawns, setShowSpawns] = React.useState(true);
-  const [autoCreateSpawn, setAutoCreateSpawn] = React.useState(defaultEditorConfig.autoCreateSpawn);
-  const [spawnSize, setSpawnSize] = React.useState(SPAWN_RADIUS_DEFAULT);
-  const [spawnTime, setSpawnTime] = React.useState(SPAWN_TIME_DEFAULT);
-  const [showWaypoints, setShowWaypoints] = React.useState(true);
-  const [zoneVisibility, setZoneVisibility] = React.useState<ZoneVisibility>(DEFAULT_ZONE_VISIBILITY);
+  const { assets, palette, status, error, minimapReady, setStatus, setError } = useAssetsBundle();
+  const { copyPositionFormat, reloadGeneral, reloadEditor } = useEditorSettings();
+
+  const [minimapOpen, setMinimapOpen] = useSetting('minimapOpen', false);
   const [placingWaypoint, setPlacingWaypoint] = React.useState<string | null>(null);
   const [townsOpen, setTownsOpen] = React.useState(false);
   const [mapPropsOpen, setMapPropsOpen] = React.useState(false);
   const [statsOpen, setStatsOpen] = React.useState(false);
   const [preferencesOpen, setPreferencesOpen] = React.useState(false);
-  const [copyPositionFormat, setCopyPositionFormat] = React.useState(defaultGeneralConfig.copyPositionFormat);
 
   const savingRef = React.useRef(false);
   const mapViewRef = React.useRef<MapView | null>(null);
@@ -124,7 +105,6 @@ const App = () => {
     [persistSpawns, persistWaypoints]
   );
 
-  const { assets, palette, status, error, minimapReady, setStatus, setError } = useAssets();
   const {
     tabs,
     recent,
@@ -185,52 +165,8 @@ const App = () => {
 
   const dock = useDock(isContentReady);
 
-  const toggleAutomagic = () =>
-    setAutomagic((v) => {
-      const next = !v;
-      void setSetting('automagic', next);
-      return next;
-    });
-
-  const toggleMinimap = () =>
-    setMinimapOpen((v) => {
-      const next = !v;
-      void setSetting('minimapOpen', next);
-      return next;
-    });
-
-  const closeMinimap = () => {
-    setMinimapOpen(false);
-    void setSetting('minimapOpen', false);
-  };
-
-  const toggleCreatures = () =>
-    setShowCreatures((v) => {
-      const next = !v;
-      void setSetting('showCreatures', next);
-      return next;
-    });
-
-  const toggleSpawns = () =>
-    setShowSpawns((v) => {
-      const next = !v;
-      void setSetting('showSpawns', next);
-      return next;
-    });
-
-  const toggleWaypoints = () =>
-    setShowWaypoints((v) => {
-      const next = !v;
-      void setSetting('showWaypoints', next);
-      return next;
-    });
-
-  const toggleZone = (key: keyof ZoneVisibility) =>
-    setZoneVisibility((v) => {
-      const next = { ...v, [key]: !v[key] };
-      void setSetting('zoneVisibility', next);
-      return next;
-    });
+  const toggleMinimap = () => setMinimapOpen((v) => !v);
+  const closeMinimap = () => setMinimapOpen(false);
 
   const editWaypoints = (next: MapWaypoints) => (waypointEditRef.current ?? handleEditWaypoints)(next);
 
@@ -253,15 +189,6 @@ const App = () => {
     const name = nextWaypointName(wps);
     editWaypoints(addWaypoint(wps, name, pos));
     setPlacingWaypoint(name);
-  };
-
-  const selectBrush = (brush: ActiveBrush | null) => {
-    setActiveBrush(brush);
-    setActiveTool(brush ? 'brush' : 'select');
-  };
-
-  const revealInPalette = (category: PaletteCategoryId, serverId: number, name?: string) => {
-    setReveal((r) => ({ category, serverId, name, nonce: (r?.nonce ?? 0) + 1 }));
   };
 
   const openEditTowns = () => {
@@ -307,49 +234,6 @@ const App = () => {
   }, []);
 
   React.useEffect(() => {
-    void getSetting('automagic', true).then(setAutomagic);
-  }, []);
-
-  React.useEffect(() => {
-    void getSetting('minimapOpen', false).then(setMinimapOpen);
-  }, []);
-
-  React.useEffect(() => {
-    void getSetting('showCreatures', true).then(setShowCreatures);
-  }, []);
-
-  React.useEffect(() => {
-    void getSetting('showSpawns', true).then(setShowSpawns);
-  }, []);
-
-  React.useEffect(() => {
-    void getSetting('showWaypoints', true).then(setShowWaypoints);
-  }, []);
-
-  React.useEffect(() => {
-    void getSetting<ZoneVisibility>('zoneVisibility', DEFAULT_ZONE_VISIBILITY).then((v) =>
-      setZoneVisibility({ ...DEFAULT_ZONE_VISIBILITY, ...v })
-    );
-  }, []);
-
-  const reloadGeneral = React.useCallback(() => {
-    void loadGeneralConfig().then((g) => {
-      setCopyPositionFormat(g.copyPositionFormat);
-      setSpawnSize(g.spawnSize);
-      setSpawnTime(g.spawnTime);
-    });
-  }, []);
-
-  const reloadEditor = React.useCallback(() => {
-    void loadEditorConfig().then((e) => {
-      setAutoCreateSpawn(e.autoCreateSpawn);
-    });
-  }, []);
-
-  React.useEffect(reloadGeneral, [reloadGeneral]);
-  React.useEffect(reloadEditor, [reloadEditor]);
-
-  React.useEffect(() => {
     statusApiRef.current?.setSelectedItem(null);
     spawnsDirty.current = false;
     waypointsDirty.current = false;
@@ -369,36 +253,15 @@ const App = () => {
 
   const renderPanel = (id: PanelId, handle?: DragHandleProps) => {
     if (id === 'tools') {
-      return (
-        <ToolsPanel
-          dragHandle={handle}
-          automagic={automagic}
-          activeTool={activeTool}
-          showSpawns={showSpawns}
-          onSelectTool={setActiveTool}
-          showCreatures={showCreatures}
-          onToggleSpawns={toggleSpawns}
-          showWaypoints={showWaypoints}
-          onToggleAutomagic={toggleAutomagic}
-          onToggleCreatures={toggleCreatures}
-          onToggleWaypoints={toggleWaypoints}
-        />
-      );
+      return <ToolsPanel dragHandle={handle} />;
     }
     if (id === 'palette' && assets && palette) {
       return (
         <PalettePanel
-          data={palette}
-          reveal={reveal}
           dragHandle={handle}
-          items={assets.items}
           waypoints={waypoints}
-          outfits={assets.outfits}
-          sprPath={assets.sprPath}
-          onSelectBrush={selectBrush}
           onGotoWaypoint={gotoWaypoint}
           onEditWaypoints={editWaypoints}
-          transparency={assets.transparency}
           onAddWaypoint={addWaypointAtCenter}
           onCopyWaypointPosition={copyWaypointPosition}
         />
@@ -442,10 +305,8 @@ const App = () => {
         onOpen={handleOpen}
         hasActive={!!active}
         loading={busy || !assets}
-        onToggleZone={toggleZone}
         onClearRecent={clearRecent}
         onEditTowns={openEditTowns}
-        zoneVisibility={zoneVisibility}
         onSave={() => void handleSave()}
         onMapProperties={openMapProperties}
         onMapStatistics={openMapStatistics}
@@ -486,45 +347,22 @@ const App = () => {
             map={active.map}
             paused={!!saving}
             zoom={active.zoom}
-            minZoom={MIN_ZOOM}
-            maxZoom={MAX_ZOOM}
-            items={assets.items}
             viewRef={mapViewRef}
             onHover={handleHover}
-            automagic={automagic}
-            spawnTime={spawnTime}
             waypoints={waypoints}
             floorZ={active.floorZ}
             onZoomChange={setZoom}
             onViewChange={setView}
-            activeTool={activeTool}
             onSelect={handleSelect}
-            showSpawns={showSpawns}
-            spawnRadius={spawnSize}
-            outfits={assets.outfits}
-            sprPath={assets.sprPath}
             centerRef={mapCenterRef}
-            activeBrush={activeBrush}
             onFloorChange={setFloorZ}
-            onSelectBrush={selectBrush}
-            onToolChange={setActiveTool}
-            itemNames={assets.itemNames}
-            showCreatures={showCreatures}
             initialCenter={active.center}
-            showWaypoints={showWaypoints}
-            zoneVisibility={zoneVisibility}
-            onRevealBrush={revealInPalette}
             onEditSpawns={handleEditSpawns}
-            autoCreateSpawn={autoCreateSpawn}
             waypointEditRef={waypointEditRef}
             placingWaypoint={placingWaypoint}
-            transparency={assets.transparency}
             onEditWaypoints={handleEditWaypoints}
-            copyPositionFormat={copyPositionFormat}
             onPlaceWaypoint={() => setPlacingWaypoint(null)}
-            spawnMarkerClientId={assets.spawnMarkerClientId}
             onEdit={(z) => minimapApiRef.current?.markDirty(z)}
-            waypointMarkerClientId={assets.waypointMarkerClientId}
           />
         ) : (
           <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">
@@ -549,9 +387,19 @@ const App = () => {
   );
 };
 
+const Root = () => (
+  <AssetsProvider>
+    <EditorSettingsProvider>
+      <ToolProvider>
+        <App />
+      </ToolProvider>
+    </EditorSettingsProvider>
+  </AssetsProvider>
+);
+
 if (typeof window !== 'undefined') {
   document.addEventListener('contextmenu', (e) => e.preventDefault());
   document.documentElement.classList.add('dark');
 }
 
-createRoot(document.getElementById('root')!).render(<App />);
+createRoot(document.getElementById('root')!).render(<Root />);

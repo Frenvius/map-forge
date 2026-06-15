@@ -1,14 +1,12 @@
 import { X, Minus, Square } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
-import { ZoneVisibility } from '~/domain/zones';
 import AppMenu from '~/components/Toolbar/AppMenu';
 
 interface ToolbarProps {
   loading: boolean;
   hasActive: boolean;
   recent: string[];
-  zoneVisibility: ZoneVisibility;
   onNew: () => void;
   onOpen: () => void;
   onSave: () => void;
@@ -19,7 +17,6 @@ interface ToolbarProps {
   onMapProperties: () => void;
   onMapStatistics: () => void;
   onOpenPreferences: () => void;
-  onToggleZone: (key: keyof ZoneVisibility) => void;
   onOpenRecent: (path: string) => void;
 }
 
@@ -27,7 +24,6 @@ const Toolbar = ({
   loading,
   hasActive,
   recent,
-  zoneVisibility,
   onNew,
   onOpen,
   onSave,
@@ -38,8 +34,7 @@ const Toolbar = ({
   onOpenRecent,
   onMapProperties,
   onMapStatistics,
-  onOpenPreferences,
-  onToggleZone
+  onOpenPreferences
 }: ToolbarProps) => {
   const win = getCurrentWindow();
   const stop = (e: React.MouseEvent) => e.stopPropagation();
@@ -82,9 +77,7 @@ const Toolbar = ({
         onCloseMap={onCloseMap}
         onEditTowns={onEditTowns}
         onOpenRecent={onOpenRecent}
-        onToggleZone={onToggleZone}
         onClearRecent={onClearRecent}
-        zoneVisibility={zoneVisibility}
         onMapProperties={onMapProperties}
         onMapStatistics={onMapStatistics}
         onOpenPreferences={onOpenPreferences}

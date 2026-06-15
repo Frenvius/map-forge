@@ -13,7 +13,9 @@ import {
 
 import { cn } from '~/usecase/classNames';
 import { TOOLS, ToolId } from '~/domain/tools';
+import { useTool } from '~/usecase/context/ToolContext';
 import { DragHandleProps } from '~/components/Dock/DockablePanel';
+import { useEditorSettings } from '~/usecase/context/EditorSettingsContext';
 
 const ICONS: Record<ToolId, ComponentType<{ className?: string }>> = {
   select: MousePointer2,
@@ -27,32 +29,14 @@ const ICONS: Record<ToolId, ComponentType<{ className?: string }>> = {
 };
 
 interface ToolsPanelProps {
-  automagic: boolean;
-  activeTool: ToolId;
-  showSpawns: boolean;
-  showCreatures: boolean;
-  showWaypoints: boolean;
   dragHandle?: DragHandleProps;
-  onSelectTool: (tool: ToolId) => void;
-  onToggleSpawns: () => void;
-  onToggleAutomagic: () => void;
-  onToggleCreatures: () => void;
-  onToggleWaypoints: () => void;
 }
 
-const ToolsPanel = ({
-  automagic,
-  activeTool,
-  showSpawns,
-  showCreatures,
-  showWaypoints,
-  dragHandle,
-  onSelectTool,
-  onToggleSpawns,
-  onToggleAutomagic,
-  onToggleCreatures,
-  onToggleWaypoints
-}: ToolsPanelProps) => {
+const ToolsPanel = ({ dragHandle }: ToolsPanelProps) => {
+  const { activeTool, setActiveTool } = useTool();
+  const { automagic, showSpawns, showCreatures, showWaypoints, toggleSpawns, toggleAutomagic, toggleCreatures, toggleWaypoints } =
+    useEditorSettings();
+
   return (
     <div className="flex h-full flex-col items-center gap-0.5 overflow-y-auto rounded-lg bg-card p-1 shadow-island">
       <div
@@ -72,7 +56,7 @@ const ToolsPanel = ({
             {tool.id === 'zone_pz' && <div className="my-1 h-px w-5 bg-border/60" />}
             <button
               title={tool.label}
-              onClick={() => onSelectTool(tool.id)}
+              onClick={() => setActiveTool(tool.id)}
               className={cn(
                 'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded transition-colors',
                 selected ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-item-hover hover:text-foreground'
@@ -87,7 +71,7 @@ const ToolsPanel = ({
       <div className="mt-auto flex w-full flex-col items-center gap-0.5 pt-1">
         <div className="my-1 h-px w-5 bg-border/60" />
         <button
-          onClick={onToggleCreatures}
+          onClick={toggleCreatures}
           title="Show creatures and NPCs"
           className={cn(
             'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded transition-colors',
@@ -97,7 +81,7 @@ const ToolsPanel = ({
           <IconSpider className="h-[18px] w-[18px]" />
         </button>
         <button
-          onClick={onToggleSpawns}
+          onClick={toggleSpawns}
           title="Show spawn areas"
           className={cn(
             'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded transition-colors',
@@ -108,7 +92,7 @@ const ToolsPanel = ({
         </button>
         <button
           title="Show waypoints"
-          onClick={onToggleWaypoints}
+          onClick={toggleWaypoints}
           className={cn(
             'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded transition-colors',
             showWaypoints ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-item-hover hover:text-foreground'
@@ -117,7 +101,7 @@ const ToolsPanel = ({
           <IconFlag3 className="h-[18px] w-[18px]" />
         </button>
         <button
-          onClick={onToggleAutomagic}
+          onClick={toggleAutomagic}
           title="Automatic borders - auto-border, walls, tables, carpets, mountains"
           className={cn(
             'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded transition-colors',
