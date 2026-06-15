@@ -21,6 +21,7 @@ mod materials;
 use materials::Materials;
 
 mod commands;
+mod creatures;
 mod map_edit;
 mod map_load;
 mod map_meta;
@@ -31,6 +32,9 @@ use commands::{
 	all_server_ids, close_spr_file, load_materials, load_otb, map_client_ids, open_spr_file, parse_dat_file_bin, read_file,
 	read_file_header,
 	read_file_text, read_sprites_batch_rgba, read_sprites_rgba, read_sprites_rgba_lz4, set_window_acrylic, write_file_text,
+};
+use creatures::{
+	creature_dirs, resolve_creature_dirs, scan_creatures, unwatch_creatures, watch_creatures, CreatureWatcherState,
 };
 use map_edit::{
 	copy_selection, delete_item, delete_selection, erase_area, erase_brush, house_sizes, move_item, paint_tiles, paint_zone,
@@ -65,6 +69,7 @@ pub fn run() {
 	let placement_store: PlacementState = Arc::new(Mutex::new(HashMap::new()));
 	let copy_buffer: CopyBufferState = Arc::new(Mutex::new(None));
 	let minimap_palette: MinimapPaletteState = Arc::new(Mutex::new(Vec::new()));
+	let creature_watcher: CreatureWatcherState = Mutex::new(None);
 
 	tauri::Builder::default()
 		.plugin(tauri_plugin_dialog::init())
@@ -75,6 +80,7 @@ pub fn run() {
 		.manage(placement_store)
 		.manage(copy_buffer)
 		.manage(minimap_palette)
+		.manage(creature_watcher)
 		.invoke_handler(tauri::generate_handler![
 			read_file,
 			read_file_text,
@@ -119,7 +125,12 @@ pub fn run() {
 			set_minimap_palette,
 			set_window_acrylic,
 			read_settings,
-			write_settings
+			write_settings,
+			resolve_creature_dirs,
+			creature_dirs,
+			scan_creatures,
+			watch_creatures,
+			unwatch_creatures
 		])
 		.setup(move |app| {
 			#[cfg(target_os = "macos")]

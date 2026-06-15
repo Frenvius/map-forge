@@ -32,6 +32,7 @@ import PanelDockMenu from '~/components/Dock/PanelDockMenu';
 import { useDock } from '~/usecase/hooks/Workspace/useDock';
 import { ToolProvider } from '~/usecase/context/ToolContext';
 import SaveProgressModal from '~/components/SaveProgressModal';
+import CreatureDataDialog from '~/components/CreatureDataDialog';
 import StatusBar, { StatusBarApi } from '~/components/StatusBar';
 import { useMapTabs } from '~/usecase/hooks/Workspace/useMapTabs';
 import { DragHandleProps } from '~/components/Dock/DockablePanel';
@@ -39,6 +40,7 @@ import { HoverInfo, HoverItem } from '~/components/MapCanvas/types';
 import { useMapSpawns } from '~/usecase/hooks/Workspace/useMapSpawns';
 import { useMapHouses } from '~/usecase/hooks/Workspace/useMapHouses';
 import { addWaypoint, nextWaypointName } from '~/usecase/waypointEdits';
+import { useMapCreatures } from '~/usecase/hooks/Workspace/useMapCreatures';
 import { useMapWaypoints } from '~/usecase/hooks/Workspace/useMapWaypoints';
 import { useAppShortcuts } from '~/usecase/hooks/Workspace/useAppShortcuts';
 import { getTowns, getMapProperties, setMapProperties } from '~/adapter/map';
@@ -156,9 +158,22 @@ const App = () => {
     setView
   } = useMapTabs(assets, { setStatus, setError, onAfterSave: persistSidecars });
 
+  const {
+    creatureDb,
+    creatureTilesets,
+    needsPicker: creatureNeedsPicker,
+    resolving: creatureResolving,
+    pickDir: pickCreatureDir
+  } = useMapCreatures(active ? { id: active.id, path: active.path } : null, assets?.creatures ?? null, handleStatus);
+  const [creatureDirSkipped, setCreatureDirSkipped] = React.useState<Set<string>>(new Set());
+  const showCreatureDirDialog = creatureNeedsPicker && !creatureResolving && active != null && !creatureDirSkipped.has(active.id);
+  const skipCreatureDir = React.useCallback(() => {
+    setCreatureDirSkipped((prev) => (active ? new Set(prev).add(active.id) : prev));
+  }, [active]);
+
   const { spawns, setSpawns } = useMapSpawns(
     active ? { id: active.id, path: active.path, mapId: active.map.id } : null,
-    assets?.creatures ?? null
+    creatureDb
   );
   spawnsRef.current = spawns;
 
@@ -333,6 +348,9 @@ const App = () => {
           onEditWaypoints={editWaypoints}
           onEditHouses={handleEditHouses}
           onAddWaypoint={addWaypointAtCenter}
+          creatureTilesets={creatureTilesets}
+          onPickCreatureDir={pickCreatureDir}
+          creatureNeedsPicker={creatureNeedsPicker}
           onCopyWaypointPosition={copyWaypointPosition}
         />
       );
@@ -457,6 +475,13 @@ const App = () => {
       />
 
       {saving && <SaveProgressModal value={saving.value} label={saving.label} />}
+
+      <CreatureDataDialog
+        onClose={skipCreatureDir}
+        onSelect={pickCreatureDir}
+        open={showCreatureDirDialog}
+        mapName={active?.path?.split(/[\\/]/).pop() ?? 'this map'}
+      />
     </div>
   );
 };

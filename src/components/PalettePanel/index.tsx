@@ -1,4 +1,5 @@
 import React from 'react';
+import { FolderOpen } from 'lucide-react';
 
 import { Town } from '~/domain/map';
 import { cn } from '~/usecase/classNames';
@@ -11,8 +12,8 @@ import { Waypoint, MapWaypoints } from '~/domain/waypoint';
 import { DragHandleProps } from '~/components/Dock/DockablePanel';
 import { useAssetsBundle } from '~/usecase/context/AssetsContext';
 import { brushSpriteLayout, BrushSpriteLayout, resolveBrushThing } from '~/usecase/brushSprite';
-import { PaletteData, PaletteBrush, PaletteCategoryId, PALETTE_CATEGORIES } from '~/domain/palette';
 import { Select, SelectItem, SelectValue, SelectContent, SelectTrigger } from '~/components/commons/ui/select';
+import { PaletteData, PaletteBrush, PaletteTileset, PaletteCategoryId, PALETTE_CATEGORIES } from '~/domain/palette';
 
 import HousesList from './HousesList';
 import WaypointsList from './WaypointsList';
@@ -47,6 +48,9 @@ interface PalettePanelProps {
   onCopyWaypointPosition: (wp: Waypoint) => void;
   onEditHouses: (next: MapHouses) => void;
   onGotoHouse: (house: House) => void;
+  creatureTilesets?: PaletteTileset[];
+  creatureNeedsPicker?: boolean;
+  onPickCreatureDir?: () => void;
 }
 
 interface PendingReveal {
@@ -73,12 +77,19 @@ const PalettePanel = ({
   onEditWaypoints,
   onCopyWaypointPosition,
   onEditHouses,
-  onGotoHouse
+  onGotoHouse,
+  creatureTilesets,
+  creatureNeedsPicker,
+  onPickCreatureDir
 }: PalettePanelProps) => {
   const { assets, palette } = useAssetsBundle();
   const { reveal, selectBrush } = useTool();
 
-  const data = palette as PaletteData;
+  const data = React.useMemo<PaletteData>(() => {
+    const base = palette as PaletteData;
+    if (!creatureTilesets || creatureTilesets.length === 0) return base;
+    return { ...base, creature: creatureTilesets };
+  }, [palette, creatureTilesets]);
   const items = assets!.items;
   const outfits = assets!.outfits;
   const sprPath = assets!.sprPath;
@@ -218,6 +229,7 @@ const PalettePanel = ({
 
   const isWaypoints = category === 'waypoints';
   const isHouses = category === 'houses';
+  const isCreature = category === 'creature';
   const isList = isWaypoints || isHouses;
 
   return (
@@ -232,6 +244,16 @@ const PalettePanel = ({
         )}
       >
         <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground">Palette</h2>
+        {isCreature && onPickCreatureDir && (
+          <button
+            onClick={onPickCreatureDir}
+            title="Select creature data folder"
+            className="ml-2 flex h-5 items-center gap-1 rounded border border-border/50 bg-card/60 px-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-item-hover hover:text-foreground"
+          >
+            <FolderOpen className="h-3 w-3" />
+            Data
+          </button>
+        )}
         <span className="ml-auto font-mono text-[10px] text-muted-foreground">
           {isWaypoints ? (waypoints?.list.length ?? 0) : isHouses ? (houses?.list.length ?? 0) : tiles.length}
         </span>
@@ -283,7 +305,13 @@ const PalettePanel = ({
       ) : (
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-2">
           {tiles.length === 0 ? (
-            <div className="px-1 py-6 text-center text-xs text-muted-foreground">No brushes in this tileset.</div>
+            isCreature && creatureNeedsPicker ? (
+              <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                No monster/npc folder for this map. Use <span className="text-foreground">Data</span> in the header to select it.
+              </div>
+            ) : (
+              <div className="px-1 py-6 text-center text-xs text-muted-foreground">No brushes in this tileset.</div>
+            )
           ) : (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(2.25rem,1fr))] gap-1">
               {tiles.map((tile) => (
