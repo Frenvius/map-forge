@@ -16,6 +16,7 @@ interface TileContextMenuProps {
   onCopyText: (text: string) => void;
   onSelectRaw: (item: HoverItem) => void;
   onSelectGround: (item: HoverItem) => void;
+  onSelectHouse: (houseId: number) => void;
   onSpawnProperties: (center: Position) => void;
   onCreatureProperties: (pos: Position) => void;
   onSelectCreature: (pos: Position) => void;
@@ -70,13 +71,14 @@ const TileContextMenu = ({
   onCopyText,
   onSelectRaw,
   onSelectGround,
+  onSelectHouse,
   onSpawnProperties,
   onCreatureProperties,
   onSelectCreature,
   onWaypointProperties,
   onAddWaypoint
 }: TileContextMenuProps) => {
-  const { item, ground, dest, tile, spawn, creature, waypoint, hasSelection, canPaste } = menu;
+  const { item, ground, dest, tile, spawn, creature, waypoint, houseId, hasSelection, canPaste } = menu;
 
   const ref = React.useRef<HTMLDivElement>(null);
   const [pos, setPos] = React.useState({ left: menu.clientX, top: menu.clientY });
@@ -116,6 +118,7 @@ const TileContextMenu = ({
         />
       )}
       {ground && <Item label="Select Groundbrush" onClick={() => onSelectGround(ground)} />}
+      {houseId != null && <Item label="Select House" onClick={() => onSelectHouse(houseId)} />}
       {creature && <Item label="Select Creature" onClick={() => onSelectCreature(creature)} />}
 
       <SubMenu label="Copy..." openLeft={flipX}>

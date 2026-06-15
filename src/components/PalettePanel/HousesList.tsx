@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Home, Search, Trash2, Pencil, DoorOpen } from 'lucide-react';
+import { Plus, Home, Search, Trash2, Pencil, DoorOpen, CircleSlash2 } from 'lucide-react';
 
 import { Town } from '~/domain/map';
 import { cn } from '~/usecase/classNames';
@@ -21,6 +21,7 @@ const HousesList = ({ houses, towns, onEdit, onGoto }: HousesListProps) => {
   const [townFilter, setTownFilter] = React.useState<string>('all');
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [dialogHouse, setDialogHouse] = React.useState<House | null>(null);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
 
   const list = React.useMemo(() => {
     const all = sortHouses(houses?.list ?? []);
@@ -42,6 +43,21 @@ const HousesList = ({ houses, towns, onEdit, onGoto }: HousesListProps) => {
     setActiveHouse(id);
     if (activeTool !== 'house' && activeTool !== 'house_exit') setActiveTool('house');
   };
+
+  React.useEffect(() => {
+    if (activeHouseId == null) return;
+    const inAll = (houses?.list ?? []).some((h) => h.id === activeHouseId);
+    if (!inAll) return;
+    if (!list.some((h) => h.id === activeHouseId)) {
+      setQuery('');
+      setTownFilter('all');
+      return;
+    }
+    const raf = window.requestAnimationFrame(() => {
+      scrollRef.current?.querySelector(`[data-house-id="${activeHouseId}"]`)?.scrollIntoView({ block: 'nearest' });
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [activeHouseId, list, houses]);
 
   const addHouse = () => {
     const wps = houses ?? { list: [] };
@@ -115,6 +131,15 @@ const HousesList = ({ houses, towns, onEdit, onGoto }: HousesListProps) => {
             onChange={(e) => setQuery(e.target.value)}
             className="w-full bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
           />
+          {activeHouseId != null && (
+            <button
+              title="Deselect house"
+              onClick={() => setActiveHouse(null)}
+              className="rounded p-0.5 text-muted-foreground hover:bg-item-hover hover:text-foreground"
+            >
+              <CircleSlash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
           <button
             title="Add house"
             onClick={addHouse}
@@ -125,13 +150,14 @@ const HousesList = ({ houses, towns, onEdit, onGoto }: HousesListProps) => {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto py-1">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto py-1">
         {list.length === 0 ? (
           <div className="px-3 py-4 text-center text-xs text-muted-foreground">No houses. Click + to add one.</div>
         ) : (
           list.map((h) => (
             <div
               key={h.id}
+              data-house-id={h.id}
               onDoubleClick={() => onGoto(h)}
               onClick={() => selectHouse(h.id)}
               className={cn(

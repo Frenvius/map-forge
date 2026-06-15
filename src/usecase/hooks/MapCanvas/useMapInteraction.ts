@@ -907,6 +907,13 @@ export function useMapInteraction(deps: InteractionDeps) {
       return;
     }
     if (canBrush) {
+      if (e.ctrlKey) {
+        scene.erasing.current = true;
+        scene.lastPaintKey.current = null;
+        recordItemEdit();
+        eraseAt(tileAt(e));
+        return;
+      }
       scene.painting.current = true;
       scene.lastPaintKey.current = null;
       recordItemEdit();
@@ -972,6 +979,7 @@ export function useMapInteraction(deps: InteractionDeps) {
 
   function onMouseMove(e: React.MouseEvent) {
     if (modalOpen.current) return;
+    scene.ctrlDown.current = e.ctrlKey;
     if (creatureStroke.current) {
       applyCreatureAt(tileAt(e));
     } else if (scene.painting.current) {
@@ -1018,7 +1026,8 @@ export function useMapInteraction(deps: InteractionDeps) {
       const tool = inputs.current.activeTool;
       if (tool === 'brush') {
         recordItemEdit();
-        paintBox(bs);
+        if (bs.additive) eraseBox(bs);
+        else paintBox(bs);
       } else if (tool === 'eraser') {
         recordItemEdit();
         eraseBox(bs);
@@ -1083,6 +1092,16 @@ export function useMapInteraction(deps: InteractionDeps) {
     const creatureSel = selection.creature.current;
     const waypointSel = selection.waypoint.current;
     const onMarker = !!spawnSel || !!creatureSel || !!waypointSel;
+    const ct = tiles.get(Math.floor(tile.x / CHUNK), Math.floor(tile.y / CHUNK), tile.z, scene.frameTick.current);
+    let houseId: number | null = null;
+    if (ct) {
+      for (let i = 0; i < ct.tileX.length; i++) {
+        if (ct.tileX[i] === tile.x && ct.tileY[i] === tile.y) {
+          houseId = ct.houseIds[i] || null;
+          break;
+        }
+      }
+    }
     setMenu({
       clientX: e.clientX,
       clientY: e.clientY,
@@ -1093,6 +1112,7 @@ export function useMapInteraction(deps: InteractionDeps) {
       spawn: spawnSel ? { x: spawnSel.x, y: spawnSel.y, z: spawnSel.z } : null,
       creature: creatureSel ? { x: creatureSel.x, y: creatureSel.y, z: creatureSel.z } : null,
       waypoint: waypointSel ? { x: waypointSel.x, y: waypointSel.y, z: waypointSel.z } : null,
+      houseId,
       hasSelection:
         selection.entries.current.size > 0 ||
         !!selection.spawn.current ||
@@ -1115,6 +1135,11 @@ export function useMapInteraction(deps: InteractionDeps) {
       preview: buildItemPreview(thing, atlas.data.current)
     });
     inputs.current.onRevealBrush?.('raw', item.serverId);
+    setMenu(null);
+  }
+
+  function selectHouse(houseId: number) {
+    inputs.current.onSelectHouse(houseId);
     setMenu(null);
   }
 
@@ -1148,6 +1173,23 @@ export function useMapInteraction(deps: InteractionDeps) {
       window.removeEventListener('blur', close);
     };
   }, [menu]);
+
+  React.useEffect(() => {
+    const sync = (e: KeyboardEvent) => {
+      scene.ctrlDown.current = e.ctrlKey;
+    };
+    const clear = () => {
+      scene.ctrlDown.current = false;
+    };
+    window.addEventListener('keydown', sync);
+    window.addEventListener('keyup', sync);
+    window.addEventListener('blur', clear);
+    return () => {
+      window.removeEventListener('keydown', sync);
+      window.removeEventListener('keyup', sync);
+      window.removeEventListener('blur', clear);
+    };
+  }, []);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1225,6 +1267,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     editWaypoints,
     selectRaw,
     selectGround,
+    selectHouse,
     goTo,
     cut: () => {
       cutSelected();

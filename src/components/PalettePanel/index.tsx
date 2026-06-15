@@ -108,6 +108,10 @@ const PalettePanel = ({
 
   React.useEffect(() => {
     if (!reveal) return;
+    if (reveal.category === 'houses') {
+      setCategory('houses');
+      return;
+    }
     const order = [reveal.category, ...PALETTE_CATEGORIES.map((c) => c.id).filter((id) => id !== reveal.category)];
     const match = (b: PaletteBrush) => (reveal.name != null ? b.name === reveal.name : b.lookServerId === reveal.serverId);
     for (const cat of order) {

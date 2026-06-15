@@ -78,7 +78,12 @@ const MapCanvas = (props: MapCanvasProps) => {
     activeHouseId: tool.activeHouseId,
     onToolChange: tool.setActiveTool,
     onSelectBrush: tool.selectBrush,
-    onRevealBrush: tool.revealInPalette
+    onRevealBrush: tool.revealInPalette,
+    onSelectHouse: (id: number) => {
+      tool.setActiveHouse(id);
+      tool.setActiveTool('house');
+      tool.revealInPalette('houses', id);
+    }
   };
 
   const camera = useMapCamera(
@@ -150,6 +155,7 @@ const MapCanvas = (props: MapCanvasProps) => {
     props.spawns,
     props.waypoints,
     props.houses,
+    tool.activeHouseId,
     settings.showSpawns,
     settings.showCreatures,
     settings.showWaypoints,
@@ -163,7 +169,9 @@ const MapCanvas = (props: MapCanvasProps) => {
     return () => el.classList.remove('panning-grab');
   }, [camera.panning]);
 
-  const paintable = activeTool === 'brush' && activeBrush != null && activeBrush.serverId != null;
+  const paintable =
+    (activeTool === 'brush' && activeBrush != null && activeBrush.serverId != null) ||
+    (activeTool === 'house' && tool.activeHouseId != null);
   const canvasCursor = props.placingWaypoint
     ? WAYPOINT_CURSOR
     : paintable
@@ -238,7 +246,7 @@ const MapCanvas = (props: MapCanvasProps) => {
               data-z={h.entryZ}
               title={`Exit: ${h.name}`}
               style={{ transformOrigin: 'top left' }}
-              className="absolute left-0 top-0 hidden items-center justify-center text-sky-300 drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]"
+              className="absolute left-0 top-0 hidden items-center justify-center text-sky-200 drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]"
             >
               <IconDoorExit className="h-3/4 w-3/4" />
             </div>
@@ -262,6 +270,7 @@ const MapCanvas = (props: MapCanvasProps) => {
           onCopyText={interaction.copyText}
           onSelectRaw={interaction.selectRaw}
           onDelete={interaction.deleteSelected}
+          onSelectHouse={interaction.selectHouse}
           onCopyPosition={interaction.copyPosition}
           onSelectGround={interaction.selectGround}
           onAddWaypoint={interaction.addWaypointHere}

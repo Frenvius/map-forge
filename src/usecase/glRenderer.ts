@@ -76,7 +76,9 @@ void main() {
 	vec3 col = c.rgb * vec3(1.0, vSpawn, vSpawn);
 	int zf = int(vZone + 0.5);
 	if ((zf & 256) != 0) { col.r *= 0.35; col.g *= 0.45; }
-	if ((zf & 1) != 0) { col.r *= 0.5; col.b *= 0.5; }
+	if ((zf & 512) != 0) { col.r *= 0.35; col.g *= 0.45; }
+	if ((zf & 1024) != 0) { col.r *= 0.15; col.g = min(col.g * 0.9, 1.0); col.b = min(col.b * 1.4, 1.0); }
+	if ((zf & 1) != 0 && (zf & 1792) == 0) { col.r *= 0.5; col.b *= 0.5; }
 	if ((zf & 16) != 0) { col.g = col.r * 0.25; col.b *= 0.66796875; }
 	if ((zf & 8) != 0) { col.b *= 0.5; }
 	if ((zf & 4) != 0) { col.g *= 0.5; }

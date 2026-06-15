@@ -54,6 +54,7 @@ export interface ContextMenuState {
   spawn: Position | null;
   creature: Position | null;
   waypoint: Position | null;
+  houseId: number | null;
   hasSelection: boolean;
   canPaste: boolean;
 }
@@ -133,6 +134,7 @@ export interface MapCanvasContextInputs {
   onToolChange: (tool: ToolId) => void;
   onSelectBrush: (brush: ActiveBrush | null) => void;
   onRevealBrush?: (category: PaletteCategoryId, serverId: number, name?: string) => void;
+  onSelectHouse: (houseId: number) => void;
 }
 
 export type MapCanvasInputs = MapCanvasProps & MapCanvasContextInputs;

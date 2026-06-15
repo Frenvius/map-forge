@@ -14,6 +14,7 @@ export interface ToolContextValue {
   activeTool: ToolId;
   activeBrush: ActiveBrush | null;
   activeHouseId: number | null;
+  ctrlErase: boolean;
   reveal: PaletteReveal | null;
   setActiveTool: (tool: ToolId) => void;
   selectBrush: (brush: ActiveBrush | null) => void;

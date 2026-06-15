@@ -14,9 +14,9 @@ import {
 } from '@tabler/icons-react';
 
 import { cn } from '~/usecase/classNames';
-import { TOOLS, ToolId } from '~/domain/tools';
 import { useTool } from '~/usecase/context/ToolContext';
 import { DragHandleProps } from '~/components/Dock/DockablePanel';
+import { TOOLS, ToolId, isZoneTool, isHouseTool } from '~/domain/tools';
 import { useEditorSettings } from '~/usecase/context/EditorSettingsContext';
 
 const ICONS: Record<ToolId, ComponentType<{ className?: string }>> = {
@@ -37,7 +37,14 @@ interface ToolsPanelProps {
 }
 
 const ToolsPanel = ({ dragHandle }: ToolsPanelProps) => {
-  const { activeTool, setActiveTool } = useTool();
+  const { activeTool, setActiveTool, ctrlErase } = useTool();
+
+  const erasing = ctrlErase && (activeTool === 'brush' || isHouseTool(activeTool) || isZoneTool(activeTool));
+  const isSelected = (id: ToolId) => {
+    if (erasing) return id === 'eraser';
+    if (id === 'brush') return activeTool === 'brush' || isHouseTool(activeTool);
+    return activeTool === id;
+  };
   const {
     automagic,
     showSpawns,
@@ -64,7 +71,7 @@ const ToolsPanel = ({ dragHandle }: ToolsPanelProps) => {
 
       {TOOLS.map((tool) => {
         const Icon = ICONS[tool.id];
-        const selected = activeTool === tool.id;
+        const selected = isSelected(tool.id);
         return (
           <div key={tool.id} className="flex w-full flex-col items-center">
             {tool.id === 'zone_pz' && <div className="my-1 h-px w-5 bg-border/60" />}

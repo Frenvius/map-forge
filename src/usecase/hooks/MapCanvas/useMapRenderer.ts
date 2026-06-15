@@ -119,6 +119,16 @@ export function useMapRenderer(deps: RendererDeps) {
 
   function buildChunkMesh(cx: number, cy: number, z: number, missing: Set<number>) {
     const { items, outfits, spawns, showSpawns, showCreatures, showHouses, zoneVisibility } = inputs.current;
+    const selHouse = inputs.current.activeHouseId;
+    let exitMap: Map<number, number> | null = null;
+    if (showHouses) {
+      exitMap = new Map<number, number>();
+      for (const h of inputs.current.houses?.list ?? []) {
+        if (h.entryZ === z && (h.entryX !== 0 || h.entryY !== 0)) {
+          exitMap.set(h.entryX * 65536 + h.entryY, h.id);
+        }
+      }
+    }
     const key = `${z},${cx},${cy}`;
     const ct = tiles.data.current.get(key) as ChunkTiles | null | undefined;
     const sel = selection.entries.current;
@@ -168,8 +178,10 @@ export function useMapRenderer(deps: RendererDeps) {
         const selEntry = useSel ? sel.get(`${z},${tx},${ty}`) : undefined;
         const spawnCount = spawnCounts?.get(spawnTileKey(tx, ty));
         const groundSpawn = spawnCount ? spawnFactor(spawnCount) : 1;
-        const houseBit = showHouses && ct.houseIds[i] ? 256 : 0;
-        const zoneBits = (ct.flags[i] ? visibleZoneBits(ct.flags[i], zoneVisibility) : 0) | houseBit;
+        const houseBit = showHouses && ct.houseIds[i] ? (ct.houseIds[i] === selHouse ? 1024 : 256) : 0;
+        const exitHouse = exitMap?.get(tx * 65536 + ty);
+        const exitBit = exitHouse != null ? (exitHouse === selHouse ? 1024 : 512) : 0;
+        const zoneBits = (ct.flags[i] ? visibleZoneBits(ct.flags[i], zoneVisibility) : 0) | houseBit | exitBit;
         let drawElevation = 0;
         for (let ii = ct.itemOffset[i]; ii < end; ii++) {
           const thing = items.get(ct.clientIds[ii]);
@@ -349,25 +361,31 @@ export function useMapRenderer(deps: RendererDeps) {
     const tool = inputs.current.activeTool;
     const brush = inputs.current.activeBrush;
     const tile = scene.hoveredTile.current;
-    const showBrush = tool === 'brush' && brush != null && brush.serverId != null;
-    const showEraser = tool === 'eraser';
+    const ctrlErase = scene.ctrlDown.current;
+    const showBrush = tool === 'brush' && brush != null && brush.serverId != null && !ctrlErase;
+    const showEraser = tool === 'eraser' || (tool === 'brush' && brush != null && brush.serverId != null && ctrlErase);
     const showZone = isZoneTool(tool);
+    const showHouse = tool === 'house' && inputs.current.activeHouseId != null;
 
-    if (selection.box.current || !tile || (!showBrush && !showEraser && !showZone)) {
+    if (selection.box.current || !tile || (!showBrush && !showEraser && !showZone && !showHouse)) {
       ghost.style.display = 'none';
       outline.style.display = 'none';
       return;
     }
 
-    if (showEraser || showZone) {
+    if (showEraser || showZone || showHouse) {
       const s = TILE * zoom;
       ghost.style.display = 'none';
       outline.style.display = 'block';
       outline.style.width = `${s}px`;
       outline.style.height = `${s}px`;
       outline.style.transform = `translate(${(tile.x * TILE - camX) * zoom}px, ${(tile.y * TILE - camY) * zoom}px)`;
-      outline.style.borderColor = showEraser ? 'rgb(248, 113, 113)' : 'rgb(125, 211, 252)';
-      outline.style.backgroundColor = showEraser ? 'rgba(239, 68, 68, 0.18)' : 'rgba(56, 189, 248, 0.14)';
+      outline.style.borderColor = showEraser ? 'rgb(248, 113, 113)' : showHouse ? 'rgb(96, 165, 250)' : 'rgb(125, 211, 252)';
+      outline.style.backgroundColor = showEraser
+        ? 'rgba(239, 68, 68, 0.18)'
+        : showHouse
+          ? 'rgba(59, 130, 246, 0.22)'
+          : 'rgba(56, 189, 248, 0.14)';
       return;
     }
 
