@@ -4,9 +4,9 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import { MapMeta } from '~/domain/map';
 import { snapZoom } from '~/usecase/zoom';
 import { getMapView, setMapView } from '~/adapter/mapViews';
-import { LoadedAssets, DEFAULT_DATA_DIR } from '~/adapter/assets';
 import { newOtbm, openOtbm, closeMap, saveOtbm } from '~/adapter/map';
 import { addRecentMap, loadRecentMaps, clearRecentMaps } from '~/adapter/recentMaps';
+import { loadOtb, LoadedAssets, resolveMapItems, DEFAULT_DATA_DIR, loadItemNamesPath } from '~/adapter/assets';
 
 const NEW_MAP_WIDTH = 1024;
 const NEW_MAP_HEIGHT = 1024;
@@ -21,6 +21,8 @@ export interface MapTab {
   zoom: number;
   center: { x: number; y: number };
   path?: string;
+  otbPath: string;
+  itemNames: Map<number, string>;
 }
 
 interface MapTabsActions {
@@ -34,6 +36,7 @@ export interface MapTabsApi {
   recent: string[];
   active: MapTab | null;
   activeId: string | null;
+  itemNames: Map<number, string> | null;
   busy: boolean;
   progress: { value: number; label: string } | null;
   saving: { value: number; label: string } | null;
@@ -60,6 +63,34 @@ export const useMapTabs = (assets: LoadedAssets | null, { setStatus, setError, o
 
   const active = tabs.find((t) => t.id === activeId) ?? null;
   const persistTimer = React.useRef(0);
+  const [itemNames, setItemNames] = React.useState<Map<number, string> | null>(null);
+  const loadedOtbPath = React.useRef<string | null>(null);
+
+  const bundledOtb = `${DEFAULT_DATA_DIR}/items.otb`;
+
+  const prepareItems = async (path?: string): Promise<{ otbPath: string; names: Map<number, string> }> => {
+    const found = path ? await resolveMapItems(path).catch(() => null) : null;
+    const otbPath = found?.otb ?? bundledOtb;
+    if (otbPath !== loadedOtbPath.current) {
+      await loadOtb(otbPath).catch((e) => console.error('Failed to load items.otb', e));
+      loadedOtbPath.current = otbPath;
+    }
+    const names = found
+      ? found.xml
+        ? await loadItemNamesPath(found.xml)
+        : new Map<number, string>()
+      : (assets?.itemNames ?? new Map<number, string>());
+    return { otbPath, names };
+  };
+
+  React.useEffect(() => {
+    if (!active) return;
+    if (active.otbPath && active.otbPath !== loadedOtbPath.current) {
+      loadedOtbPath.current = active.otbPath;
+      void loadOtb(active.otbPath).catch(() => undefined);
+    }
+    setItemNames(active.itemNames);
+  }, [activeId]);
 
   React.useEffect(() => {
     void loadRecentMaps().then(setRecent);
@@ -97,12 +128,22 @@ export const useMapTabs = (assets: LoadedAssets | null, { setStatus, setError, o
     floor: number;
   }
 
-  const addTab = (title: string, data: MapMeta, path?: string, initial?: InitialView) => {
+  const addTab = (
+    title: string,
+    data: MapMeta,
+    items: { otbPath: string; names: Map<number, string> },
+    path?: string,
+    initial?: InitialView
+  ) => {
     const id = `tab-${++tabSeq}`;
     const center = initial?.center ?? { x: data.center.x, y: data.center.y };
     const floorZ = initial?.floor ?? data.center.floor;
     const zoom = initial?.zoom ?? 1;
-    setTabs((prev) => [...prev, { id, title, map: data, floorZ, zoom, center, path }]);
+    setTabs((prev) => [
+      ...prev,
+      { id, title, map: data, floorZ, zoom, center, path, otbPath: items.otbPath, itemNames: items.names }
+    ]);
+    setItemNames(items.names);
     setActiveId(id);
   };
 
@@ -121,6 +162,7 @@ export const useMapTabs = (assets: LoadedAssets | null, { setStatus, setError, o
     setProgress({ value: 0, label: 'Reading map...' });
     setStatus('Reading map...');
     try {
+      const items = await prepareItems(path);
       const data = await openOtbm(path, (_phase, value) => {
         setProgress({ value, label: 'Reading map...' });
       });
@@ -129,7 +171,7 @@ export const useMapTabs = (assets: LoadedAssets | null, { setStatus, setError, o
       const initial = saved
         ? { center: { x: saved.cx, y: saved.cy }, zoom: saved.zoom, floor: saved.floor }
         : { center: { x: data.center.x, y: data.center.y }, zoom: 1, floor: data.center.floor };
-      addTab(name, data, path, initial);
+      addTab(name, data, items, path, initial);
       const dims = `${data.bounds.minX}..${data.bounds.maxX} x ${data.bounds.minY}..${data.bounds.maxY}`;
       setStatus(`${name} - ${data.tileCount} tiles - ${dims} - ${data.width}x${data.height}`);
       void addRecentMap(path).then(setRecent);
@@ -159,11 +201,12 @@ export const useMapTabs = (assets: LoadedAssets | null, { setStatus, setError, o
     setBusy(true);
     setStatus('Creating map...');
     try {
+      const items = await prepareItems();
       const data = await newOtbm(NEW_MAP_WIDTH, NEW_MAP_HEIGHT);
       const used = new Set(tabs.map((t) => t.title));
       let n = 1;
       while (used.has(`untitled-${n}`)) n++;
-      addTab(`untitled-${n}`, data);
+      addTab(`untitled-${n}`, data, items);
       setError(null);
       setStatus(`New map - ${data.width}x${data.height}`);
     } catch (e) {
@@ -216,6 +259,7 @@ export const useMapTabs = (assets: LoadedAssets | null, { setStatus, setError, o
     recent,
     active,
     activeId,
+    itemNames,
     busy,
     progress,
     saving,

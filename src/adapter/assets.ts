@@ -61,11 +61,11 @@ async function readOtfi(dir: string): Promise<Partial<OtfiFlags>> {
   }
 }
 
-async function loadItemNames(dir: string): Promise<Map<number, string>> {
+export async function loadItemNamesPath(path: string): Promise<Map<number, string>> {
   const names = new Map<number, string>();
   let content: string;
   try {
-    content = await invoke<string>('read_file_text', { path: `${dir}/items.xml` });
+    content = await invoke<string>('read_file_text', { path });
   } catch {
     return names;
   }
@@ -75,6 +75,23 @@ async function loadItemNames(dir: string): Promise<Map<number, string>> {
     names.set(Number(m[1]), m[2]);
   }
   return names;
+}
+
+async function loadItemNames(dir: string): Promise<Map<number, string>> {
+  return loadItemNamesPath(`${dir}/items.xml`);
+}
+
+export interface MapItemsPaths {
+  otb: string;
+  xml: string | null;
+}
+
+export async function resolveMapItems(mapPath: string): Promise<MapItemsPaths | null> {
+  return (await invoke<MapItemsPaths | null>('resolve_items_dir', { mapPath })) ?? null;
+}
+
+export async function loadOtb(path: string): Promise<number> {
+  return invoke<number>('load_otb', { path });
 }
 
 interface RustSprHeader {

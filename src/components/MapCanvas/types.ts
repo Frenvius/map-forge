@@ -85,6 +85,7 @@ export interface WaypointForm {
 
 export interface MapCanvasProps {
   map: MapMeta;
+  itemNames?: Map<number, string> | null;
   spawns: MapSpawns | null;
   onEditSpawns: (next: MapSpawns) => void;
   waypoints: MapWaypoints | null;

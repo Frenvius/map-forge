@@ -142,6 +142,7 @@ const App = () => {
     recent,
     active,
     activeId,
+    itemNames,
     busy,
     progress,
     saving,
@@ -437,6 +438,7 @@ const App = () => {
             paused={!!saving}
             zoom={active.zoom}
             viewRef={mapViewRef}
+            itemNames={itemNames}
             onHover={handleHover}
             waypoints={waypoints}
             floorZ={active.floorZ}

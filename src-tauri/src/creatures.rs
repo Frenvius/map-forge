@@ -61,13 +61,12 @@ pub fn creature_dirs(base: String) -> Option<CreatureDirs> {
 
 const MAX_RESOLVE_DEPTH: usize = 8;
 
-#[tauri::command]
-pub fn resolve_creature_dirs(map_path: String) -> Option<CreatureDirs> {
-	let map = PathBuf::from(&map_path);
+fn walk_ancestors<T>(map_path: &str, probe: impl Fn(&Path) -> Option<T>) -> Option<T> {
+	let map = PathBuf::from(map_path);
 	let mut dir = map.parent();
 	let mut depth = 0;
 	while let Some(base) = dir {
-		if let Some(found) = dirs_at(base).or_else(|| dirs_at(&base.join("data"))) {
+		if let Some(found) = probe(base).or_else(|| probe(&base.join("data"))) {
 			return Some(found);
 		}
 		if depth >= MAX_RESOLVE_DEPTH {
@@ -77,6 +76,35 @@ pub fn resolve_creature_dirs(map_path: String) -> Option<CreatureDirs> {
 		dir = base.parent();
 	}
 	None
+}
+
+#[tauri::command]
+pub fn resolve_creature_dirs(map_path: String) -> Option<CreatureDirs> {
+	walk_ancestors(&map_path, dirs_at)
+}
+
+#[derive(Serialize)]
+pub struct ItemsPaths {
+	pub otb: String,
+	pub xml: Option<String>,
+}
+
+fn items_at(base: &Path) -> Option<ItemsPaths> {
+	for otb in [base.join("items").join("items.otb"), base.join("items.otb")] {
+		if otb.is_file() {
+			let xml = otb.with_file_name("items.xml");
+			return Some(ItemsPaths {
+				otb: otb.to_string_lossy().into_owned(),
+				xml: xml.is_file().then(|| xml.to_string_lossy().into_owned()),
+			});
+		}
+	}
+	None
+}
+
+#[tauri::command]
+pub fn resolve_items_dir(map_path: String) -> Option<ItemsPaths> {
+	walk_ancestors(&map_path, items_at)
 }
 
 fn attr_u16(node: &roxmltree::Node, name: &str) -> u16 {

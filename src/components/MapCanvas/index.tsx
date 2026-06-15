@@ -58,7 +58,7 @@ const MapCanvas = (props: MapCanvasProps) => {
     ...props,
     items: assets!.items,
     outfits: assets!.outfits,
-    itemNames: assets!.itemNames,
+    itemNames: props.itemNames ?? assets!.itemNames,
     sprPath: assets!.sprPath,
     transparency: assets!.transparency,
     spawnMarkerClientId: assets!.spawnMarkerClientId,

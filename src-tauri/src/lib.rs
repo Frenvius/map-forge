@@ -34,7 +34,8 @@ use commands::{
 	read_file_text, read_sprites_batch_rgba, read_sprites_rgba, read_sprites_rgba_lz4, set_window_acrylic, write_file_text,
 };
 use creatures::{
-	creature_dirs, resolve_creature_dirs, scan_creatures, unwatch_creatures, watch_creatures, CreatureWatcherState,
+	creature_dirs, resolve_creature_dirs, resolve_items_dir, scan_creatures, unwatch_creatures, watch_creatures,
+	CreatureWatcherState,
 };
 use map_edit::{
 	copy_selection, delete_item, delete_selection, erase_area, erase_brush, house_sizes, move_item, paint_tiles, paint_zone,
@@ -128,6 +129,7 @@ pub fn run() {
 			write_settings,
 			resolve_creature_dirs,
 			creature_dirs,
+			resolve_items_dir,
 			scan_creatures,
 			watch_creatures,
 			unwatch_creatures
