@@ -37,12 +37,15 @@ export function useMapCamera(
   zoom: number,
   onZoomChange: (zoom: number) => void,
   initialCenter: { x: number; y: number },
-  onViewChange?: (cx: number, cy: number) => void
+  onViewChange?: (cx: number, cy: number) => void,
+  infiniteMouse = true
 ): MapCamera {
   const ref = React.useRef<Camera>({ x: 0, y: 0 });
   const zoomRef = React.useRef(zoom);
   const appliedZoom = React.useRef(zoom);
   const drag = React.useRef<null | { lastX: number; lastY: number; warp: { x: number; y: number } | null }>(null);
+  const infiniteRef = React.useRef(infiniteMouse);
+  infiniteRef.current = infiniteMouse;
   const [panning, setPanning] = React.useState(false);
 
   const onZoomChangeRef = React.useRef(onZoomChange);
@@ -190,32 +193,36 @@ export function useMapCamera(
       const z = zoomRef.current;
       ref.current = { x: ref.current.x - (clientX - d.lastX) / z, y: ref.current.y - (clientY - d.lastY) / z };
 
-      const canvas = canvasRef.current;
-      let nx = clientX;
-      let ny = clientY;
-      let wrapped = false;
-      if (canvas && !d.warp) {
-        const r = canvas.getBoundingClientRect();
-        if (clientX <= r.left + EDGE) {
-          nx = r.right - EDGE - 1;
-          wrapped = true;
-        } else if (clientX >= r.right - EDGE) {
-          nx = r.left + EDGE + 1;
-          wrapped = true;
+      if (infiniteRef.current) {
+        const canvas = canvasRef.current;
+        let nx = clientX;
+        let ny = clientY;
+        let wrapped = false;
+        if (canvas && !d.warp) {
+          const r = canvas.getBoundingClientRect();
+          if (clientX <= r.left + EDGE) {
+            nx = r.right - EDGE - 1;
+            wrapped = true;
+          } else if (clientX >= r.right - EDGE) {
+            nx = r.left + EDGE + 1;
+            wrapped = true;
+          }
+          if (clientY <= r.top + EDGE) {
+            ny = r.bottom - EDGE - 1;
+            wrapped = true;
+          } else if (clientY >= r.bottom - EDGE) {
+            ny = r.top + EDGE + 1;
+            wrapped = true;
+          }
         }
-        if (clientY <= r.top + EDGE) {
-          ny = r.bottom - EDGE - 1;
-          wrapped = true;
-        } else if (clientY >= r.bottom - EDGE) {
-          ny = r.top + EDGE + 1;
-          wrapped = true;
+        if (wrapped) {
+          warpCursor(nx, ny);
+          drag.current = { lastX: clientX, lastY: clientY, warp: { x: nx, y: ny } };
+        } else {
+          drag.current = { lastX: clientX, lastY: clientY, warp: d.warp };
         }
-      }
-      if (wrapped) {
-        warpCursor(nx, ny);
-        drag.current = { lastX: clientX, lastY: clientY, warp: { x: nx, y: ny } };
       } else {
-        drag.current = { lastX: clientX, lastY: clientY, warp: d.warp };
+        drag.current = { lastX: clientX, lastY: clientY, warp: null };
       }
     },
     [canvasRef]

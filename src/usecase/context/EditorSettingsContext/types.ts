@@ -12,6 +12,7 @@ export interface EditorSettingsValue {
   spawnTime: number;
   autoCreateSpawn: boolean;
   copyPositionFormat: string;
+  infiniteMouse: boolean;
   zoneVisibility: ZoneVisibility;
   reloadEditor: () => void;
   reloadGeneral: () => void;

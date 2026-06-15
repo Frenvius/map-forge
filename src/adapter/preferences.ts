@@ -37,13 +37,15 @@ export interface GeneralConfig {
   copyPositionFormat: string;
   spawnSize: number;
   spawnTime: number;
+  infiniteMouse: boolean;
 }
 
 export const defaultGeneralConfig: GeneralConfig = {
   maxStack: DEFAULT_MAX_STACK,
   copyPositionFormat: DEFAULT_COPY_POSITION_FORMAT,
   spawnSize: 3,
-  spawnTime: 60
+  spawnTime: 60,
+  infiniteMouse: true
 };
 
 export async function loadGeneralConfig(): Promise<GeneralConfig> {

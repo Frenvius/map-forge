@@ -24,12 +24,14 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
   const [spawnTime, setSpawnTime] = React.useState(defaultGeneralConfig.spawnTime);
   const [autoCreateSpawn, setAutoCreateSpawn] = React.useState(defaultEditorConfig.autoCreateSpawn);
   const [copyPositionFormat, setCopyPositionFormat] = React.useState(defaultGeneralConfig.copyPositionFormat);
+  const [infiniteMouse, setInfiniteMouse] = React.useState(defaultGeneralConfig.infiniteMouse);
 
   const reloadGeneral = React.useCallback(() => {
     void loadGeneralConfig().then((g) => {
       setSpawnSize(g.spawnSize);
       setSpawnTime(g.spawnTime);
       setCopyPositionFormat(g.copyPositionFormat);
+      setInfiniteMouse(g.infiniteMouse);
     });
   }, []);
 
@@ -61,6 +63,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       spawnTime,
       autoCreateSpawn,
       copyPositionFormat,
+      infiniteMouse,
       zoneVisibility,
       reloadEditor,
       reloadGeneral,
@@ -81,6 +84,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       spawnTime,
       autoCreateSpawn,
       copyPositionFormat,
+      infiniteMouse,
       zoneVisibility,
       reloadEditor,
       reloadGeneral,

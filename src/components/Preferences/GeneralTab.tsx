@@ -1,6 +1,7 @@
 import { MIN_STACK, MAX_STACK } from '~/domain/dock';
 import { GeneralConfig } from '~/adapter/preferences';
 import { Button } from '~/components/commons/ui/button';
+import { Checkbox } from '~/components/commons/ui/checkbox';
 import { formatPosition, COPY_POSITION_FORMATS } from '~/usecase/positionFormat';
 import { Select, SelectItem, SelectValue, SelectContent, SelectTrigger } from '~/components/commons/ui/select';
 
@@ -86,6 +87,16 @@ const GeneralTab = ({ config, onResetLayout, onChange }: GeneralTabProps) => {
           onChange={(e) => onChange({ ...config, spawnTime: Math.max(1, Number(e.target.value)) })}
           className="h-7 w-16 rounded border border-input bg-background px-2 text-sm text-foreground outline-none focus:border-ring"
         />
+      </div>
+
+      <div className="h-px bg-border" />
+
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col">
+          <span className="text-xs font-medium">Boundless panning</span>
+          <span className="text-[10px] text-muted-foreground">Wrap cursor at screen edges while panning the map</span>
+        </div>
+        <Checkbox checked={config.infiniteMouse} onCheckedChange={(v) => onChange({ ...config, infiniteMouse: v === true })} />
       </div>
 
       <div className="h-px bg-border" />

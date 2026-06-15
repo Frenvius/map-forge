@@ -81,7 +81,15 @@ const MapCanvas = (props: MapCanvasProps) => {
     onRevealBrush: tool.revealInPalette
   };
 
-  const camera = useMapCamera(canvasRef, map, zoom, onZoomChange, props.initialCenter, props.onViewChange);
+  const camera = useMapCamera(
+    canvasRef,
+    map,
+    zoom,
+    onZoomChange,
+    props.initialCenter,
+    props.onViewChange,
+    settings.infiniteMouse
+  );
   const scene = useMapScene();
   const atlas = useSpriteAtlas(gl);
   const tiles = useChunkTiles();
@@ -166,11 +174,9 @@ const MapCanvas = (props: MapCanvasProps) => {
           isHouseTool(activeTool) ||
           interaction.boxing
         ? 'crosshair'
-        : camera.panning
-          ? 'none'
-          : interaction.moving
-            ? 'grabbing'
-            : 'default';
+        : camera.panning || interaction.moving
+          ? 'grabbing'
+          : 'default';
 
   return (
     <div className="relative h-full w-full">
