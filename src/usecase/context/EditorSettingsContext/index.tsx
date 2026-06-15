@@ -15,6 +15,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
   const [showSpawns, setShowSpawns] = useSetting('showSpawns', true);
   const [showCreatures, setShowCreatures] = useSetting('showCreatures', true);
   const [showWaypoints, setShowWaypoints] = useSetting('showWaypoints', true);
+  const [showHouses, setShowHouses] = useSetting('showHouses', true);
   const [zoneVisibility, setZoneVisibility] = useSetting<ZoneVisibility>('zoneVisibility', DEFAULT_ZONE_VISIBILITY, {
     revive: reviveZones
   });
@@ -43,6 +44,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
   const toggleSpawns = React.useCallback(() => setShowSpawns((v) => !v), [setShowSpawns]);
   const toggleCreatures = React.useCallback(() => setShowCreatures((v) => !v), [setShowCreatures]);
   const toggleWaypoints = React.useCallback(() => setShowWaypoints((v) => !v), [setShowWaypoints]);
+  const toggleHouses = React.useCallback(() => setShowHouses((v) => !v), [setShowHouses]);
   const toggleZone = React.useCallback(
     (key: keyof ZoneVisibility) => setZoneVisibility((v) => ({ ...v, [key]: !v[key] })),
     [setZoneVisibility]
@@ -54,6 +56,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       showSpawns,
       showCreatures,
       showWaypoints,
+      showHouses,
       spawnSize,
       spawnTime,
       autoCreateSpawn,
@@ -65,6 +68,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       toggleAutomagic,
       toggleCreatures,
       toggleWaypoints,
+      toggleHouses,
       toggleZone
     }),
     [
@@ -72,6 +76,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       showSpawns,
       showCreatures,
       showWaypoints,
+      showHouses,
       spawnSize,
       spawnTime,
       autoCreateSpawn,
@@ -83,6 +88,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       toggleAutomagic,
       toggleCreatures,
       toggleWaypoints,
+      toggleHouses,
       toggleZone
     ]
   );

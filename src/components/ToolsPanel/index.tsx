@@ -1,10 +1,12 @@
 import { ComponentType } from 'react';
 import { Brush, Eraser, Crosshair, MousePointer2, GripHorizontal } from 'lucide-react';
 import {
+  IconHome,
   IconFlag3,
   IconSpider,
   IconSwords,
   IconLogout,
+  IconDoorExit,
   IconSwordOff,
   IconViewfinder,
   IconShieldHalf,
@@ -25,7 +27,9 @@ const ICONS: Record<ToolId, ComponentType<{ className?: string }>> = {
   zone_pz: IconShieldHalf,
   zone_nopvp: IconSwordOff,
   zone_nologout: IconLogout,
-  zone_pvp: IconSwords
+  zone_pvp: IconSwords,
+  house: IconHome,
+  house_exit: IconDoorExit
 };
 
 interface ToolsPanelProps {
@@ -34,8 +38,18 @@ interface ToolsPanelProps {
 
 const ToolsPanel = ({ dragHandle }: ToolsPanelProps) => {
   const { activeTool, setActiveTool } = useTool();
-  const { automagic, showSpawns, showCreatures, showWaypoints, toggleSpawns, toggleAutomagic, toggleCreatures, toggleWaypoints } =
-    useEditorSettings();
+  const {
+    automagic,
+    showSpawns,
+    showCreatures,
+    showWaypoints,
+    showHouses,
+    toggleSpawns,
+    toggleAutomagic,
+    toggleCreatures,
+    toggleWaypoints,
+    toggleHouses
+  } = useEditorSettings();
 
   return (
     <div className="flex h-full flex-col items-center gap-0.5 overflow-y-auto rounded-lg bg-card p-1 shadow-island">
@@ -99,6 +113,16 @@ const ToolsPanel = ({ dragHandle }: ToolsPanelProps) => {
           )}
         >
           <IconFlag3 className="h-[18px] w-[18px]" />
+        </button>
+        <button
+          title="Show houses"
+          onClick={toggleHouses}
+          className={cn(
+            'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded transition-colors',
+            showHouses ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-item-hover hover:text-foreground'
+          )}
+        >
+          <IconHome className="h-[18px] w-[18px]" />
         </button>
         <button
           onClick={toggleAutomagic}

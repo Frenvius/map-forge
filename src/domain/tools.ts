@@ -1,6 +1,8 @@
 import { ZoneToolId } from '~/domain/zones';
 
-export type ToolId = 'select' | 'brush' | 'eraser' | 'spawn' | ZoneToolId;
+export type HouseToolId = 'house' | 'house_exit';
+
+export type ToolId = 'select' | 'brush' | 'eraser' | 'spawn' | ZoneToolId | HouseToolId;
 
 export interface ToolMeta {
   id: ToolId;
@@ -19,3 +21,5 @@ export const TOOLS: ToolMeta[] = [
 ];
 
 export const isZoneTool = (id: ToolId): id is ZoneToolId => id.startsWith('zone_');
+
+export const isHouseTool = (id: ToolId): id is HouseToolId => id === 'house' || id === 'house_exit';

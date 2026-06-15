@@ -33,6 +33,7 @@ import {
   moveItem,
   undoEdit,
   redoEdit,
+  setHouse,
   eraseArea,
   paintZone,
   deleteItem,
@@ -57,6 +58,8 @@ type EditEntry =
   | { kind: 'item' }
   | { kind: 'spawn'; before: MapSpawns; after: MapSpawns }
   | { kind: 'waypoint'; before: MapWaypoints; after: MapWaypoints };
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 export interface InteractionDeps {
   canvasRef: React.RefObject<HTMLCanvasElement>;
@@ -105,6 +108,7 @@ export function useMapInteraction(deps: InteractionDeps) {
 
   const tileAt = (e: React.MouseEvent) => camera.tileUnderCursor(e, inputs.current.floorZ);
   const notifyEdit = (z: number) => inputs.current.onEdit?.(z);
+  const emit = (message: string) => inputs.current.onStatus?.(message);
 
   const spawnCenterAt = (pos: Position): boolean => {
     const areas = inputs.current.spawns?.areasByZ.get(pos.z);
@@ -318,6 +322,7 @@ export function useMapInteraction(deps: InteractionDeps) {
   function submitSpawnForm(form: SpawnForm) {
     const base = inputs.current.spawns ?? emptyMapSpawns();
     editSpawns(updateSpawn(base, { x: form.x, y: form.y, z: form.z }, form.radius, form.spawntime));
+    emit('Spawn updated');
     setSpawnForm(null);
   }
 
@@ -332,6 +337,7 @@ export function useMapInteraction(deps: InteractionDeps) {
   function submitCreatureForm(form: CreatureForm) {
     const base = inputs.current.spawns ?? emptyMapSpawns();
     editSpawns(updateCreature(base, { x: form.x, y: form.y, z: form.z }, form.spawntime, form.direction));
+    emit('Creature updated');
     setCreatureForm(null);
   }
 
@@ -347,6 +353,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     const wp = waypointAt(wps, form.x, form.y, form.z);
     if (wp && form.name.trim() && form.name.trim() !== wp.name) {
       editWaypoints(renameWaypoint(wps, wp.name, form.name));
+      emit(`Waypoint renamed to "${form.name.trim()}"`);
     }
     setWaypointForm(null);
   }
@@ -357,6 +364,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     editWaypoints(addWaypoint(wps, name, pos));
     selection.clear();
     selection.selectWaypoint(pos);
+    emit(`Waypoint "${name}" added`);
     setMenu(null);
   }
 
@@ -448,6 +456,65 @@ export function useMapInteraction(deps: InteractionDeps) {
     paintZone(inputs.current.map.id, z, xs, ys, ZONE_TOOL_FLAG[tool], set)
       .then((touched) => refetchKeysNow(touched, z))
       .catch((err) => console.error('Failed to paint zone box', err));
+  }
+
+  const housePainting = React.useRef(false);
+  const houseMode = React.useRef<{ houseId: number; set: boolean } | null>(null);
+
+  function housePaintAt(pos: Position) {
+    const mode = houseMode.current;
+    if (!mode) return;
+    const key = `${pos.x},${pos.y},${pos.z}`;
+    if (key === scene.lastPaintKey.current) return;
+    scene.lastPaintKey.current = key;
+    setHouse(inputs.current.map.id, pos.z, [pos.x], [pos.y], mode.houseId, mode.set)
+      .then((touched) => {
+        if (touched.length === 0) tiles.queueRefetch(pos.x, pos.y, pos.z);
+        for (const k of touched) tiles.queueRefetch((k >>> 16) * CHUNK, (k & 0xffff) * CHUNK, pos.z);
+        if (touched.length) inputs.current.onHousesDirty();
+        notifyEdit(pos.z);
+      })
+      .catch((err) => console.error('Failed to paint house', err));
+  }
+
+  function housePaintBox(bs: BoxSelection, set: boolean) {
+    const houseId = inputs.current.activeHouseId;
+    if (houseId == null) return;
+    const z = bs.startTile.z;
+    const { xs, ys } = boxTiles(bs);
+    setHouse(inputs.current.map.id, z, xs, ys, houseId, set)
+      .then((touched) => {
+        refetchKeysNow(touched, z);
+        if (touched.length) inputs.current.onHousesDirty();
+      })
+      .catch((err) => console.error('Failed to paint house box', err));
+  }
+
+  function setHouseExit(pos: Position) {
+    const houseId = inputs.current.activeHouseId;
+    const houses = inputs.current.houses;
+    if (houseId == null || !houses) {
+      emit('Select a house first');
+      return;
+    }
+    const ct = tiles.get(Math.floor(pos.x / CHUNK), Math.floor(pos.y / CHUNK), pos.z, scene.frameTick.current);
+    const hasGround =
+      !!ct &&
+      (() => {
+        for (let i = 0; i < ct.tileX.length; i++) {
+          if (ct.tileX[i] === pos.x && ct.tileY[i] === pos.y) return ct.itemOffset[i + 1] > ct.itemOffset[i];
+        }
+        return false;
+      })();
+    if (!hasGround) {
+      emit('Exit must be on a ground tile');
+      return;
+    }
+    const next = {
+      list: houses.list.map((h) => (h.id === houseId ? { ...h, entryX: pos.x, entryY: pos.y, entryZ: pos.z } : h))
+    };
+    inputs.current.onEditHouses(next);
+    emit('House exit set');
   }
 
   function eraseBox(bs: BoxSelection) {
@@ -603,18 +670,20 @@ export function useMapInteraction(deps: InteractionDeps) {
       });
   }
 
-  function deleteSelected() {
+  function deleteSelected(silent = false) {
     const base = inputs.current.spawns ?? emptyMapSpawns();
     if (selection.creature.current) {
       editSpawns(removeCreatureAt(base, selection.creature.current));
       selection.selectCreature(null);
       inputs.current.onSelect(null);
+      if (!silent) emit('Creature deleted');
       return;
     }
     if (selection.spawn.current) {
       editSpawns(removeSpawnAt(base, selection.spawn.current));
       selection.selectSpawn(null);
       inputs.current.onSelect(null);
+      if (!silent) emit('Spawn deleted');
       return;
     }
     if (selection.waypoint.current) {
@@ -623,6 +692,7 @@ export function useMapInteraction(deps: InteractionDeps) {
       if (wp) editWaypoints(removeWaypoint(wps, wp.name));
       selection.selectWaypoint(null);
       inputs.current.onSelect(null);
+      if (wp && !silent) emit(`Waypoint "${wp.name}" deleted`);
       return;
     }
     const selTiles = [...selection.entries.current.values()];
@@ -631,6 +701,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     const xs = selTiles.map((t) => t.x);
     const ys = selTiles.map((t) => t.y);
     const all = selTiles.map((t) => t.all);
+    const count = selTiles.length;
     recordItemEdit();
     deleteSelection(inputs.current.map.id, z, xs, ys, all, inputs.current.automagic)
       .then((touched) => {
@@ -640,8 +711,12 @@ export function useMapInteraction(deps: InteractionDeps) {
       .then(() => {
         atlas.version.current++;
         inputs.current.onSelect(null);
+        if (!silent) emit(`Deleted ${plural(count, 'tile')}`);
       })
-      .catch((err) => console.error('Failed to delete selection', err));
+      .catch((err) => {
+        console.error('Failed to delete selection', err);
+        emit('Delete failed');
+      });
   }
 
   function selectionArrays() {
@@ -650,29 +725,53 @@ export function useMapInteraction(deps: InteractionDeps) {
     return { z: sel[0].z, xs: sel.map((t) => t.x), ys: sel.map((t) => t.y), all: sel.map((t) => t.all) };
   }
 
-  function copySelected() {
+  function copySelected(silent = false): Promise<number> {
     const s = selectionArrays();
-    if (!s) return Promise.resolve();
+    if (!s) {
+      if (!silent) emit('Nothing to copy');
+      return Promise.resolve(0);
+    }
     return copySelection(inputs.current.map.id, s.z, s.xs, s.ys, s.all)
       .then((n) => {
         clipboardCount.current = n;
+        if (!silent) emit(`Copied ${plural(n, 'tile')}`);
+        return n;
       })
-      .catch((err) => console.error('Copy failed', err));
+      .catch((err) => {
+        console.error('Copy failed', err);
+        emit('Copy failed');
+        return 0;
+      });
   }
 
   function cutSelected() {
-    copySelected().then(() => deleteSelected());
+    void copySelected(true).then((n) => {
+      if (n === 0) {
+        emit('Nothing to cut');
+        return;
+      }
+      deleteSelected(true);
+      emit(`Cut ${plural(n, 'tile')}`);
+    });
   }
 
   function pasteAt(pos: Position) {
-    if (clipboardCount.current === 0) return;
+    if (clipboardCount.current === 0) {
+      emit('Clipboard empty');
+      return;
+    }
+    const count = clipboardCount.current;
     recordItemEdit();
     pasteSelection(inputs.current.map.id, pos.x, pos.y, pos.z)
       .then((touched) => refetchKeysNow(touched, pos.z))
       .then(() => {
         atlas.version.current++;
+        emit(`Pasted ${plural(count, 'tile')}`);
       })
-      .catch((err) => console.error('Paste failed', err));
+      .catch((err) => {
+        console.error('Paste failed', err);
+        emit('Paste failed');
+      });
   }
 
   function copyText(text: string) {
@@ -680,7 +779,9 @@ export function useMapInteraction(deps: InteractionDeps) {
   }
 
   function copyPosition(pos: Position) {
-    copyText(formatPosition(inputs.current.copyPositionFormat, pos));
+    const text = formatPosition(inputs.current.copyPositionFormat, pos);
+    copyText(text);
+    emit(`Copied ${text}`);
   }
 
   function selectGround(item: HoverItem) {
@@ -696,6 +797,7 @@ export function useMapInteraction(deps: InteractionDeps) {
       preview: buildItemPreview(thing, atlas.data.current)
     });
     inputs.current.onRevealBrush?.('terrain', item.serverId);
+    emit(`Selected "${item.name || `Item ${item.serverId}`}"`);
     setMenu(null);
   }
 
@@ -716,11 +818,13 @@ export function useMapInteraction(deps: InteractionDeps) {
       if (e.kind === 'spawn') {
         redoTimeline.current.push(e);
         inputs.current.onEditSpawns(e.before);
+        emit('Undo');
         return;
       }
       if (e.kind === 'waypoint') {
         redoTimeline.current.push(e);
         inputs.current.onEditWaypoints(e.before);
+        emit('Undo');
         return;
       }
       try {
@@ -728,13 +832,16 @@ export function useMapInteraction(deps: InteractionDeps) {
         if (touched.length > 0) {
           redoTimeline.current.push(e);
           applyHistory(touched);
+          emit('Undo');
           return;
         }
       } catch (err) {
         console.error('Undo failed', err);
+        emit('Undo failed');
         return;
       }
     }
+    emit('Nothing to undo');
   }
 
   async function redo() {
@@ -743,11 +850,13 @@ export function useMapInteraction(deps: InteractionDeps) {
       if (e.kind === 'spawn') {
         undoTimeline.current.push(e);
         inputs.current.onEditSpawns(e.after);
+        emit('Redo');
         return;
       }
       if (e.kind === 'waypoint') {
         undoTimeline.current.push(e);
         inputs.current.onEditWaypoints(e.after);
+        emit('Redo');
         return;
       }
       try {
@@ -755,13 +864,16 @@ export function useMapInteraction(deps: InteractionDeps) {
         if (touched.length > 0) {
           undoTimeline.current.push(e);
           applyHistory(touched);
+          emit('Redo');
           return;
         }
       } catch (err) {
         console.error('Redo failed', err);
+        emit('Redo failed');
         return;
       }
     }
+    emit('Nothing to redo');
   }
 
   function onMouseDown(e: React.MouseEvent) {
@@ -787,7 +899,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     const brush = inputs.current.activeBrush;
     const canBrush = tool === 'brush' && brush != null && brush.serverId != null;
     const zoneTool = isZoneTool(tool);
-    if (e.shiftKey && (tool === 'select' || tool === 'eraser' || zoneTool || canBrush)) {
+    if (e.shiftKey && (tool === 'select' || tool === 'eraser' || zoneTool || canBrush || tool === 'house')) {
       const pos = tileAt(e);
       selection.box.current = { startTile: pos, curTile: pos, additive: e.ctrlKey };
       setBoxing(true);
@@ -809,6 +921,23 @@ export function useMapInteraction(deps: InteractionDeps) {
       paintZoneAt(tileAt(e));
       return;
     }
+    if (tool === 'house') {
+      const houseId = inputs.current.activeHouseId;
+      if (houseId == null) {
+        emit('Select a house first');
+        return;
+      }
+      housePainting.current = true;
+      houseMode.current = { houseId, set: !e.ctrlKey };
+      scene.lastPaintKey.current = null;
+      recordItemEdit();
+      housePaintAt(tileAt(e));
+      return;
+    }
+    if (tool === 'house_exit') {
+      setHouseExit(tileAt(e));
+      return;
+    }
     if (tool === 'brush' && brush && brush.kind === 'creature') {
       beginCreatureStroke(e);
       return;
@@ -819,6 +948,7 @@ export function useMapInteraction(deps: InteractionDeps) {
       editSpawns(placeSpawn(base, pos, inputs.current.spawnRadius));
       selection.clear();
       selection.selectSpawn(pos);
+      emit('Spawn placed');
       return;
     }
     if (tool === 'eraser') {
@@ -848,6 +978,8 @@ export function useMapInteraction(deps: InteractionDeps) {
       paintAt(tileAt(e));
     } else if (zonePainting.current) {
       paintZoneAt(tileAt(e));
+    } else if (housePainting.current) {
+      housePaintAt(tileAt(e));
     } else if (scene.erasing.current) {
       eraseAt(tileAt(e));
     } else if (camera.panMove(e)) {
@@ -893,6 +1025,9 @@ export function useMapInteraction(deps: InteractionDeps) {
       } else if (isZoneTool(tool)) {
         recordItemEdit();
         paintZoneBox(bs, !bs.additive);
+      } else if (tool === 'house') {
+        recordItemEdit();
+        housePaintBox(bs, !bs.additive);
       } else {
         selection.selectBox(bs.startTile.z, bs.startTile.x, bs.startTile.y, bs.curTile.x, bs.curTile.y, bs.additive);
         inputs.current.onSelect(hoverAt(bs.curTile).item);
@@ -904,6 +1039,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     scene.painting.current = false;
     scene.erasing.current = false;
     zonePainting.current = false;
+    housePainting.current = false;
     scene.lastPaintKey.current = null;
   }
 
@@ -918,6 +1054,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     scene.painting.current = false;
     scene.erasing.current = false;
     zonePainting.current = false;
+    housePainting.current = false;
     scene.lastPaintKey.current = null;
     scene.lastHoverKey.current = null;
     scene.hoveredTile.current = null;
@@ -1111,6 +1248,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     },
     copyText: (text: string) => {
       copyText(text);
+      emit('Copied to clipboard');
       setMenu(null);
     },
     openGoto: (tile: Position) => {

@@ -26,6 +26,7 @@ export interface MapScene {
   highlightRef: React.RefObject<HTMLDivElement>;
   selectionBoxRef: React.RefObject<HTMLDivElement>;
   spawnBoxRef: React.RefObject<HTMLDivElement>;
+  houseExitsRef: React.RefObject<HTMLDivElement>;
   boxGhostRef: React.RefObject<HTMLDivElement>;
   boxGhostTiles: React.MutableRefObject<PreviewTile[] | null>;
   hoveredTile: React.MutableRefObject<Position | null>;
@@ -49,6 +50,7 @@ export function useMapScene(): MapScene {
     highlightRef: React.useRef<HTMLDivElement>(null),
     selectionBoxRef: React.useRef<HTMLDivElement>(null),
     spawnBoxRef: React.useRef<HTMLDivElement>(null),
+    houseExitsRef: React.useRef<HTMLDivElement>(null),
     boxGhostRef: React.useRef<HTMLDivElement>(null),
     boxGhostTiles: React.useRef<PreviewTile[] | null>(null),
     hoveredTile: React.useRef<Position | null>(null),

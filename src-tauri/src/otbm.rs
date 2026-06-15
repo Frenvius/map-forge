@@ -48,7 +48,8 @@ pub trait OtbmVisitor {
 	fn map_description(&mut self, _text: String) {}
 	fn spawn_file(&mut self, _name: String) {}
 	fn house_file(&mut self, _name: String) {}
-	fn house_tile(&mut self, _x: u16, _y: u16, _z: u8) {}
+	fn house_tile(&mut self, _x: u16, _y: u16, _z: u8, _house_id: u32) {}
+	fn tile_door(&mut self, _x: u16, _y: u16, _z: u8, _door_id: u8) {}
 	fn town(&mut self, _id: u32, _name: String, _x: u16, _y: u16, _z: u8) {}
 	fn waypoint(&mut self, _name: String, _x: u16, _y: u16, _z: u8) {}
 }
@@ -122,6 +123,7 @@ struct Parser<'a, V: OtbmVisitor> {
 	v: &'a mut V,
 	total: usize,
 	scratch: Vec<(u16, u8)>,
+	cur_door: u8,
 }
 
 impl<'a, V: OtbmVisitor> Parser<'a, V> {
@@ -250,10 +252,10 @@ impl<'a, V: OtbmVisitor> Parser<'a, V> {
 			let kind = p.r.data_u8().ok_or("otbm: missing node type")?;
 			if kind == OTBM_TILE || kind == OTBM_HOUSETILE {
 				let house = kind == OTBM_HOUSETILE;
-				let (x, y, z) = p.tile(house, base_x, base_y, base_z)?;
+				let (x, y, z, house_id) = p.tile(house, base_x, base_y, base_z)?;
 				p.v.tile_span(x, y, z, house, node_start, p.r.pos);
 				if house {
-					p.v.house_tile(x, y, z);
+					p.v.house_tile(x, y, z, house_id);
 				}
 				Ok(())
 			} else {
@@ -262,15 +264,14 @@ impl<'a, V: OtbmVisitor> Parser<'a, V> {
 		})
 	}
 
-	fn tile(&mut self, house: bool, base_x: u16, base_y: u16, base_z: u8) -> Result<(u16, u16, u8), String> {
+	fn tile(&mut self, house: bool, base_x: u16, base_y: u16, base_z: u8) -> Result<(u16, u16, u8, u32), String> {
 		let dx = self.r.data_u8().ok_or("otbm: tile missing dx")?;
 		let dy = self.r.data_u8().ok_or("otbm: tile missing dy")?;
-		if house {
-			self.r.data_u32();
-		}
+		let house_id = if house { self.r.data_u32().unwrap_or(0) } else { 0 };
 		let tile_x = base_x.wrapping_add(dx as u16);
 		let tile_y = base_y.wrapping_add(dy as u16);
 		self.scratch.clear();
+		self.cur_door = 0;
 		let mut flags = 0u32;
 
 		while let Some(attr) = self.r.data_u8() {
@@ -303,7 +304,10 @@ impl<'a, V: OtbmVisitor> Parser<'a, V> {
 		if flags != 0 {
 			self.v.tile_flags(tile_x, tile_y, base_z, flags);
 		}
-		Ok((tile_x, tile_y, base_z))
+		if self.cur_door != 0 {
+			self.v.tile_door(tile_x, tile_y, base_z, self.cur_door);
+		}
+		Ok((tile_x, tile_y, base_z, house_id))
 	}
 
 	fn tile_item(&mut self, tile_x: u16, tile_y: u16, base_z: u8) -> Result<(), String> {
@@ -320,7 +324,14 @@ impl<'a, V: OtbmVisitor> Parser<'a, V> {
 					}
 					None => false,
 				},
-				OTBM_ATTR_TIER | OTBM_ATTR_HOUSEDOORID | OTBM_ATTR_RUNE_CHARGES => self.r.skip_data(1),
+				OTBM_ATTR_HOUSEDOORID => match self.r.data_u8() {
+					Some(d) => {
+						self.cur_door = d;
+						true
+					}
+					None => false,
+				},
+				OTBM_ATTR_TIER | OTBM_ATTR_RUNE_CHARGES => self.r.skip_data(1),
 				OTBM_ATTR_ACTION_ID | OTBM_ATTR_UNIQUE_ID | OTBM_ATTR_CHARGES | OTBM_ATTR_DEPOT_ID => self.r.skip_data(2),
 				OTBM_ATTR_TEXT | OTBM_ATTR_DESC | OTBM_ATTR_DESCRIPTION => match self.r.data_u16() {
 					Some(len) => self.r.skip_data(len as usize),
@@ -373,6 +384,7 @@ pub fn read_otbm<V: OtbmVisitor>(bytes: &[u8], visitor: &mut V) -> Result<(), St
 		v: visitor,
 		total: bytes.len(),
 		scratch: Vec::new(),
+		cur_door: 0,
 	};
 	parser.run()
 }
@@ -400,6 +412,7 @@ pub fn read_otbm_floor<V: OtbmVisitor>(slice: &[u8], visitor: &mut V) -> Result<
 		v: visitor,
 		total: slice.len(),
 		scratch: Vec::new(),
+		cur_door: 0,
 	};
 	loop {
 		match p.r.peek() {

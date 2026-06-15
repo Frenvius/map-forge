@@ -52,6 +52,8 @@ pub(crate) struct OtbmCollector<'a> {
 	pub(crate) server_ids: Vec<u16>,
 	pub(crate) subtypes: Vec<u8>,
 	pub(crate) flags: Vec<u32>,
+	pub(crate) house_ids: Vec<u32>,
+	pub(crate) door_ids: Vec<u8>,
 	pub(crate) teleports: Vec<u8>,
 	pub(crate) teleport_count: u32,
 	pub(crate) last_step: i32,
@@ -80,6 +82,8 @@ impl OtbmCollector<'_> {
 			&self.server_ids,
 			&self.subtypes,
 			&self.flags,
+			&self.house_ids,
+			&self.door_ids,
 			self.teleports,
 			self.teleport_count,
 		);
@@ -133,6 +137,8 @@ impl OtbmVisitor for OtbmCollector<'_> {
 		self.item_start.push(start);
 		self.item_count.push(n);
 		self.flags.push(0);
+		self.house_ids.push(0);
+		self.door_ids.push(0);
 	}
 
 	fn tile_flags(&mut self, _x: u16, _y: u16, _z: u8, flags: u32) {
@@ -169,8 +175,17 @@ impl OtbmVisitor for OtbmCollector<'_> {
 		self.house_file = name;
 	}
 
-	fn house_tile(&mut self, _x: u16, _y: u16, _z: u8) {
+	fn house_tile(&mut self, _x: u16, _y: u16, _z: u8, house_id: u32) {
+		if let Some(last) = self.house_ids.last_mut() {
+			*last = house_id;
+		}
 		self.house_tile_count += 1;
+	}
+
+	fn tile_door(&mut self, _x: u16, _y: u16, _z: u8, door_id: u8) {
+		if let Some(last) = self.door_ids.last_mut() {
+			*last = door_id;
+		}
 	}
 
 	fn town(&mut self, id: u32, name: String, x: u16, y: u16, z: u8) {
@@ -217,6 +232,8 @@ pub async fn open_otbm(
 			server_ids: Vec::new(),
 			subtypes: Vec::new(),
 			flags: Vec::new(),
+			house_ids: Vec::new(),
+			door_ids: Vec::new(),
 			teleports: Vec::new(),
 			teleport_count: 0,
 			last_step: -1,

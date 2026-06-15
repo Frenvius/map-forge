@@ -7,6 +7,7 @@ export interface EditorSettingsValue {
   showSpawns: boolean;
   showCreatures: boolean;
   showWaypoints: boolean;
+  showHouses: boolean;
   spawnSize: number;
   spawnTime: number;
   autoCreateSpawn: boolean;
@@ -18,6 +19,7 @@ export interface EditorSettingsValue {
   toggleAutomagic: () => void;
   toggleCreatures: () => void;
   toggleWaypoints: () => void;
+  toggleHouses: () => void;
   toggleZone: (key: keyof ZoneVisibility) => void;
 }
 

@@ -1,8 +1,9 @@
 import React from 'react';
+import { IconDoorExit } from '@tabler/icons-react';
 
-import { isZoneTool } from '~/domain/tools';
 import { GLRenderer } from '~/usecase/glRenderer';
 import { useTool } from '~/usecase/context/ToolContext';
+import { isZoneTool, isHouseTool } from '~/domain/tools';
 import { DRAW_CURSOR, WAYPOINT_CURSOR } from '~/usecase/cursors';
 import { useAssetsBundle } from '~/usecase/context/AssetsContext';
 import { useMapScene } from '~/usecase/hooks/MapCanvas/useMapScene';
@@ -65,6 +66,7 @@ const MapCanvas = (props: MapCanvasProps) => {
     showSpawns: settings.showSpawns,
     showCreatures: settings.showCreatures,
     showWaypoints: settings.showWaypoints,
+    showHouses: settings.showHouses,
     automagic: settings.automagic,
     zoneVisibility: settings.zoneVisibility,
     spawnTime: settings.spawnTime,
@@ -73,6 +75,7 @@ const MapCanvas = (props: MapCanvasProps) => {
     copyPositionFormat: settings.copyPositionFormat,
     activeTool: tool.activeTool,
     activeBrush: tool.activeBrush,
+    activeHouseId: tool.activeHouseId,
     onToolChange: tool.setActiveTool,
     onSelectBrush: tool.selectBrush,
     onRevealBrush: tool.revealInPalette
@@ -138,9 +141,11 @@ const MapCanvas = (props: MapCanvasProps) => {
   }, [
     props.spawns,
     props.waypoints,
+    props.houses,
     settings.showSpawns,
     settings.showCreatures,
     settings.showWaypoints,
+    settings.showHouses,
     settings.zoneVisibility
   ]);
 
@@ -155,11 +160,17 @@ const MapCanvas = (props: MapCanvasProps) => {
     ? WAYPOINT_CURSOR
     : paintable
       ? DRAW_CURSOR
-      : activeTool === 'eraser' || activeTool === 'spawn' || isZoneTool(activeTool) || interaction.boxing
+      : activeTool === 'eraser' ||
+          activeTool === 'spawn' ||
+          isZoneTool(activeTool) ||
+          isHouseTool(activeTool) ||
+          interaction.boxing
         ? 'crosshair'
-        : camera.panning || interaction.moving
-          ? 'grabbing'
-          : 'default';
+        : camera.panning
+          ? 'none'
+          : interaction.moving
+            ? 'grabbing'
+            : 'default';
 
   return (
     <div className="relative h-full w-full">
@@ -210,6 +221,24 @@ const MapCanvas = (props: MapCanvasProps) => {
           />
         ))}
       </div>
+      <div ref={scene.houseExitsRef} style={{ display: 'none' }} className="pointer-events-none absolute left-0 top-0">
+        {(props.houses?.list ?? [])
+          .filter((h) => h.entryX !== 0 || h.entryY !== 0)
+          .map((h) => (
+            <div
+              key={h.id}
+              data-x={h.entryX}
+              data-y={h.entryY}
+              data-z={h.entryZ}
+              title={`Exit: ${h.name}`}
+              style={{ transformOrigin: 'top left' }}
+              className="absolute left-0 top-0 hidden items-center justify-center text-sky-300 drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]"
+            >
+              <IconDoorExit className="h-3/4 w-3/4" />
+            </div>
+          ))}
+      </div>
+
       {glError && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-destructive">
           WebGL unavailable: {glError}

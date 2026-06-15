@@ -13,9 +13,11 @@ export interface PaletteReveal {
 export interface ToolContextValue {
   activeTool: ToolId;
   activeBrush: ActiveBrush | null;
+  activeHouseId: number | null;
   reveal: PaletteReveal | null;
   setActiveTool: (tool: ToolId) => void;
   selectBrush: (brush: ActiveBrush | null) => void;
+  setActiveHouse: (id: number | null) => void;
   revealInPalette: (category: PaletteCategoryId, serverId: number, name?: string) => void;
 }
 

@@ -3,10 +3,13 @@ import { createRoot } from 'react-dom/client';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
-import { MapView } from '~/domain/map';
+import { House } from '~/domain/house';
 import { cornerOf } from '~/usecase/dock';
 import Toolbar from '~/components/Toolbar';
 import MapTabs from '~/components/MapTabs';
+import { MapHouses } from '~/domain/house';
+import { houseSizes } from '~/adapter/map';
+import { Town, MapView } from '~/domain/map';
 import MapTowns from '~/components/MapTowns';
 import { MapSpawns } from '~/domain/creature';
 import MapCanvas from '~/components/MapCanvas';
@@ -16,6 +19,7 @@ import ToolsPanel from '~/components/ToolsPanel';
 import Preferences from '~/components/Preferences';
 import { MIN_ZOOM, MAX_ZOOM } from '~/usecase/zoom';
 import PalettePanel from '~/components/PalettePanel';
+import { serializeHouseXml } from '~/adapter/houses';
 import MapProperties from '~/components/MapProperties';
 import MapStatistics from '~/components/MapStatistics';
 import { useSetting } from '~/usecase/hooks/useSetting';
@@ -31,12 +35,13 @@ import SaveProgressModal from '~/components/SaveProgressModal';
 import StatusBar, { StatusBarApi } from '~/components/StatusBar';
 import { useMapTabs } from '~/usecase/hooks/Workspace/useMapTabs';
 import { DragHandleProps } from '~/components/Dock/DockablePanel';
-import { getMapProperties, setMapProperties } from '~/adapter/map';
 import { HoverInfo, HoverItem } from '~/components/MapCanvas/types';
 import { useMapSpawns } from '~/usecase/hooks/Workspace/useMapSpawns';
+import { useMapHouses } from '~/usecase/hooks/Workspace/useMapHouses';
 import { addWaypoint, nextWaypointName } from '~/usecase/waypointEdits';
 import { useMapWaypoints } from '~/usecase/hooks/Workspace/useMapWaypoints';
 import { useAppShortcuts } from '~/usecase/hooks/Workspace/useAppShortcuts';
+import { getTowns, getMapProperties, setMapProperties } from '~/adapter/map';
 import { AssetsProvider, useAssetsBundle } from '~/usecase/context/AssetsContext';
 import { useEditorSettings, EditorSettingsProvider } from '~/usecase/context/EditorSettingsContext';
 
@@ -66,9 +71,12 @@ const App = () => {
   const waypointsRef = React.useRef<MapWaypoints | null>(null);
   const waypointsDirty = React.useRef(false);
   const waypointEditRef = React.useRef<((next: MapWaypoints) => void) | null>(null);
+  const housesRef = React.useRef<MapHouses | null>(null);
+  const housesDirty = React.useRef(false);
 
   const handleHover = React.useCallback((info: HoverInfo | null) => statusApiRef.current?.setHover(info), []);
   const handleSelect = React.useCallback((item: HoverItem | null) => statusApiRef.current?.setSelectedItem(item), []);
+  const handleStatus = React.useCallback((message: string) => statusApiRef.current?.flash(message), []);
 
   const persistSpawns = React.useCallback(async (mapId: number, path: string) => {
     if (!spawnsDirty.current || !spawnsRef.current) return;
@@ -97,12 +105,34 @@ const App = () => {
     waypointsDirty.current = false;
   }, []);
 
+  const persistHouses = React.useCallback(async (mapId: number, path: string) => {
+    if (!housesDirty.current || !housesRef.current) return;
+    const props = await getMapProperties(mapId).catch(() => null);
+    let file = props?.houseFile ?? '';
+    if (!file) {
+      file = (path.split(/[\\/]/).pop() ?? 'map.otbm').replace(/\.otbm$/i, '-house.xml');
+      if (props) {
+        await setMapProperties(mapId, {
+          description: props.description,
+          spawnFile: props.spawnFile,
+          houseFile: file,
+          otbmVersion: props.otbmVersion,
+          itemsMinor: props.itemsMinor
+        }).catch(() => undefined);
+      }
+    }
+    const sizes = await houseSizes(mapId).catch(() => ({}));
+    await invoke('write_file_text', { path: dirOf(path) + file, contents: serializeHouseXml(housesRef.current, sizes) });
+    housesDirty.current = false;
+  }, []);
+
   const persistSidecars = React.useCallback(
     async (mapId: number, path: string) => {
       await persistSpawns(mapId, path);
       await persistWaypoints(path);
+      await persistHouses(mapId, path);
     },
-    [persistSpawns, persistWaypoints]
+    [persistSpawns, persistWaypoints, persistHouses]
   );
 
   const {
@@ -157,6 +187,41 @@ const App = () => {
     },
     [setWaypoints]
   );
+
+  const { houses, setHouses } = useMapHouses(active ? { id: active.id, path: active.path, mapId: active.map.id } : null);
+  housesRef.current = houses;
+
+  const [towns, setTownList] = React.useState<Town[]>([]);
+  const activeMapId = active?.map.id ?? null;
+  React.useEffect(() => {
+    if (activeMapId === null) {
+      setTownList([]);
+      return;
+    }
+    let cancelled = false;
+    void getTowns(activeMapId)
+      .then((list) => {
+        if (!cancelled) setTownList(list);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeMapId, townsOpen]);
+
+  const gotoHouse = (h: House) => gotoPosition(h.entryX, h.entryY, h.entryZ);
+
+  const handleEditHouses = React.useCallback(
+    (next: MapHouses) => {
+      setHouses(next);
+      housesDirty.current = true;
+    },
+    [setHouses]
+  );
+
+  const markHousesDirty = React.useCallback(() => {
+    housesDirty.current = true;
+  }, []);
 
   const isContentReady = (id: PanelId) => {
     if (id === 'minimap') return minimapOpen && !!assets && !!active && minimapReady;
@@ -237,6 +302,7 @@ const App = () => {
     statusApiRef.current?.setSelectedItem(null);
     spawnsDirty.current = false;
     waypointsDirty.current = false;
+    housesDirty.current = false;
     setPlacingWaypoint(null);
   }, [activeId]);
 
@@ -258,10 +324,14 @@ const App = () => {
     if (id === 'palette' && assets && palette) {
       return (
         <PalettePanel
+          towns={towns}
+          houses={houses}
           dragHandle={handle}
           waypoints={waypoints}
+          onGotoHouse={gotoHouse}
           onGotoWaypoint={gotoWaypoint}
           onEditWaypoints={editWaypoints}
+          onEditHouses={handleEditHouses}
           onAddWaypoint={addWaypointAtCenter}
           onCopyWaypointPosition={copyWaypointPosition}
         />
@@ -344,6 +414,7 @@ const App = () => {
           <MapCanvas
             key={active.id}
             spawns={spawns}
+            houses={houses}
             map={active.map}
             paused={!!saving}
             zoom={active.zoom}
@@ -353,11 +424,14 @@ const App = () => {
             floorZ={active.floorZ}
             onZoomChange={setZoom}
             onViewChange={setView}
+            onStatus={handleStatus}
             onSelect={handleSelect}
             centerRef={mapCenterRef}
             onFloorChange={setFloorZ}
             initialCenter={active.center}
             onEditSpawns={handleEditSpawns}
+            onEditHouses={handleEditHouses}
+            onHousesDirty={markHousesDirty}
             waypointEditRef={waypointEditRef}
             placingWaypoint={placingWaypoint}
             onEditWaypoints={handleEditWaypoints}

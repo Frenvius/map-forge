@@ -2,6 +2,7 @@ import React from 'react';
 
 import { ToolId } from '~/domain/tools';
 import { ThingType } from '~/domain/tibia';
+import { MapHouses } from '~/domain/house';
 import { MapSpawns } from '~/domain/creature';
 import { ZoneVisibility } from '~/domain/zones';
 import { MapWaypoints } from '~/domain/waypoint';
@@ -88,6 +89,9 @@ export interface MapCanvasProps {
   waypoints: MapWaypoints | null;
   onEditWaypoints: (next: MapWaypoints) => void;
   waypointEditRef?: React.MutableRefObject<((next: MapWaypoints) => void) | null>;
+  houses: MapHouses | null;
+  onEditHouses: (next: MapHouses) => void;
+  onHousesDirty: () => void;
   placingWaypoint: string | null;
   onPlaceWaypoint: () => void;
   floorZ: number;
@@ -96,6 +100,7 @@ export interface MapCanvasProps {
   onFloorChange: (z: number) => void;
   onHover: (info: HoverInfo | null) => void;
   onSelect: (item: HoverItem | null) => void;
+  onStatus: (message: string) => void;
   onEdit?: (z: number) => void;
   paused?: boolean;
   initialCenter: { x: number; y: number };
@@ -115,6 +120,7 @@ export interface MapCanvasContextInputs {
   showSpawns: boolean;
   showCreatures: boolean;
   showWaypoints: boolean;
+  showHouses: boolean;
   automagic: boolean;
   zoneVisibility: ZoneVisibility;
   spawnTime: number;
@@ -123,6 +129,7 @@ export interface MapCanvasContextInputs {
   copyPositionFormat: string;
   activeTool: ToolId;
   activeBrush: ActiveBrush | null;
+  activeHouseId: number | null;
   onToolChange: (tool: ToolId) => void;
   onSelectBrush: (brush: ActiveBrush | null) => void;
   onRevealBrush?: (category: PaletteCategoryId, serverId: number, name?: string) => void;

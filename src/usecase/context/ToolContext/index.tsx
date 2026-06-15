@@ -10,6 +10,7 @@ const ToolContext = React.createContext({} as ToolContextValue);
 export const ToolProvider = ({ children }: ToolProviderProps) => {
   const [activeTool, setActiveTool] = React.useState<ToolId>('select');
   const [activeBrush, setActiveBrush] = React.useState<ActiveBrush | null>(null);
+  const [activeHouseId, setActiveHouse] = React.useState<number | null>(null);
   const [reveal, setReveal] = React.useState<PaletteReveal | null>(null);
 
   const selectBrush = React.useCallback((brush: ActiveBrush | null) => {
@@ -22,8 +23,8 @@ export const ToolProvider = ({ children }: ToolProviderProps) => {
   }, []);
 
   const value = React.useMemo<ToolContextValue>(
-    () => ({ activeTool, activeBrush, reveal, setActiveTool, selectBrush, revealInPalette }),
-    [activeTool, activeBrush, reveal, selectBrush, revealInPalette]
+    () => ({ activeTool, activeBrush, activeHouseId, reveal, setActiveTool, selectBrush, setActiveHouse, revealInPalette }),
+    [activeTool, activeBrush, activeHouseId, reveal, selectBrush, revealInPalette]
   );
 
   return <ToolContext.Provider value={value}>{children}</ToolContext.Provider>;

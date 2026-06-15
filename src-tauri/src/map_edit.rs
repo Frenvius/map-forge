@@ -3,9 +3,36 @@ use std::collections::{HashMap, HashSet};
 use tauri::ipc::Response;
 
 use crate::map_model::{
-	chunk_key_of, empty_model, flags_at, push_u16, push_u32, stack_at, tile_stack_mut, MapModel, ACTION_DELETE, ACTION_ERASE,
-	ACTION_FLAG, ACTION_MOVE, ACTION_PAINT, CHUNK,
+	chunk_key_of, door_id_at, empty_model, flags_at, house_id_at, push_u16, push_u32, stack_at, tile_stack_mut, MapModel,
+	ACTION_DELETE, ACTION_ERASE, ACTION_FLAG, ACTION_HOUSE, ACTION_MOVE, ACTION_PAINT, CHUNK,
 };
+
+fn empty_door_id(m: &MapModel, house_id: u32) -> u8 {
+	let mut used = [false; 256];
+	let mark = |used: &mut [bool; 256], z: u8, x: u16, y: u16| {
+		if house_id_at(m, z, x, y) == house_id {
+			let d = door_id_at(m, z, x, y);
+			if d != 0 {
+				used[d as usize] = true;
+			}
+		}
+	};
+	for (&z, floor) in &m.floors {
+		for &(start, end) in floor.values() {
+			for t in start as usize..end as usize {
+				mark(&mut used, z, m.tile_x[t], m.tile_y[t]);
+			}
+		}
+	}
+	for (&z, chunks) in &m.house_edits {
+		for posmap in chunks.values() {
+			for &pos in posmap.keys() {
+				mark(&mut used, z, (pos >> 16) as u16, (pos & 0xFFFF) as u16);
+			}
+		}
+	}
+	(1..=255u16).find(|&i| !used[i as usize]).map(|i| i as u8).unwrap_or(0)
+}
 use crate::materials::{self, Materials};
 use crate::otb::OtbItems;
 use crate::{CopyBufferState, MapState, MaterialsState, OtbState, PlaceFlags, PlacementState};
@@ -467,6 +494,135 @@ pub fn paint_zone(
 	Ok(touched.into_iter().collect())
 }
 
+const HOUSE_PZ_FLAG: u32 = 0x01;
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub fn set_house(
+	map_id: u32,
+	z: u8,
+	xs: Vec<u16>,
+	ys: Vec<u16>,
+	house_id: u32,
+	set: bool,
+	otb_state: tauri::State<OtbState>,
+	map_state: tauri::State<MapState>,
+	materials_state: tauri::State<MaterialsState>,
+	placement_state: tauri::State<PlacementState>,
+) -> Result<Vec<u32>, String> {
+	if xs.len() != ys.len() {
+		return Err("xs and ys length mismatch".into());
+	}
+
+	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb = otb_guard.as_ref().ok_or("items.otb not loaded")?;
+	let materials_guard = materials_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let mats = materials_guard.as_ref();
+	let place = placement_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+	m.ensure_floor(z, otb)?;
+	m.record_begin();
+
+	let mut touched: HashSet<u32> = HashSet::new();
+	for i in 0..xs.len() {
+		let (x, y) = (xs[i], ys[i]);
+		if set {
+			let stack = stack_at(m, z, x, y);
+			let has_ground = stack.first().is_some_and(|&(c, s)| is_ground_item(&place, mats, c, s));
+			if !has_ground {
+				continue;
+			}
+			let mut changed = false;
+			if house_id_at(m, z, x, y) != house_id {
+				m.set_tile_house_id(z, x, y, house_id);
+				changed = true;
+			}
+			let flags = flags_at(m, z, x, y);
+			if flags & HOUSE_PZ_FLAG == 0 {
+				m.set_tile_flags(z, x, y, flags | HOUSE_PZ_FLAG);
+				changed = true;
+			}
+			if let Some(mats) = mats {
+				let has_door = stack_at(m, z, x, y).iter().any(|&(_, s)| mats.is_door(s));
+				if has_door && door_id_at(m, z, x, y) == 0 {
+					let door = empty_door_id(m, house_id);
+					if door != 0 {
+						m.set_tile_door_id(z, x, y, door);
+						changed = true;
+					}
+				}
+			}
+			if changed {
+				touched.insert(chunk_key_of(x, y));
+			}
+		} else {
+			let was_house = house_id_at(m, z, x, y) != 0;
+			if !was_house {
+				continue;
+			}
+			m.set_tile_house_id(z, x, y, 0);
+			let flags = flags_at(m, z, x, y);
+			if flags & HOUSE_PZ_FLAG != 0 {
+				m.set_tile_flags(z, x, y, flags & !HOUSE_PZ_FLAG);
+			}
+			touched.insert(chunk_key_of(x, y));
+		}
+	}
+	m.record_commit(ACTION_HOUSE);
+	Ok(touched.into_iter().collect())
+}
+
+#[tauri::command]
+pub fn house_sizes(
+	map_id: u32,
+	otb_state: tauri::State<OtbState>,
+	map_state: tauri::State<MapState>,
+) -> Result<HashMap<u32, u32>, String> {
+	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb = otb_guard.as_ref().ok_or("items.otb not loaded")?;
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+
+	for z in m.available_floors.clone() {
+		m.ensure_floor(z, otb)?;
+	}
+
+	let mut sizes: HashMap<u32, u32> = HashMap::new();
+	for z in m.available_floors.clone() {
+		let Some(floor) = m.floors.get(&z) else { continue };
+		let keys: Vec<u32> = floor.keys().copied().collect();
+		for k in keys {
+			let Some(&(start, end)) = m.floors.get(&z).and_then(|f| f.get(&k)) else { continue };
+			for t in start as usize..end as usize {
+				let (x, y) = (m.tile_x[t], m.tile_y[t]);
+				let id = house_id_at(m, z, x, y);
+				if id != 0 {
+					*sizes.entry(id).or_insert(0) += 1;
+				}
+			}
+		}
+	}
+	for (&z, chunks) in &m.house_edits {
+		for posmap in chunks.values() {
+			for (&pos, &id) in posmap {
+				let (x, y) = ((pos >> 16) as u16, (pos & 0xFFFF) as u16);
+				let on_base = m
+					.floors
+					.get(&z)
+					.and_then(|f| f.get(&chunk_key_of(x, y)))
+					.map(|&(s, e)| (s as usize..e as usize).any(|t| m.tile_x[t] == x && m.tile_y[t] == y))
+					.unwrap_or(false);
+				if !on_base && id != 0 {
+					*sizes.entry(id).or_insert(0) += 1;
+				}
+			}
+		}
+	}
+	Ok(sizes)
+}
+
 const PREVIEW_AREA_CAP: u32 = 4096;
 
 #[tauri::command]
@@ -892,7 +1048,7 @@ mod tests {
 		let mut place = HashMap::new();
 		place.insert(grass_client, PlaceFlags { ground: true, top_order: 0 });
 
-		let mut m = build_map_model(100, 100, &[50], &[50], &[7], &[0], &[1], &[grass_client], &[4526], &[1], &[], Vec::new(), 0);
+		let mut m = build_map_model(100, 100, &[50], &[50], &[7], &[0], &[1], &[grass_client], &[4526], &[1], &[], &[], &[], Vec::new(), 0);
 
 		let tiles: HashSet<(u16, u16)> = [(50u16, 50u16)].into_iter().collect();
 		borderize(&mut m, &mats, &place, &otb, 7, &tiles, false);
@@ -911,7 +1067,7 @@ mod tests {
 		let mut place = HashMap::new();
 		place.insert(grass, PlaceFlags { ground: true, top_order: 0 });
 
-		let mut m = build_map_model(100, 100, &[50, 51], &[50, 50], &[7, 7], &[0, 1], &[1, 1], &[grass, grass], &[4526, 4526], &[1, 1], &[], Vec::new(), 0);
+		let mut m = build_map_model(100, 100, &[50, 51], &[50, 50], &[7, 7], &[0, 1], &[1, 1], &[grass, grass], &[4526, 4526], &[1, 1], &[], &[], &[], Vec::new(), 0);
 
 		let both: HashSet<(u16, u16)> = [(50, 50), (51, 50)].into_iter().collect();
 		borderize(&mut m, &mats, &place, &otb, 7, &both, false);
@@ -933,7 +1089,7 @@ mod tests {
 		let mut place = HashMap::new();
 		place.insert(grass, PlaceFlags { ground: true, top_order: 0 });
 
-		let mut m = build_map_model(100, 100, &[], &[], &[], &[], &[], &[], &[], &[], &[], Vec::new(), 0);
+		let mut m = build_map_model(100, 100, &[], &[], &[], &[], &[], &[], &[], &[], &[], &[], &[], Vec::new(), 0);
 
 		m.record_begin();
 		insert_ordered(tile_stack_mut(&mut m, 7, 50, 50), &place, Some(&mats), grass, 4526);
@@ -966,7 +1122,7 @@ mod tests {
 		assert_eq!(order_class(&place, Some(&mats), border_client, border_server), BORDER_CLASS, "border item");
 		assert_eq!(order_class(&place, Some(&mats), item.0, item.1), NORMAL_CLASS, "synthetic item is normal");
 
-		let mut m = build_map_model(100, 100, &[], &[], &[], &[], &[], &[], &[], &[], &[], Vec::new(), 0);
+		let mut m = build_map_model(100, 100, &[], &[], &[], &[], &[], &[], &[], &[], &[], &[], &[], Vec::new(), 0);
 		let stack = tile_stack_mut(&mut m, 7, 10, 10);
 		*stack = vec![(grass, 4526), (border_client, border_server), item];
 		stack.retain(|&(c, s)| matches!(order_class(&place, Some(&mats), c, s), GROUND_CLASS | BORDER_CLASS));

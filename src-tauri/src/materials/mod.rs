@@ -51,6 +51,7 @@ pub struct Materials {
 	pub border_types: [u32; 256],
 	pub walls: Vec<WallBrush>,
 	pub server_to_wall: HashMap<u16, u32>,
+	pub door_ids: HashSet<u16>,
 	pub wall_name_to_id: HashMap<String, u32>,
 	pub full_border_types: [u8; 16],
 	pub half_border_types: [u8; 16],
@@ -207,6 +208,7 @@ impl Materials {
 
 		let mut walls = Vec::with_capacity(raw_walls.len());
 		let mut server_to_wall: HashMap<u16, u32> = HashMap::new();
+		let mut door_ids: HashSet<u16> = HashSet::new();
 		for (idx, raw) in raw_walls.into_iter().enumerate() {
 			let id = idx as u32 + 1;
 			for node in &raw.alignments {
@@ -216,6 +218,7 @@ impl Materials {
 			}
 			for &door_id in &raw.door_ids {
 				server_to_wall.insert(door_id, id);
+				door_ids.insert(door_id);
 			}
 			let friends = raw
 				.friend_names
@@ -292,6 +295,7 @@ impl Materials {
 			border_types: build_border_types(),
 			walls,
 			server_to_wall,
+			door_ids,
 			wall_name_to_id,
 			full_border_types,
 			half_border_types,
@@ -308,6 +312,10 @@ impl Materials {
 
 	pub fn is_border_item(&self, server_id: u16) -> bool {
 		self.border_item_ids.contains(&server_id)
+	}
+
+	pub fn is_door(&self, server_id: u16) -> bool {
+		self.door_ids.contains(&server_id)
 	}
 
 	pub fn ground_brush_for(&self, server_id: u16) -> Option<&GroundBrush> {

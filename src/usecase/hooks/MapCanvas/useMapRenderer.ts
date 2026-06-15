@@ -118,7 +118,7 @@ export function useMapRenderer(deps: RendererDeps) {
   }
 
   function buildChunkMesh(cx: number, cy: number, z: number, missing: Set<number>) {
-    const { items, outfits, spawns, showSpawns, showCreatures, zoneVisibility } = inputs.current;
+    const { items, outfits, spawns, showSpawns, showCreatures, showHouses, zoneVisibility } = inputs.current;
     const key = `${z},${cx},${cy}`;
     const ct = tiles.data.current.get(key) as ChunkTiles | null | undefined;
     const sel = selection.entries.current;
@@ -168,7 +168,8 @@ export function useMapRenderer(deps: RendererDeps) {
         const selEntry = useSel ? sel.get(`${z},${tx},${ty}`) : undefined;
         const spawnCount = spawnCounts?.get(spawnTileKey(tx, ty));
         const groundSpawn = spawnCount ? spawnFactor(spawnCount) : 1;
-        const zoneBits = ct.flags[i] ? visibleZoneBits(ct.flags[i], zoneVisibility) : 0;
+        const houseBit = showHouses && ct.houseIds[i] ? 256 : 0;
+        const zoneBits = (ct.flags[i] ? visibleZoneBits(ct.flags[i], zoneVisibility) : 0) | houseBit;
         let drawElevation = 0;
         for (let ii = ct.itemOffset[i]; ii < end; ii++) {
           const thing = items.get(ct.clientIds[ii]);
@@ -419,6 +420,31 @@ export function useMapRenderer(deps: RendererDeps) {
     el.style.transform = `translate(${(x0 - camX) * zoom}px, ${(y0 - camY) * zoom}px)`;
   }
 
+  function updateHouseExits(camX: number, camY: number, zoom: number) {
+    const layer = scene.houseExitsRef.current;
+    if (!layer) return;
+    if (!inputs.current.showHouses) {
+      layer.style.display = 'none';
+      return;
+    }
+    layer.style.display = 'block';
+    const size = TILE * zoom;
+    const floor = inputs.current.floorZ;
+    for (const child of Array.from(layer.children) as HTMLElement[]) {
+      const x = Number(child.dataset.x);
+      const y = Number(child.dataset.y);
+      const z = Number(child.dataset.z);
+      if (z !== floor) {
+        child.style.display = 'none';
+        continue;
+      }
+      child.style.display = 'flex';
+      child.style.width = `${size}px`;
+      child.style.height = `${size}px`;
+      child.style.transform = `translate(${(x * TILE - camX) * zoom}px, ${(y * TILE - camY) * zoom}px)`;
+    }
+  }
+
   function updateSelectionBox(camX: number, camY: number, zoom: number) {
     const el = scene.selectionBoxRef.current;
     const ghost = scene.boxGhostRef.current;
@@ -636,6 +662,7 @@ export function useMapRenderer(deps: RendererDeps) {
     updateGhost(camX, camY, zoom);
     updateSelectionBox(camX, camY, zoom);
     updateSpawnBox(camX, camY, zoom);
+    updateHouseExits(camX, camY, zoom);
 
     flushTileRequests();
     atlas.loadMissing(sprPath, missing, transparency);

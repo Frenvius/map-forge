@@ -36,6 +36,7 @@ pub(crate) const ACTION_ERASE: u8 = 2;
 pub(crate) const ACTION_MOVE: u8 = 3;
 pub(crate) const ACTION_DELETE: u8 = 4;
 pub(crate) const ACTION_FLAG: u8 = 5;
+pub(crate) const ACTION_HOUSE: u8 = 6;
 
 const UNDO_LIMIT: usize = 200;
 const MERGE_WINDOW: Duration = Duration::from_millis(500);
@@ -54,16 +55,25 @@ struct FlagChange {
 	after: u32,
 }
 
+struct HouseChange {
+	z: u8,
+	pos: u32,
+	before: u32,
+	after: u32,
+}
+
 #[derive(Default)]
 struct Batch {
 	items: Vec<TileChange>,
 	flags: Vec<FlagChange>,
+	houses: Vec<HouseChange>,
 }
 
 #[derive(Default)]
 struct History {
 	recording: Option<HashMap<(u8, u32), Vec<(u16, u16)>>>,
 	flag_recording: Option<HashMap<(u8, u32), u32>>,
+	house_recording: Option<HashMap<(u8, u32), u32>>,
 	undo: Vec<Batch>,
 	redo: Vec<Batch>,
 	last_kind: u8,
@@ -84,11 +94,15 @@ pub struct MapModel {
 	pub(crate) server_ids: Vec<u16>,
 	pub(crate) subtypes: Vec<u8>,
 	pub(crate) tile_flags: Vec<u32>,
+	pub(crate) house_ids: Vec<u32>,
+	pub(crate) door_ids: Vec<u8>,
 	pub(crate) floors: HashMap<u8, HashMap<u32, (u32, u32)>>,
 	pub(crate) teleports: Vec<u8>,
 	pub(crate) teleport_count: u32,
 	pub(crate) edits: HashMap<u8, HashMap<u32, HashMap<u32, Vec<(u16, u16)>>>>,
 	pub(crate) flag_edits: HashMap<u8, HashMap<u32, HashMap<u32, u32>>>,
+	pub(crate) house_edits: HashMap<u8, HashMap<u32, HashMap<u32, u32>>>,
+	pub(crate) door_edits: HashMap<u8, HashMap<u32, HashMap<u32, u8>>>,
 	pub(crate) source_path: Option<std::path::PathBuf>,
 	pub(crate) available_floors: Vec<u8>,
 	pub(crate) total_tiles: u32,
@@ -139,6 +153,8 @@ pub(crate) fn build_map_model(
 	server_ids: &[u16],
 	subtypes: &[u8],
 	flags: &[u32],
+	house_ids: &[u32],
+	door_ids: &[u8],
 	teleports: Vec<u8>,
 	teleport_count: u32,
 ) -> MapModel {
@@ -173,6 +189,8 @@ pub(crate) fn build_map_model(
 	let mut server_col: Vec<u16> = Vec::with_capacity(server_ids.len());
 	let mut subtype_col: Vec<u8> = Vec::with_capacity(subtypes.len());
 	let mut flag_col: Vec<u32> = Vec::with_capacity(n);
+	let mut house_col: Vec<u32> = Vec::with_capacity(n);
+	let mut door_col: Vec<u8> = Vec::with_capacity(n);
 	let mut acc: u32 = 0;
 	for &oi in &order {
 		let i = oi as usize;
@@ -181,6 +199,8 @@ pub(crate) fn build_map_model(
 		tile_x.push(xs[i]);
 		tile_y.push(ys[i]);
 		flag_col.push(flags.get(i).copied().unwrap_or(0));
+		house_col.push(house_ids.get(i).copied().unwrap_or(0));
+		door_col.push(door_ids.get(i).copied().unwrap_or(0));
 		client_col.extend_from_slice(&client_ids[s..s + c]);
 		server_col.extend_from_slice(&server_ids[s..s + c]);
 		subtype_col.extend_from_slice(&subtypes[s..s + c]);
@@ -220,11 +240,15 @@ pub(crate) fn build_map_model(
 		server_ids: server_col,
 		subtypes: subtype_col,
 		tile_flags: flag_col,
+		house_ids: house_col,
+		door_ids: door_col,
 		floors,
 		teleports,
 		teleport_count,
 		edits: HashMap::new(),
 		flag_edits: HashMap::new(),
+		house_edits: HashMap::new(),
+		door_edits: HashMap::new(),
 		source_path: None,
 		available_floors,
 		total_tiles,
@@ -275,12 +299,14 @@ pub(crate) fn serialize_chunks(m: &MapModel, z: u8, keys: &[u32]) -> Vec<u8> {
 	let floor = m.floors.get(&z);
 	let efloor = m.edits.get(&z);
 	let feloor = m.flag_edits.get(&z);
+	let hfloor = m.house_edits.get(&z);
 	for &k in keys {
 		let base_range = floor.and_then(|f| f.get(&k).copied());
 		let edits_chunk = efloor.and_then(|c| c.get(&k));
 		let flags_chunk = feloor.and_then(|c| c.get(&k));
+		let house_chunk = hfloor.and_then(|c| c.get(&k));
 
-		let mut by_pos: HashMap<u32, (u32, Vec<(u16, u16, u8)>)> = HashMap::new();
+		let mut by_pos: HashMap<u32, (u32, u32, Vec<(u16, u16, u8)>)> = HashMap::new();
 		if let Some((start, end)) = base_range {
 			for t in start as usize..end as usize {
 				let pos = (m.tile_x[t] as u32) << 16 | m.tile_y[t] as u32;
@@ -290,39 +316,46 @@ pub(crate) fn serialize_chunks(m: &MapModel, z: u8, keys: &[u32]) -> Vec<u8> {
 				let s = m.item_off[t] as usize;
 				let e = m.item_off[t + 1] as usize;
 				let items = (s..e).map(|j| (m.client_ids[j], m.server_ids[j], m.subtypes[j])).collect();
-				by_pos.insert(pos, (m.tile_flags[t], items));
+				by_pos.insert(pos, (m.tile_flags[t], m.house_ids.get(t).copied().unwrap_or(0), items));
 			}
 		}
 		if let Some(c) = edits_chunk {
 			for (&pos, stack) in c {
 				let base = base_flags(m, z, k, (pos >> 16) as u16, (pos & 0xFFFF) as u16);
+				let house = base_house_id(m, z, k, (pos >> 16) as u16, (pos & 0xFFFF) as u16);
 				let items = stack.iter().map(|&(cl, sv)| (cl, sv, 1u8)).collect();
-				by_pos.insert(pos, (base, items));
+				by_pos.insert(pos, (base, house, items));
 			}
 		}
 		if let Some(c) = flags_chunk {
 			for (&pos, &flags) in c {
-				by_pos.entry(pos).or_insert_with(|| (0, Vec::new())).0 = flags;
+				by_pos.entry(pos).or_insert_with(|| (0, 0, Vec::new())).0 = flags;
+			}
+		}
+		if let Some(c) = house_chunk {
+			for (&pos, &house) in c {
+				by_pos.entry(pos).or_insert_with(|| (0, 0, Vec::new())).1 = house;
 			}
 		}
 
-		let mut tiles: Vec<(u16, u16, u32, Vec<(u16, u16, u8)>)> = by_pos
+		let mut tiles: Vec<(u16, u16, u32, u32, Vec<(u16, u16, u8)>)> = by_pos
 			.into_iter()
-			.filter(|(_, (flags, items))| !items.is_empty() || *flags != 0)
-			.map(|(pos, (flags, items))| ((pos >> 16) as u16, (pos & 0xFFFF) as u16, flags, items))
+			.filter(|(_, (flags, house, items))| !items.is_empty() || *flags != 0 || *house != 0)
+			.map(|(pos, (flags, house, items))| ((pos >> 16) as u16, (pos & 0xFFFF) as u16, flags, house, items))
 			.collect();
 		if tiles.is_empty() {
 			continue;
 		}
-		tiles.sort_unstable_by_key(|(x, y, _, _)| (*y, *x));
+		tiles.sort_unstable_by_key(|(x, y, _, _, _)| (*y, *x));
 
 		push_u16(&mut out, (k >> 16) as u16);
 		push_u16(&mut out, (k & 0xFFFF) as u16);
 		push_u32(&mut out, tiles.len() as u32);
-		for (x, y, flags, items) in &tiles {
+		for (x, y, flags, house, items) in &tiles {
 			push_u16(&mut out, *x);
 			push_u16(&mut out, *y);
 			push_u32(&mut out, *flags);
+			push_u32(&mut out, *house);
 			push_u16(&mut out, items.len() as u16);
 			for (c, s, sub) in items {
 				push_u16(&mut out, *c);
@@ -371,6 +404,46 @@ pub(crate) fn flags_at(m: &MapModel, z: u8, x: u16, y: u16) -> u32 {
 		return f;
 	}
 	base_flags(m, z, chunk_key, x, y)
+}
+
+pub(crate) fn base_house_id(m: &MapModel, z: u8, chunk_key: u32, x: u16, y: u16) -> u32 {
+	if let Some(&(start, end)) = m.floors.get(&z).and_then(|f| f.get(&chunk_key)) {
+		for t in start as usize..end as usize {
+			if m.tile_x[t] == x && m.tile_y[t] == y {
+				return m.house_ids.get(t).copied().unwrap_or(0);
+			}
+		}
+	}
+	0
+}
+
+pub(crate) fn house_id_at(m: &MapModel, z: u8, x: u16, y: u16) -> u32 {
+	let chunk_key = chunk_key_of(x, y);
+	let pos = (x as u32) << 16 | y as u32;
+	if let Some(&h) = m.house_edits.get(&z).and_then(|c| c.get(&chunk_key)).and_then(|t| t.get(&pos)) {
+		return h;
+	}
+	base_house_id(m, z, chunk_key, x, y)
+}
+
+pub(crate) fn base_door_id(m: &MapModel, z: u8, chunk_key: u32, x: u16, y: u16) -> u8 {
+	if let Some(&(start, end)) = m.floors.get(&z).and_then(|f| f.get(&chunk_key)) {
+		for t in start as usize..end as usize {
+			if m.tile_x[t] == x && m.tile_y[t] == y {
+				return m.door_ids.get(t).copied().unwrap_or(0);
+			}
+		}
+	}
+	0
+}
+
+pub(crate) fn door_id_at(m: &MapModel, z: u8, x: u16, y: u16) -> u8 {
+	let chunk_key = chunk_key_of(x, y);
+	let pos = (x as u32) << 16 | y as u32;
+	if let Some(&d) = m.door_edits.get(&z).and_then(|c| c.get(&chunk_key)).and_then(|t| t.get(&pos)) {
+		return d;
+	}
+	base_door_id(m, z, chunk_key, x, y)
 }
 
 pub(crate) fn stack_at(m: &MapModel, z: u8, x: u16, y: u16) -> Vec<(u16, u16)> {
@@ -543,6 +616,8 @@ impl MapModel {
 				server_ids: Vec::new(),
 				subtypes: Vec::new(),
 				flags: Vec::new(),
+				house_ids: Vec::new(),
+				door_ids: Vec::new(),
 			};
 			read_otbm_floor(&slice, &mut col)?;
 			self.append_chunk(z, key, &col);
@@ -568,6 +643,8 @@ impl MapModel {
 			self.tile_x.push(col.xs[i]);
 			self.tile_y.push(col.ys[i]);
 			self.tile_flags.push(col.flags[i]);
+			self.house_ids.push(col.house_ids.get(i).copied().unwrap_or(0));
+			self.door_ids.push(col.door_ids.get(i).copied().unwrap_or(0));
 			self.client_ids.extend_from_slice(&col.client_ids[s..s + c]);
 			self.server_ids.extend_from_slice(&col.server_ids[s..s + c]);
 			self.subtypes.extend_from_slice(&col.subtypes[s..s + c]);
@@ -587,6 +664,9 @@ impl MapModel {
 		if self.history.flag_recording.is_none() {
 			self.history.flag_recording = Some(HashMap::new());
 		}
+		if self.history.house_recording.is_none() {
+			self.history.house_recording = Some(HashMap::new());
+		}
 	}
 
 	pub(crate) fn set_tile_flags(&mut self, z: u8, x: u16, y: u16, new_flags: u32) {
@@ -599,9 +679,26 @@ impl MapModel {
 		self.flag_edits.entry(z).or_default().entry(chunk_key).or_default().insert(pos, new_flags);
 	}
 
+	pub(crate) fn set_tile_house_id(&mut self, z: u8, x: u16, y: u16, new_house: u32) {
+		let chunk_key = chunk_key_of(x, y);
+		let pos = (x as u32) << 16 | y as u32;
+		if self.history.house_recording.as_ref().is_some_and(|r| !r.contains_key(&(z, pos))) {
+			let before = house_id_at(self, z, x, y);
+			self.history.house_recording.as_mut().unwrap().insert((z, pos), before);
+		}
+		self.house_edits.entry(z).or_default().entry(chunk_key).or_default().insert(pos, new_house);
+	}
+
+	pub(crate) fn set_tile_door_id(&mut self, z: u8, x: u16, y: u16, door_id: u8) {
+		let chunk_key = chunk_key_of(x, y);
+		let pos = (x as u32) << 16 | y as u32;
+		self.door_edits.entry(z).or_default().entry(chunk_key).or_default().insert(pos, door_id);
+	}
+
 	pub(crate) fn record_commit(&mut self, kind: u8) {
 		let item_before = self.history.recording.take();
 		let flag_before = self.history.flag_recording.take();
+		let house_before = self.history.house_recording.take();
 		let mut items: Vec<TileChange> = item_before
 			.into_iter()
 			.flatten()
@@ -618,11 +715,19 @@ impl MapModel {
 				(before != after).then_some(FlagChange { z, pos, before, after })
 			})
 			.collect();
-		if items.is_empty() && flags.is_empty() {
+		let mut houses: Vec<HouseChange> = house_before
+			.into_iter()
+			.flatten()
+			.filter_map(|((z, pos), before)| {
+				let after = house_id_at(self, z, (pos >> 16) as u16, (pos & 0xFFFF) as u16);
+				(before != after).then_some(HouseChange { z, pos, before, after })
+			})
+			.collect();
+		if items.is_empty() && flags.is_empty() && houses.is_empty() {
 			return;
 		}
 
-		let mergeable = matches!(kind, ACTION_PAINT | ACTION_ERASE | ACTION_FLAG)
+		let mergeable = matches!(kind, ACTION_PAINT | ACTION_ERASE | ACTION_FLAG | ACTION_HOUSE)
 			&& self.history.last_kind == kind
 			&& self.history.redo.is_empty()
 			&& self.history.last_commit.is_some_and(|t| t.elapsed() < MERGE_WINDOW);
@@ -641,10 +746,16 @@ impl MapModel {
 						None => group.flags.push(ch),
 					}
 				}
+				for ch in houses.drain(..) {
+					match group.houses.iter_mut().find(|c| c.z == ch.z && c.pos == ch.pos) {
+						Some(existing) => existing.after = ch.after,
+						None => group.houses.push(ch),
+					}
+				}
 			}
 		} else {
 			self.history.redo.clear();
-			self.history.undo.push(Batch { items, flags });
+			self.history.undo.push(Batch { items, flags, houses });
 			if self.history.undo.len() > UNDO_LIMIT {
 				self.history.undo.remove(0);
 			}
@@ -661,6 +772,11 @@ impl MapModel {
 	fn set_flag_overlay(&mut self, z: u8, pos: u32, flags: u32) {
 		let chunk_key = chunk_key_of((pos >> 16) as u16, (pos & 0xFFFF) as u16);
 		self.flag_edits.entry(z).or_default().entry(chunk_key).or_default().insert(pos, flags);
+	}
+
+	fn set_house_overlay(&mut self, z: u8, pos: u32, house: u32) {
+		let chunk_key = chunk_key_of((pos >> 16) as u16, (pos & 0xFFFF) as u16);
+		self.house_edits.entry(z).or_default().entry(chunk_key).or_default().insert(pos, house);
 	}
 
 	pub(crate) fn undo(&mut self) -> Vec<(u8, u32)> {
@@ -697,6 +813,12 @@ impl MapModel {
 			let chunk_key = chunk_key_of((ch.pos >> 16) as u16, (ch.pos & 0xFFFF) as u16);
 			touched.insert((ch.z, chunk_key));
 		}
+		for ch in &batch.houses {
+			let house = if to_before { ch.before } else { ch.after };
+			self.set_house_overlay(ch.z, ch.pos, house);
+			let chunk_key = chunk_key_of((ch.pos >> 16) as u16, (ch.pos & 0xFFFF) as u16);
+			touched.insert((ch.z, chunk_key));
+		}
 		touched.into_iter().collect()
 	}
 }
@@ -726,11 +848,15 @@ pub(crate) fn empty_model(width: u16, height: u16) -> MapModel {
 		server_ids: Vec::new(),
 		subtypes: Vec::new(),
 		tile_flags: Vec::new(),
+		house_ids: Vec::new(),
 		floors: HashMap::new(),
 		teleports: Vec::new(),
 		teleport_count: 0,
 		edits: HashMap::new(),
 		flag_edits: HashMap::new(),
+		house_edits: HashMap::new(),
+		door_ids: Vec::new(),
+		door_edits: HashMap::new(),
 		source_path: None,
 		available_floors: Vec::new(),
 		total_tiles: 0,
@@ -780,11 +906,15 @@ pub(crate) fn lazy_model(width: u16, height: u16, idx: &MapIndex, source: std::p
 		server_ids: Vec::new(),
 		subtypes: Vec::new(),
 		tile_flags: Vec::new(),
+		house_ids: Vec::new(),
 		floors: HashMap::new(),
 		teleports: idx.teleports.clone(),
 		teleport_count: idx.teleport_count,
 		edits: HashMap::new(),
 		flag_edits: HashMap::new(),
+		house_edits: HashMap::new(),
+		door_ids: Vec::new(),
+		door_edits: HashMap::new(),
 		source_path: Some(source),
 		available_floors,
 		total_tiles,
@@ -815,6 +945,8 @@ struct FloorCollector<'a> {
 	server_ids: Vec<u16>,
 	subtypes: Vec<u8>,
 	flags: Vec<u32>,
+	house_ids: Vec<u32>,
+	door_ids: Vec<u8>,
 }
 
 impl OtbmVisitor for FloorCollector<'_> {
@@ -839,10 +971,22 @@ impl OtbmVisitor for FloorCollector<'_> {
 		self.item_start.push(start);
 		self.item_count.push(n);
 		self.flags.push(0);
+		self.house_ids.push(0);
+		self.door_ids.push(0);
 	}
 	fn tile_flags(&mut self, _x: u16, _y: u16, _z: u8, flags: u32) {
 		if let Some(last) = self.flags.last_mut() {
 			*last = flags;
+		}
+	}
+	fn house_tile(&mut self, _x: u16, _y: u16, _z: u8, house_id: u32) {
+		if let Some(last) = self.house_ids.last_mut() {
+			*last = house_id;
+		}
+	}
+	fn tile_door(&mut self, _x: u16, _y: u16, _z: u8, door_id: u8) {
+		if let Some(last) = self.door_ids.last_mut() {
+			*last = door_id;
 		}
 	}
 }
@@ -939,7 +1083,7 @@ mod tests {
 		let client_ids = vec![100u16, 101, 102, 103, 104];
 		let server_ids = vec![900u16, 901, 902, 903, 904];
 		let subtypes = vec![1u8, 1, 1, 1, 1];
-		build_map_model(10, 20, &xs, &ys, &zs, &item_start, &item_count, &client_ids, &server_ids, &subtypes, &[], Vec::new(), 0)
+		build_map_model(10, 20, &xs, &ys, &zs, &item_start, &item_count, &client_ids, &server_ids, &subtypes, &[], &[], &[], Vec::new(), 0)
 	}
 
 	#[test]
@@ -982,16 +1126,18 @@ mod tests {
 		assert_eq!(u16_at(&buf, o), 40);
 		assert_eq!(u16_at(&buf, o + 2), 0);
 		assert_eq!(u32_at(&buf, o + 4), 0);
-		assert_eq!(u16_at(&buf, o + 8), 1);
-		assert_eq!(u16_at(&buf, o + 10), 100);
-		assert_eq!(u16_at(&buf, o + 12), 900);
-		assert_eq!(buf[o + 14], 1);
-		o += 15;
+		assert_eq!(u32_at(&buf, o + 8), 0);
+		assert_eq!(u16_at(&buf, o + 12), 1);
+		assert_eq!(u16_at(&buf, o + 14), 100);
+		assert_eq!(u16_at(&buf, o + 16), 900);
+		assert_eq!(buf[o + 18], 1);
+		o += 19;
 		assert_eq!(u16_at(&buf, o), 33);
 		assert_eq!(u16_at(&buf, o + 2), 5);
 		assert_eq!(u32_at(&buf, o + 4), 0);
-		assert_eq!(u16_at(&buf, o + 8), 2);
-		assert_eq!(u16_at(&buf, o + 10), 102);
-		assert_eq!(u16_at(&buf, o + 15), 103);
+		assert_eq!(u32_at(&buf, o + 8), 0);
+		assert_eq!(u16_at(&buf, o + 12), 2);
+		assert_eq!(u16_at(&buf, o + 14), 102);
+		assert_eq!(u16_at(&buf, o + 19), 103);
 	}
 }

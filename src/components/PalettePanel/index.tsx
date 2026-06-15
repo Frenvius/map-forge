@@ -1,9 +1,11 @@
 import React from 'react';
 
+import { Town } from '~/domain/map';
 import { cn } from '~/usecase/classNames';
 import { LoadedSprite } from '~/domain/sprite';
 import { loadSprites } from '~/adapter/sprites';
 import { mapClientIds } from '~/adapter/assets';
+import { House, MapHouses } from '~/domain/house';
 import { useTool } from '~/usecase/context/ToolContext';
 import { Waypoint, MapWaypoints } from '~/domain/waypoint';
 import { DragHandleProps } from '~/components/Dock/DockablePanel';
@@ -12,6 +14,7 @@ import { brushSpriteLayout, BrushSpriteLayout, resolveBrushThing } from '~/useca
 import { PaletteData, PaletteBrush, PaletteCategoryId, PALETTE_CATEGORIES } from '~/domain/palette';
 import { Select, SelectItem, SelectValue, SelectContent, SelectTrigger } from '~/components/commons/ui/select';
 
+import HousesList from './HousesList';
 import WaypointsList from './WaypointsList';
 import BrushThumbnail from './BrushThumbnail';
 
@@ -36,10 +39,14 @@ function makeBrushPreview(layout: BrushSpriteLayout, cache: Map<number, LoadedSp
 interface PalettePanelProps {
   dragHandle?: DragHandleProps;
   waypoints: MapWaypoints | null;
+  houses: MapHouses | null;
+  towns: Town[];
   onAddWaypoint: () => void;
   onGotoWaypoint: (wp: Waypoint) => void;
   onEditWaypoints: (next: MapWaypoints) => void;
   onCopyWaypointPosition: (wp: Waypoint) => void;
+  onEditHouses: (next: MapHouses) => void;
+  onGotoHouse: (house: House) => void;
 }
 
 interface PendingReveal {
@@ -59,10 +66,14 @@ const SHARED_SERVER_TO_CLIENT = new Map<number, number>();
 const PalettePanel = ({
   dragHandle,
   waypoints,
+  houses,
+  towns,
   onAddWaypoint,
   onGotoWaypoint,
   onEditWaypoints,
-  onCopyWaypointPosition
+  onCopyWaypointPosition,
+  onEditHouses,
+  onGotoHouse
 }: PalettePanelProps) => {
   const { assets, palette } = useAssetsBundle();
   const { reveal, selectBrush } = useTool();
@@ -202,6 +213,8 @@ const PalettePanel = ({
   }
 
   const isWaypoints = category === 'waypoints';
+  const isHouses = category === 'houses';
+  const isList = isWaypoints || isHouses;
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden rounded-lg bg-card shadow-island">
@@ -216,7 +229,7 @@ const PalettePanel = ({
       >
         <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground">Palette</h2>
         <span className="ml-auto font-mono text-[10px] text-muted-foreground">
-          {isWaypoints ? (waypoints?.list.length ?? 0) : tiles.length}
+          {isWaypoints ? (waypoints?.list.length ?? 0) : isHouses ? (houses?.list.length ?? 0) : tiles.length}
         </span>
       </div>
 
@@ -234,7 +247,7 @@ const PalettePanel = ({
           </SelectContent>
         </Select>
 
-        {!isWaypoints && (
+        {!isList && (
           <div className="flex flex-col gap-1">
             <span className="px-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">Tileset</span>
             <Select value={current?.name ?? ''} onValueChange={setTilesetName} disabled={tilesets.length === 0}>
@@ -261,6 +274,8 @@ const PalettePanel = ({
           onEdit={onEditWaypoints}
           onCopyPosition={onCopyWaypointPosition}
         />
+      ) : isHouses ? (
+        <HousesList towns={towns} houses={houses} onGoto={onGotoHouse} onEdit={onEditHouses} />
       ) : (
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-2">
           {tiles.length === 0 ? (
