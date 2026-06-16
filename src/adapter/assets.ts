@@ -108,6 +108,17 @@ export async function resolveMapItems(mapPath: string): Promise<MapItemsPaths | 
   return (await invoke<MapItemsPaths | null>('resolve_items_dir', { mapPath })) ?? null;
 }
 
+export interface OtbmVersionInfo {
+  otbm_version: number;
+  items_major: number;
+  items_minor: number;
+  data_dir: string | null;
+}
+
+export async function peekOtbmVersion(path: string): Promise<OtbmVersionInfo> {
+  return invoke<OtbmVersionInfo>('peek_otbm_version', { path });
+}
+
 export async function loadOtb(path: string): Promise<number> {
   return invoke<number>('load_otb', { path });
 }
@@ -125,11 +136,13 @@ export async function loadAssets(dataDir: string, clientDir: string, version = D
   const datPath = `${clientDir}/${otfi.metadataFile ?? 'Tibia.dat'}`;
   const sprPath = `${clientDir}/${otfi.spritesFile ?? 'Tibia.spr'}`;
 
-  const otbItemCount = await invoke<number>('load_otb', { path: `${dataDir}/items.otb` });
-  await invoke<number>('load_materials', { dataDir }).catch((err) => console.error('Failed to load materials', err));
+  const otbItemCount = await invoke<number>('load_otb', { path: `${dataDir}/items.otb` }).catch(() => 0);
+  await invoke<number>('load_materials', { dataDir }).catch(() => undefined);
   const itemNames = await loadItemNames(dataDir);
   const creatures = await loadCreatureDb(dataDir);
-  const [spawnMarkerClientId, waypointMarkerClientId] = await mapClientIds([SPAWN_MARKER_SERVER_ID, WAYPOINT_MARKER_SERVER_ID]);
+  const [spawnMarkerClientId, waypointMarkerClientId] = otbItemCount > 0
+    ? await mapClientIds([SPAWN_MARKER_SERVER_ID, WAYPOINT_MARKER_SERVER_ID])
+    : [0, 0];
 
   const datResponse = await invoke<Uint8Array | ArrayBuffer>('parse_dat_file_bin', { path: datPath, version });
   const datBuf = datResponse instanceof Uint8Array ? datResponse : new Uint8Array(datResponse);

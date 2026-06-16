@@ -62,6 +62,7 @@ const App = () => {
     status,
     error,
     dataDir,
+    version,
     clientConfigured,
     assetsMissing,
     retryAssets,
@@ -496,6 +497,8 @@ const App = () => {
         ) : assetsMissing ? (
           <AssetsMissing
             dataDir={dataDir}
+            version={version}
+            error={error}
             onRetry={retryAssets}
             clientConfigured={clientConfigured}
             onOpenSettings={() => openPreferences('client')}

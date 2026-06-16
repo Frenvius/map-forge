@@ -89,15 +89,20 @@ pub struct ItemsPaths {
 	pub xml: Option<String>,
 }
 
+const SERVER_DIR_MARKERS: [&str; 3] = ["world", "monster", "npc"];
+
+fn is_server_data_dir(base: &Path) -> bool {
+	SERVER_DIR_MARKERS.iter().any(|d| base.join(d).is_dir())
+}
+
 fn items_at(base: &Path) -> Option<ItemsPaths> {
-	for otb in [base.join("items").join("items.otb"), base.join("items.otb")] {
-		if otb.is_file() {
-			let xml = otb.with_file_name("items.xml");
-			return Some(ItemsPaths {
-				otb: otb.to_string_lossy().into_owned(),
-				xml: xml.is_file().then(|| xml.to_string_lossy().into_owned()),
-			});
-		}
+	let otb = base.join("items").join("items.otb");
+	if otb.is_file() && is_server_data_dir(base) {
+		let xml = otb.with_file_name("items.xml");
+		return Some(ItemsPaths {
+			otb: otb.to_string_lossy().into_owned(),
+			xml: xml.is_file().then(|| xml.to_string_lossy().into_owned()),
+		});
 	}
 	None
 }

@@ -28,6 +28,7 @@
 				"backgroundColor": [0, 0, 0, 0]
 			}
 		],
+		"withGlobalTauri": true,
 		"security": {
 			"csp": null
 		}

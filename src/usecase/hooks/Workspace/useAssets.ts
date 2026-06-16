@@ -82,8 +82,12 @@ export const useAssets = (): AssetsState => {
         const a = await loadAssets(resolvedDataDir, clientDir, v);
         if (cancelled) return;
         setAssets(a);
-        setPalette(await loadPalette(resolvedDataDir));
-        setStatus(`Assets ready - ${a.otbItemCount} items, ${a.spritesCount} sprites. Open a map to begin.`);
+        const pal = await loadPalette(resolvedDataDir).catch(() => null);
+        setPalette(pal);
+        const parts = [`${a.spritesCount} sprites`];
+        if (a.otbItemCount > 0) parts.push(`${a.otbItemCount} items`);
+        if (!pal) parts.push('no materials');
+        setStatus(`Assets ready - ${parts.join(', ')}. Open a map to begin.`);
       } catch (e) {
         if (cancelled) return;
         setAssetsMissing(true);

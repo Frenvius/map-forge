@@ -20,6 +20,7 @@ use settings::{read_settings, write_settings};
 mod materials;
 use materials::Materials;
 
+mod client_version;
 mod commands;
 mod creatures;
 mod map_edit;
@@ -28,6 +29,7 @@ mod map_meta;
 mod map_model;
 mod map_save;
 
+use client_version::peek_otbm_version;
 use commands::{
 	all_server_ids, close_spr_file, default_data_dir, load_materials, load_otb, map_client_ids, open_data_dir, open_spr_file,
 	open_url, parse_dat_file_bin, read_file, read_file_header, read_file_text, read_sprites_batch_rgba, read_sprites_rgba,
@@ -72,8 +74,15 @@ pub fn run() {
 	let minimap_palette: MinimapPaletteState = Arc::new(Mutex::new(Vec::new()));
 	let creature_watcher: CreatureWatcherState = Mutex::new(None);
 
-	tauri::Builder::default()
-		.plugin(tauri_plugin_dialog::init())
+	let mut builder = tauri::Builder::default()
+		.plugin(tauri_plugin_dialog::init());
+
+	#[cfg(debug_assertions)]
+	{
+		builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+	}
+
+	builder
 		.manage(spr_manager)
 		.manage(otb_store)
 		.manage(map_store)
@@ -135,7 +144,8 @@ pub fn run() {
 			resolve_items_dir,
 			scan_creatures,
 			watch_creatures,
-			unwatch_creatures
+			unwatch_creatures,
+			peek_otbm_version
 		])
 		.setup(move |app| {
 			#[cfg(target_os = "macos")]

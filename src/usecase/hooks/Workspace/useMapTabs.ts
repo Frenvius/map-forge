@@ -6,7 +6,7 @@ import { snapZoom } from '~/usecase/zoom';
 import { getMapView, setMapView } from '~/adapter/mapViews';
 import { newOtbm, openOtbm, closeMap, saveOtbm } from '~/adapter/map';
 import { addRecentMap, loadRecentMaps, clearRecentMaps } from '~/adapter/recentMaps';
-import { loadOtb, LoadedAssets, defaultDataDir, resolveMapItems, loadItemNamesPath } from '~/adapter/assets';
+import { loadOtb, LoadedAssets, defaultDataDir, resolveMapItems, loadItemNamesPath, peekOtbmVersion } from '~/adapter/assets';
 
 const NEW_MAP_WIDTH = 1024;
 const NEW_MAP_HEIGHT = 1024;
@@ -66,13 +66,21 @@ export const useMapTabs = (assets: LoadedAssets | null, { setStatus, setError, o
   const [itemNames, setItemNames] = React.useState<Map<number, string> | null>(null);
   const loadedOtbPath = React.useRef<string | null>(null);
 
-  const bundledOtb = `${defaultDataDir()}/items.otb`;
+  const startupOtb = `${defaultDataDir()}/items.otb`;
 
   const prepareItems = async (path?: string): Promise<{ otbPath: string; names: Map<number, string> }> => {
     const found = path ? await resolveMapItems(path).catch(() => null) : null;
-    const otbPath = found?.otb ?? bundledOtb;
+    let otbPath: string | null = found?.otb ?? null;
+
+    if (!otbPath && path) {
+      const ver = await peekOtbmVersion(path).catch(() => null);
+      if (ver?.data_dir) otbPath = `${ver.data_dir}/items.otb`;
+    }
+
+    if (!otbPath) otbPath = startupOtb;
+
     if (otbPath !== loadedOtbPath.current) {
-      await loadOtb(otbPath).catch((e) => console.error('Failed to load items.otb', e));
+      await loadOtb(otbPath);
       loadedOtbPath.current = otbPath;
     }
     const names = found

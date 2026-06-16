@@ -406,6 +406,25 @@ pub fn read_otbm_header(bytes: &[u8]) -> Result<(u16, u16), String> {
 	Ok((width, height))
 }
 
+pub fn read_otbm_version(bytes: &[u8]) -> Result<(u32, u32, u32), String> {
+	let mut r = Reader { b: bytes, pos: 0 };
+	if bytes.len() < 6 {
+		return Err("otbm: file too small for header".into());
+	}
+	r.pos = 4;
+	if r.peek() != Some(NODE_START) {
+		return Err("otbm: missing root node start byte".into());
+	}
+	r.pos += 1;
+	r.data_u8().ok_or("otbm: missing root type")?;
+	let otbm_version = r.data_u32().ok_or("otbm: missing version")?;
+	r.data_u16().ok_or("otbm: missing width")?;
+	r.data_u16().ok_or("otbm: missing height")?;
+	let items_major = r.data_u32().unwrap_or(0);
+	let items_minor = r.data_u32().unwrap_or(0);
+	Ok((otbm_version, items_major, items_minor))
+}
+
 pub fn read_otbm_floor<V: OtbmVisitor>(slice: &[u8], visitor: &mut V) -> Result<(), String> {
 	let mut p = Parser {
 		r: Reader { b: slice, pos: 0 },

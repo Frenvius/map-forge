@@ -34,19 +34,6 @@ pub fn default_data_dir(version: u32) -> String {
 	let v = version.to_string();
 	let exe = std::env::current_exe().ok();
 	let exe_dir = exe.as_deref().and_then(|e| e.parent());
-	let mut dir = exe_dir;
-	let mut depth = 0;
-	while let Some(base) = dir {
-		let candidate = base.join("data").join(&v);
-		if candidate.is_dir() {
-			return candidate.to_string_lossy().into_owned();
-		}
-		if depth >= 6 {
-			break;
-		}
-		depth += 1;
-		dir = base.parent();
-	}
 	exe_dir
 		.map(|b| b.join("data").join(&v).to_string_lossy().into_owned())
 		.unwrap_or_else(|| format!("data{}{}", std::path::MAIN_SEPARATOR, v))
