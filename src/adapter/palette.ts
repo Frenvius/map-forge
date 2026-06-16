@@ -3,8 +3,12 @@ import { invoke } from '@tauri-apps/api/core';
 import { defaultDataDir } from '~/adapter/assets';
 import { BrushKind, PaletteData, PaletteBrush, PaletteTileset } from '~/domain/palette';
 
+function sanitizeXml(text: string): string {
+  return text.replace(/&(?!amp;|lt;|gt;|quot;|apos;|#)/g, '&amp;');
+}
+
 function parseXml(text: string): Document {
-  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  const doc = new DOMParser().parseFromString(sanitizeXml(text), 'application/xml');
   const error = doc.querySelector('parsererror');
   if (error) throw new Error(error.textContent?.trim() || 'invalid XML');
   return doc;
