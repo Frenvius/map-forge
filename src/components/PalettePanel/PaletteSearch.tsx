@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search } from 'lucide-react';
+import { X, Search } from 'lucide-react';
 
 interface PaletteSearchProps {
   value: string;
@@ -18,6 +18,16 @@ const PaletteSearch = ({ value, placeholder, onChange, children }: PaletteSearch
       onChange={(e) => onChange(e.target.value)}
       className="h-7 w-full bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
     />
+    {value && (
+      <button
+        type="button"
+        title="Clear search"
+        onClick={() => onChange('')}
+        className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-item-hover hover:text-foreground"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    )}
     {children}
   </div>
 );
