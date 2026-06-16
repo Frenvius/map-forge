@@ -2,8 +2,13 @@ import React from 'react';
 import { Layers, ZoomIn, ZoomOut } from 'lucide-react';
 
 import { stepZoom } from '~/usecase/zoom';
-import { Slider } from '~/components/commons/ui/slider';
 import { HoverInfo, HoverItem } from '~/components/MapCanvas/types';
+import { Select, SelectItem, SelectContent, SelectTrigger } from '~/components/commons/ui/select';
+
+const MIN_FLOOR = 0;
+const MAX_FLOOR = 15;
+const SEA_LEVEL = 7;
+const FLOORS = Array.from({ length: MAX_FLOOR - MIN_FLOOR + 1 }, (_, i) => MIN_FLOOR + i);
 
 export interface StatusBarApi {
   setHover: (hover: HoverInfo | null) => void;
@@ -95,10 +100,31 @@ const StatusBar = ({ status, apiRef, floorZ, zoom, onFloorChange, onZoomChange }
 
       <div className="w-px self-stretch bg-border" />
 
-      <div className="flex flex-shrink-0 items-center gap-2 px-3">
+      <div
+        className="flex flex-shrink-0 items-center gap-2 px-3"
+        onWheel={(e) => {
+          const delta = e.deltaY < 0 ? -1 : 1;
+          const next = Math.min(MAX_FLOOR, Math.max(MIN_FLOOR, floorZ + delta));
+          if (next !== floorZ) onFloorChange(next);
+        }}
+      >
         <Layers className="h-3.5 w-3.5" />
-        <span className="w-12 tabular-nums">Floor {floorZ}</span>
-        <Slider min={0} max={15} step={1} className="w-24" value={[floorZ]} onValueChange={(v) => onFloorChange(v[0])} />
+        <Select value={String(floorZ)} onValueChange={(v) => onFloorChange(Number(v))}>
+          <SelectTrigger className="h-6 w-28 px-2 py-0 tabular-nums">
+            <span>
+              Floor {floorZ}
+              {floorZ === SEA_LEVEL ? <span className="ml-1 text-muted-foreground/70">(sea)</span> : null}
+            </span>
+          </SelectTrigger>
+          <SelectContent className="max-h-none">
+            {FLOORS.map((z) => (
+              <SelectItem key={z} value={String(z)}>
+                Floor {z}
+                {z === SEA_LEVEL ? <span className="ml-1.5 text-muted-foreground/70">(sea level)</span> : null}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <div className="mx-1 h-4 w-px bg-border" />
 
