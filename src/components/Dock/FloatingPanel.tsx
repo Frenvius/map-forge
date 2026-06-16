@@ -1,10 +1,11 @@
 import React from 'react';
 
 import Resizer from '~/components/Dock/Resizer';
-import { PanelMeta, FloatRect, ResizeSide } from '~/domain/dock';
+import { PanelId, PanelMeta, FloatRect, ResizeSide } from '~/domain/dock';
 import DockablePanel, { DragHandleProps } from '~/components/Dock/DockablePanel';
 
 interface FloatingPanelProps {
+  id: PanelId;
   meta: PanelMeta;
   rect: FloatRect;
   guarded?: boolean;
@@ -25,14 +26,14 @@ const SIDES: { side: ResizeSide; dir: 'x' | 'y' | 'xy' }[] = [
   { side: 'bottom-right', dir: 'xy' }
 ];
 
-const FloatingPanel = ({ meta, rect, guarded, onResizeEnd, onResizeStart, onResize, children }: FloatingPanelProps) => {
+const FloatingPanel = ({ id, meta, rect, guarded, onResizeEnd, onResizeStart, onResize, children }: FloatingPanelProps) => {
   const style: React.CSSProperties = meta.resizable
     ? { left: rect.x, top: rect.y, width: rect.width, height: rect.height }
     : { left: rect.x, top: rect.y };
 
   return (
     <div style={style} className="absolute z-20 rounded-lg shadow-[0_10px_40px_-5px_rgba(0,0,0,0.65)] ring-1 ring-black/40">
-      <DockablePanel meta={meta} guarded={guarded} className="h-full">
+      <DockablePanel id={id} meta={meta} guarded={guarded} className="h-full">
         {children}
       </DockablePanel>
       {meta.resizable &&

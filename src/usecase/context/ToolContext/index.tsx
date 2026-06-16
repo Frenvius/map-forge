@@ -3,7 +3,7 @@ import React from 'react';
 import { ToolId } from '~/domain/tools';
 import { ActiveBrush, PaletteCategoryId } from '~/domain/palette';
 
-import { PaletteReveal, ToolContextValue, ToolProviderProps } from './types';
+import { PaletteReveal, ToolContextValue, ToolProviderProps, PaletteCategorySignal } from './types';
 
 const ToolContext = React.createContext({} as ToolContextValue);
 
@@ -13,6 +13,7 @@ export const ToolProvider = ({ children }: ToolProviderProps) => {
   const [activeHouseId, setActiveHouse] = React.useState<number | null>(null);
   const [ctrlErase, setCtrlErase] = React.useState(false);
   const [reveal, setReveal] = React.useState<PaletteReveal | null>(null);
+  const [paletteCategory, setPaletteCategoryState] = React.useState<PaletteCategorySignal | null>(null);
 
   React.useEffect(() => {
     const sync = (e: KeyboardEvent) => setCtrlErase(e.ctrlKey);
@@ -42,6 +43,10 @@ export const ToolProvider = ({ children }: ToolProviderProps) => {
     setReveal((r) => ({ category, serverId, name, nonce: (r?.nonce ?? 0) + 1 }));
   }, []);
 
+  const setPaletteCategory = React.useCallback((category: PaletteCategoryId) => {
+    setPaletteCategoryState((p) => ({ category, nonce: (p?.nonce ?? 0) + 1 }));
+  }, []);
+
   const value = React.useMemo<ToolContextValue>(
     () => ({
       activeTool,
@@ -49,12 +54,26 @@ export const ToolProvider = ({ children }: ToolProviderProps) => {
       activeHouseId,
       ctrlErase,
       reveal,
+      paletteCategory,
       setActiveTool,
       selectBrush,
       setActiveHouse,
-      revealInPalette
+      revealInPalette,
+      setPaletteCategory
     }),
-    [activeTool, activeBrush, activeHouseId, ctrlErase, reveal, setActiveTool, selectBrush, revealInPalette]
+    [
+      activeTool,
+      activeBrush,
+      activeHouseId,
+      ctrlErase,
+      reveal,
+      paletteCategory,
+      setActiveTool,
+      selectBrush,
+      setActiveHouse,
+      revealInPalette,
+      setPaletteCategory
+    ]
   );
 
   return <ToolContext.Provider value={value}>{children}</ToolContext.Provider>;

@@ -4,8 +4,8 @@ import { useSensor, useSensors, DragEndEvent, PointerSensor, DragMoveEvent, Drag
 import { loadGeneralConfig } from '~/adapter/preferences';
 import { getSetting, setSetting } from '~/adapter/settings';
 import {
-  PANELS,
   PanelId,
+  baseKind,
   DockZone,
   MapCorner,
   FloatRect,
@@ -13,6 +13,7 @@ import {
   DropTarget,
   DockLayout,
   CORNER_MARGIN,
+  instancePanelId,
   DEFAULT_MAX_STACK,
   DEFAULT_FLOAT_WIDTH,
   DEFAULT_MINIMAP_SIZE,
@@ -25,6 +26,7 @@ import {
   floatAt,
   heightOf,
   cornerOf,
+  placedIds,
   isFloating,
   dockCorner,
   removePanel,
@@ -77,6 +79,8 @@ export interface DockApi {
   reloadConfig: () => void;
   floatPanel: (id: PanelId) => void;
   dockToCorner: (id: PanelId, corner: MapCorner) => void;
+  newPalette: () => void;
+  closePanel: (id: PanelId) => void;
 }
 
 export const useDock = (isContentReady: (id: PanelId) => boolean): DockApi => {
@@ -271,6 +275,32 @@ export const useDock = (isContentReady: (id: PanelId) => boolean): DockApi => {
     });
   };
 
+  const newPalette = () => {
+    setLayout((prev) => {
+      const existing = placedIds(prev).filter((id) => baseKind(id) === 'palette');
+      let n = 2;
+      while (existing.includes(instancePanelId('palette', n))) n++;
+      const id = instancePanelId('palette', n);
+      const ws = workspaceRef.current?.getBoundingClientRect();
+      const width = DEFAULT_FLOAT_WIDTH;
+      const height = DEFAULT_FLOAT_HEIGHT;
+      const step = existing.length * 24;
+      const x = Math.max(8, Math.min(72 + step, (ws?.width ?? width + 88) - width - 8));
+      const y = Math.max(8, Math.min(72 + step, (ws?.height ?? height + 88) - height - 8));
+      const next = floatAt(prev, id, { x, y, width, height });
+      saveDockLayout(next);
+      return next;
+    });
+  };
+
+  const closePanel = (id: PanelId) => {
+    setLayout((prev) => {
+      const next = removePanel(prev, id);
+      saveDockLayout(next);
+      return next;
+    });
+  };
+
   const reloadConfig = () => void loadGeneralConfig().then((g) => setMaxStack(g.maxStack));
 
   React.useEffect(() => {
@@ -310,8 +340,9 @@ export const useDock = (isContentReady: (id: PanelId) => boolean): DockApi => {
   const isRenderable = (id: PanelId) => id !== dragging && isContentReady(id);
   const guard = !!dragging || resizing;
   const dragLayout = dragging ? removePanel(layout, dragging) : layout;
-  const floating = (Object.keys(PANELS) as PanelId[]).filter((id) => isFloating(dragLayout, id) && isRenderable(id));
-  const cornered = (Object.keys(PANELS) as PanelId[]).filter((id) => !!cornerOf(dragLayout, id) && isRenderable(id));
+  const placed = placedIds(dragLayout);
+  const floating = placed.filter((id) => isFloating(dragLayout, id) && isRenderable(id));
+  const cornered = placed.filter((id) => !!cornerOf(dragLayout, id) && isRenderable(id));
 
   return {
     layout,
@@ -338,6 +369,8 @@ export const useDock = (isContentReady: (id: PanelId) => boolean): DockApi => {
     resetLayout,
     reloadConfig,
     floatPanel,
-    dockToCorner
+    dockToCorner,
+    newPalette,
+    closePanel
   };
 };

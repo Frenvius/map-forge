@@ -6,7 +6,7 @@ import CornerPanel from '~/components/Dock/CornerPanel';
 import { DockApi } from '~/usecase/hooks/Workspace/useDock';
 import FloatingPanel from '~/components/Dock/FloatingPanel';
 import { DragHandleProps } from '~/components/Dock/DockablePanel';
-import { PANELS, PanelId, DEFAULT_MINIMAP_SIZE } from '~/domain/dock';
+import { PanelId, panelMeta, DEFAULT_MINIMAP_SIZE } from '~/domain/dock';
 
 import DockSide from './DockSide';
 
@@ -26,7 +26,7 @@ const Workspace = ({ dock, tabs, children, progress, renderPanel }: WorkspacePro
       <CornerPanel
         key={id}
         corner={corner}
-        meta={PANELS[id]}
+        meta={panelMeta(id)}
         guarded={dock.guard}
         onResizeEnd={() => dock.setResizing(false)}
         onResizeStart={() => dock.setResizing(true)}
@@ -44,9 +44,10 @@ const Workspace = ({ dock, tabs, children, progress, renderPanel }: WorkspacePro
     if (!rect) return null;
     return (
       <FloatingPanel
+        id={id}
         key={id}
         rect={rect}
-        meta={PANELS[id]}
+        meta={panelMeta(id)}
         guarded={dock.guard}
         onResizeEnd={() => dock.setResizing(false)}
         onResizeStart={() => dock.setResizing(true)}

@@ -5,7 +5,7 @@ import Resizer from '~/components/Dock/Resizer';
 import { heightOf, columnWidthOf } from '~/usecase/dock';
 import { DockApi } from '~/usecase/hooks/Workspace/useDock';
 import DockablePanel, { DragHandleProps } from '~/components/Dock/DockablePanel';
-import { PANELS, PanelId, DockZone, DropTarget, DEFAULT_FLOAT_WIDTH, DEFAULT_FLOAT_HEIGHT } from '~/domain/dock';
+import { PanelId, DockZone, panelMeta, DropTarget, DEFAULT_FLOAT_WIDTH, DEFAULT_FLOAT_HEIGHT } from '~/domain/dock';
 
 import DropPlaceholder from './DropPlaceholder';
 
@@ -15,7 +15,7 @@ interface DockSideProps {
   renderPanel: (id: PanelId, handle?: DragHandleProps) => React.ReactNode;
 }
 
-const isStrip = (id: PanelId) => PANELS[id].variant === 'strip';
+const isStrip = (id: PanelId) => panelMeta(id).variant === 'strip';
 
 const sameTarget = (a: DropTarget | null, b: DropTarget | null) =>
   !!a && !!b && a.zone === b.zone && a.col === b.col && a.row === b.row;
@@ -32,7 +32,7 @@ const DockSide = ({ zone, dock, renderPanel }: DockSideProps) => {
         className={cn('relative min-h-0', last ? 'flex-1' : 'flex-shrink-0')}
         style={last || strip ? undefined : { height: heightOf(dragLayout, id) }}
       >
-        <DockablePanel guarded={guard} meta={PANELS[id]} className="h-full">
+        <DockablePanel id={id} guarded={guard} className="h-full" meta={panelMeta(id)}>
           {(handle) => renderPanel(id, handle)}
         </DockablePanel>
         {!last && (

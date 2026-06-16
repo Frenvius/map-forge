@@ -2,7 +2,7 @@ import React from 'react';
 import { useDraggable } from '@dnd-kit/core';
 
 import { cn } from '~/usecase/classNames';
-import { PanelMeta } from '~/domain/dock';
+import { PanelId, PanelMeta } from '~/domain/dock';
 
 type UseDraggableReturn = ReturnType<typeof useDraggable>;
 
@@ -14,6 +14,7 @@ export interface DragHandleProps {
 }
 
 interface DockablePanelProps {
+  id?: PanelId;
   meta: PanelMeta;
   guarded?: boolean;
   className?: string;
@@ -22,8 +23,9 @@ interface DockablePanelProps {
 
 const HANDLE_CLASS = 'cursor-grab active:cursor-grabbing';
 
-const DockablePanel = ({ meta, guarded, className = 'min-h-0 flex-1', children }: DockablePanelProps) => {
-  const { setNodeRef, setActivatorNodeRef, listeners, attributes, isDragging } = useDraggable({ id: meta.id });
+const DockablePanel = ({ id, meta, guarded, className = 'min-h-0 flex-1', children }: DockablePanelProps) => {
+  const panelId = id ?? meta.id;
+  const { setNodeRef, setActivatorNodeRef, listeners, attributes, isDragging } = useDraggable({ id: panelId });
 
   const handle: DragHandleProps = {
     ref: setActivatorNodeRef,
@@ -35,7 +37,7 @@ const DockablePanel = ({ meta, guarded, className = 'min-h-0 flex-1', children }
   return (
     <div
       ref={setNodeRef}
-      data-panel-id={meta.id}
+      data-panel-id={panelId}
       className={cn(className, isDragging && 'opacity-40', guarded && 'pointer-events-none select-none')}
     >
       {children(handle)}

@@ -5,6 +5,8 @@ import {
   DockZone,
   MapCorner,
   FloatRect,
+  isPanelId,
+  panelMeta,
   ResizeSide,
   DropTarget,
   DockColumn,
@@ -25,7 +27,15 @@ export interface Bounds {
 
 const SETTINGS_KEY = 'dockLayout';
 
-const PANEL_IDS = Object.keys(PANELS) as PanelId[];
+const PANEL_KINDS = Object.keys(PANELS) as (keyof typeof PANELS)[];
+
+export function placedIds(layout: DockLayout): PanelId[] {
+  const ids = new Set<PanelId>();
+  for (const zone of ['left', 'right'] as DockZone[]) for (const col of layout[zone]) for (const id of col) ids.add(id);
+  for (const id of Object.keys(layout.float)) ids.add(id);
+  for (const id of Object.keys(layout.corner)) ids.add(id);
+  return [...ids];
+}
 
 export function defaultDockLayout(): DockLayout {
   return {
@@ -103,8 +113,8 @@ export function resizeCorner(
   dy: number,
   bounds?: Bounds
 ): DockLayout {
-  const minW = Math.max(MIN_PANEL_WIDTH, PANELS[id].minWidth);
-  const minH = Math.max(MIN_PANEL_HEIGHT, PANELS[id].minHeight);
+  const minW = Math.max(MIN_PANEL_WIDTH, panelMeta(id).minWidth);
+  const minH = Math.max(MIN_PANEL_HEIGHT, panelMeta(id).minHeight);
   const sx = corner.includes('left') ? 1 : -1;
   const sy = corner.includes('top') ? 1 : -1;
 
@@ -121,9 +131,9 @@ export function resizeCorner(
 }
 
 export function canStackInto(column: DockColumn, dragId: PanelId, maxStack: number): boolean {
-  if (!PANELS[dragId].stackable) return false;
+  if (!panelMeta(dragId).stackable) return false;
   if (column.length >= maxStack) return false;
-  return column.every((p) => PANELS[p].stackable);
+  return column.every((p) => panelMeta(p).stackable);
 }
 
 export function dockAt(layout: DockLayout, id: PanelId, target: DropTarget, maxStack: number): DockLayout {
@@ -158,13 +168,13 @@ export function floatAt(layout: DockLayout, id: PanelId, rect: FloatRect): DockL
 export function resizeColumn(layout: DockLayout, zone: DockZone, col: number, width: number): DockLayout {
   const c = layout[zone][col];
   if (!c || !c.length) return layout;
-  const min = Math.max(MIN_PANEL_WIDTH, ...c.map((id) => PANELS[id].minWidth));
+  const min = Math.max(MIN_PANEL_WIDTH, ...c.map((id) => panelMeta(id).minWidth));
   const clamped = Math.max(min, Math.min(width, MAX_PANEL_WIDTH));
   return { ...layout, width: { ...layout.width, [c[0]]: clamped } };
 }
 
 export function resizeHeight(layout: DockLayout, id: PanelId, height: number): DockLayout {
-  const clamped = Math.max(PANELS[id].minHeight || MIN_PANEL_HEIGHT, height);
+  const clamped = Math.max(panelMeta(id).minHeight || MIN_PANEL_HEIGHT, height);
   return { ...layout, height: { ...layout.height, [id]: clamped } };
 }
 
@@ -177,10 +187,10 @@ export function resizeFloat(
   bounds?: Bounds
 ): DockLayout {
   const rect = layout.float[id];
-  if (!rect || !PANELS[id].resizable) return layout;
+  if (!rect || !panelMeta(id).resizable) return layout;
 
-  const minW = Math.max(MIN_PANEL_WIDTH, PANELS[id].minWidth);
-  const minH = Math.max(MIN_PANEL_HEIGHT, PANELS[id].minHeight);
+  const minW = Math.max(MIN_PANEL_WIDTH, panelMeta(id).minWidth);
+  const minH = Math.max(MIN_PANEL_HEIGHT, panelMeta(id).minHeight);
 
   let left = rect.x;
   let top = rect.y;
@@ -245,10 +255,10 @@ function parseColumns(arr: unknown): DockColumn[] {
   const cols: DockColumn[] = [];
   for (const entry of arr) {
     if (Array.isArray(entry)) {
-      const col = entry.filter((id) => PANEL_IDS.includes(id as PanelId)) as PanelId[];
+      const col = entry.filter((id) => isPanelId(id)) as PanelId[];
       if (col.length) cols.push(col);
-    } else if (PANEL_IDS.includes(entry as PanelId)) {
-      cols.push([entry as PanelId]);
+    } else if (isPanelId(entry)) {
+      cols.push([entry]);
     }
   }
   return cols;
@@ -265,9 +275,8 @@ function parseDockLayout(parsed: Partial<DockLayout> | null): DockLayout {
 
   const corner: DockLayout['corner'] = {};
   if (parsed.corner && typeof parsed.corner === 'object') {
-    for (const id of PANEL_IDS) {
-      const c = (parsed.corner as Record<string, unknown>)[id];
-      if (!seen.has(id) && PANELS[id].cornerDockable && isValidCorner(c)) {
+    for (const [id, c] of Object.entries(parsed.corner as Record<string, unknown>)) {
+      if (isPanelId(id) && !seen.has(id) && panelMeta(id).cornerDockable && isValidCorner(c)) {
         corner[id] = c;
         seen.add(id);
       }
@@ -276,9 +285,8 @@ function parseDockLayout(parsed: Partial<DockLayout> | null): DockLayout {
 
   const float: DockLayout['float'] = {};
   if (parsed.float && typeof parsed.float === 'object') {
-    for (const id of PANEL_IDS) {
-      const rect = (parsed.float as Record<string, unknown>)[id];
-      if (!seen.has(id) && isValidRect(rect)) {
+    for (const [id, rect] of Object.entries(parsed.float as Record<string, unknown>)) {
+      if (isPanelId(id) && !seen.has(id) && isValidRect(rect)) {
         float[id] = rect;
         seen.add(id);
       }
@@ -287,21 +295,19 @@ function parseDockLayout(parsed: Partial<DockLayout> | null): DockLayout {
 
   const width: DockLayout['width'] = {};
   if (parsed.width && typeof parsed.width === 'object') {
-    for (const id of PANEL_IDS) {
-      const w = (parsed.width as Record<string, unknown>)[id];
-      if (typeof w === 'number') width[id] = w;
+    for (const [id, w] of Object.entries(parsed.width as Record<string, unknown>)) {
+      if (isPanelId(id) && typeof w === 'number') width[id] = w;
     }
   }
 
   const height: DockLayout['height'] = {};
   if (parsed.height && typeof parsed.height === 'object') {
-    for (const id of PANEL_IDS) {
-      const h = (parsed.height as Record<string, unknown>)[id];
-      if (typeof h === 'number') height[id] = h;
+    for (const [id, h] of Object.entries(parsed.height as Record<string, unknown>)) {
+      if (isPanelId(id) && typeof h === 'number') height[id] = h;
     }
   }
 
-  for (const id of PANEL_IDS) {
+  for (const id of PANEL_KINDS) {
     if (seen.has(id) || id === 'minimap') continue;
     (DEFAULT_DOCK_LAYOUT.left.some((c) => c.includes(id)) ? left : right).push([id]);
     seen.add(id);

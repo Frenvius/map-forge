@@ -2,11 +2,13 @@ import { X, Minus, Square } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
 import AppMenu from '~/components/Toolbar/AppMenu';
+import { PaletteCategoryId } from '~/domain/palette';
 
 interface ToolbarProps {
   loading: boolean;
   hasActive: boolean;
   recent: string[];
+  minimapOpen: boolean;
   onNew: () => void;
   onOpen: () => void;
   onSave: () => void;
@@ -14,10 +16,13 @@ interface ToolbarProps {
   onCloseMap: () => void;
   onEditTowns: () => void;
   onClearRecent: () => void;
+  onNewPalette: () => void;
+  onToggleMinimap: () => void;
   onMapProperties: () => void;
   onMapStatistics: () => void;
   onOpenPreferences: () => void;
   onOpenRecent: (path: string) => void;
+  onSelectPaletteCategory: (category: PaletteCategoryId) => void;
   onAbout: () => void;
 }
 
@@ -25,6 +30,7 @@ const Toolbar = ({
   loading,
   hasActive,
   recent,
+  minimapOpen,
   onNew,
   onOpen,
   onSave,
@@ -32,10 +38,13 @@ const Toolbar = ({
   onCloseMap,
   onEditTowns,
   onClearRecent,
+  onNewPalette,
+  onToggleMinimap,
   onOpenRecent,
   onMapProperties,
   onMapStatistics,
   onOpenPreferences,
+  onSelectPaletteCategory,
   onAbout
 }: ToolbarProps) => {
   const win = getCurrentWindow();
@@ -79,11 +88,15 @@ const Toolbar = ({
         hasActive={hasActive}
         onCloseMap={onCloseMap}
         onEditTowns={onEditTowns}
+        minimapOpen={minimapOpen}
         onOpenRecent={onOpenRecent}
+        onNewPalette={onNewPalette}
         onClearRecent={onClearRecent}
+        onToggleMinimap={onToggleMinimap}
         onMapProperties={onMapProperties}
         onMapStatistics={onMapStatistics}
         onOpenPreferences={onOpenPreferences}
+        onSelectPaletteCategory={onSelectPaletteCategory}
       />
 
       <div className="-mr-3 ml-auto flex items-center">

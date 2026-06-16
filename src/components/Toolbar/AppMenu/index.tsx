@@ -2,6 +2,7 @@ import React from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Save, FilePlus, FolderOpen } from 'lucide-react';
 
+import { PaletteCategoryId, PALETTE_CATEGORIES } from '~/domain/palette';
 import { useEditorSettings } from '~/usecase/context/EditorSettingsContext';
 import {
   Menubar,
@@ -21,6 +22,7 @@ interface AppMenuProps {
   loading: boolean;
   hasActive: boolean;
   recent: string[];
+  minimapOpen: boolean;
   onNew: () => void;
   onOpen: () => void;
   onSave: () => void;
@@ -28,14 +30,19 @@ interface AppMenuProps {
   onCloseMap: () => void;
   onEditTowns: () => void;
   onClearRecent: () => void;
+  onNewPalette: () => void;
+  onToggleMinimap: () => void;
   onMapProperties: () => void;
   onMapStatistics: () => void;
   onOpenPreferences: () => void;
   onOpenRecent: (path: string) => void;
+  onSelectPaletteCategory: (category: PaletteCategoryId) => void;
   onAbout: () => void;
 }
 
 const basename = (path: string) => path.split(/[\\/]/).pop() ?? path;
+
+const categoryLabel = (label: string) => label.replace(/ Palette$/, '');
 
 const AppMenu = ({
   loading,
@@ -47,11 +54,15 @@ const AppMenu = ({
   onSaveAs,
   onCloseMap,
   onEditTowns,
+  minimapOpen,
   onClearRecent,
+  onNewPalette,
+  onToggleMinimap,
   onOpenRecent,
   onMapProperties,
   onMapStatistics,
   onOpenPreferences,
+  onSelectPaletteCategory,
   onAbout
 }: AppMenuProps) => {
   const { zoneVisibility, toggleZone, setAllZones, showRenderStats, toggleRenderStats } = useEditorSettings();
@@ -178,14 +189,34 @@ const AppMenu = ({
         </MenubarContent>
       </MenubarMenu>
 
+      <MenubarMenu value="window">
+        <MenubarTrigger onMouseDown={stop}>Window</MenubarTrigger>
+        <MenubarContent onMouseDown={stop}>
+          <MenubarCheckboxItem checked={minimapOpen} onCheckedChange={onToggleMinimap} onSelect={(e) => e.preventDefault()}>
+            Minimap
+            <MenubarShortcut>M</MenubarShortcut>
+          </MenubarCheckboxItem>
+          <MenubarSeparator />
+          <MenubarItem disabled={loading} onSelect={onNewPalette}>
+            New Palette
+          </MenubarItem>
+          <MenubarSub>
+            <MenubarSubTrigger disabled={loading}>Palette</MenubarSubTrigger>
+            <MenubarSubContent>
+              {PALETTE_CATEGORIES.map((c) => (
+                <MenubarItem key={c.id} onSelect={() => onSelectPaletteCategory(c.id)}>
+                  {categoryLabel(c.label)}
+                </MenubarItem>
+              ))}
+            </MenubarSubContent>
+          </MenubarSub>
+        </MenubarContent>
+      </MenubarMenu>
+
       <MenubarMenu value="help">
         <MenubarTrigger onMouseDown={stop}>Help</MenubarTrigger>
         <MenubarContent onMouseDown={stop}>
-          <MenubarCheckboxItem
-            checked={showRenderStats}
-            onCheckedChange={toggleRenderStats}
-            onSelect={(e) => e.preventDefault()}
-          >
+          <MenubarCheckboxItem checked={showRenderStats} onCheckedChange={toggleRenderStats} onSelect={(e) => e.preventDefault()}>
             Show render stats
           </MenubarCheckboxItem>
           <MenubarSeparator />

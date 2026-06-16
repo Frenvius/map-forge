@@ -1,5 +1,5 @@
 import React from 'react';
-import { FolderOpen } from 'lucide-react';
+import { X, FolderOpen } from 'lucide-react';
 
 import { Town } from '~/domain/map';
 import { cn } from '~/usecase/classNames';
@@ -38,6 +38,8 @@ function makeBrushPreview(layout: BrushSpriteLayout, cache: Map<number, LoadedSp
 }
 
 interface PalettePanelProps {
+  primary?: boolean;
+  onClose?: () => void;
   dragHandle?: DragHandleProps;
   waypoints: MapWaypoints | null;
   houses: MapHouses | null;
@@ -68,6 +70,8 @@ const SHARED_SPRITE_CACHE = new Map<number, LoadedSprite>();
 const SHARED_SERVER_TO_CLIENT = new Map<number, number>();
 
 const PalettePanel = ({
+  primary,
+  onClose,
   dragHandle,
   waypoints,
   houses,
@@ -83,7 +87,7 @@ const PalettePanel = ({
   onPickCreatureDir
 }: PalettePanelProps) => {
   const { assets, palette } = useAssetsBundle();
-  const { reveal, selectBrush } = useTool();
+  const { reveal, selectBrush, paletteCategory } = useTool();
 
   const data = React.useMemo<PaletteData>(() => {
     const base = palette as PaletteData;
@@ -116,6 +120,11 @@ const PalettePanel = ({
     if (pending.current?.category === category) return;
     setTilesetName(data[category][0]?.name ?? '');
   }, [category, data]);
+
+  React.useEffect(() => {
+    if (!primary || !paletteCategory) return;
+    setCategory(paletteCategory.category);
+  }, [paletteCategory?.nonce]);
 
   React.useEffect(() => {
     if (!reveal) return;
@@ -257,6 +266,15 @@ const PalettePanel = ({
         <span className="ml-auto font-mono text-[10px] text-muted-foreground">
           {isWaypoints ? (waypoints?.list.length ?? 0) : isHouses ? (houses?.list.length ?? 0) : tiles.length}
         </span>
+        {onClose && (
+          <button
+            onClick={onClose}
+            title="Close palette"
+            className="ml-2 flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-item-hover hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       <div className="flex flex-shrink-0 flex-col gap-2 border-b border-border/50 p-2">

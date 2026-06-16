@@ -15,7 +15,6 @@ import { MapSpawns } from '~/domain/creature';
 import MapCanvas from '~/components/MapCanvas';
 import Workspace from '~/components/Workspace';
 import { openDataDir } from '~/adapter/assets';
-import { PANELS, PanelId } from '~/domain/dock';
 import ToolsPanel from '~/components/ToolsPanel';
 import Preferences from '~/components/Preferences';
 import AboutDialog from '~/components/AboutDialog';
@@ -33,13 +32,14 @@ import { serializeWaypointXml } from '~/adapter/waypoints';
 import Minimap, { MinimapApi } from '~/components/Minimap';
 import PanelDockMenu from '~/components/Dock/PanelDockMenu';
 import { useDock } from '~/usecase/hooks/Workspace/useDock';
-import { ToolProvider } from '~/usecase/context/ToolContext';
+import { PanelId, baseKind, panelMeta } from '~/domain/dock';
 import SaveProgressModal from '~/components/SaveProgressModal';
 import CreatureDataDialog from '~/components/CreatureDataDialog';
 import StatusBar, { StatusBarApi } from '~/components/StatusBar';
 import { useMapTabs } from '~/usecase/hooks/Workspace/useMapTabs';
 import { DragHandleProps } from '~/components/Dock/DockablePanel';
 import { HoverInfo, HoverItem } from '~/components/MapCanvas/types';
+import { useTool, ToolProvider } from '~/usecase/context/ToolContext';
 import { useMapSpawns } from '~/usecase/hooks/Workspace/useMapSpawns';
 import { useMapHouses } from '~/usecase/hooks/Workspace/useMapHouses';
 import { addWaypoint, nextWaypointName } from '~/usecase/waypointEdits';
@@ -70,6 +70,7 @@ const App = () => {
     setError
   } = useAssetsBundle();
   const { copyPositionFormat, reloadGeneral, reloadEditor } = useEditorSettings();
+  const { setPaletteCategory } = useTool();
 
   const [minimapOpen, setMinimapOpen] = useSetting('minimapOpen', false);
   const [placingWaypoint, setPlacingWaypoint] = React.useState<string | null>(null);
@@ -261,8 +262,9 @@ const App = () => {
   }, []);
 
   const isContentReady = (id: PanelId) => {
-    if (id === 'minimap') return minimapOpen && !!assets && !!active && minimapReady;
-    return id === 'tools' || !!(assets && palette);
+    const kind = baseKind(id);
+    if (kind === 'minimap') return minimapOpen && !!assets && !!active && minimapReady;
+    return kind === 'tools' || !!(assets && palette);
   };
 
   const dock = useDock(isContentReady);
@@ -344,7 +346,7 @@ const App = () => {
   }, [activeId]);
 
   const panelMenu = (id: PanelId) => {
-    if (!PANELS[id].cornerDockable) return null;
+    if (!panelMeta(id).cornerDockable) return null;
     return (
       <PanelDockMenu
         corner={cornerOf(dock.layout, id)}
@@ -355,14 +357,17 @@ const App = () => {
   };
 
   const renderPanel = (id: PanelId, handle?: DragHandleProps) => {
-    if (id === 'tools') {
+    const kind = baseKind(id);
+    if (kind === 'tools') {
       return <ToolsPanel dragHandle={handle} />;
     }
-    if (id === 'palette' && assets && palette) {
+    if (kind === 'palette' && assets && palette) {
+      const isPrimary = id === 'palette';
       return (
         <PalettePanel
           towns={towns}
           houses={houses}
+          primary={isPrimary}
           dragHandle={handle}
           waypoints={waypoints}
           onGotoHouse={gotoHouse}
@@ -374,10 +379,11 @@ const App = () => {
           onPickCreatureDir={pickCreatureDir}
           creatureNeedsPicker={creatureNeedsPicker}
           onCopyWaypointPosition={copyWaypointPosition}
+          onClose={isPrimary ? undefined : () => dock.closePanel(id)}
         />
       );
     }
-    if (id === 'minimap' && assets && active && minimapReady) {
+    if (kind === 'minimap' && assets && active && minimapReady) {
       return (
         <Minimap
           key={active.id}
@@ -415,8 +421,11 @@ const App = () => {
         onOpen={handleOpen}
         hasActive={!!active}
         loading={busy || !assets}
+        minimapOpen={minimapOpen}
         onClearRecent={clearRecent}
         onEditTowns={openEditTowns}
+        onNewPalette={dock.newPalette}
+        onToggleMinimap={toggleMinimap}
         onSave={() => void handleSave()}
         onAbout={() => setAboutOpen(true)}
         onMapProperties={openMapProperties}
@@ -424,6 +433,7 @@ const App = () => {
         onSaveAs={() => void handleSaveAs()}
         onOpenPreferences={() => openPreferences()}
         onOpenRecent={(path) => void openPath(path)}
+        onSelectPaletteCategory={setPaletteCategory}
         onCloseMap={() => activeId && closeTab(activeId)}
       />
 

@@ -1,15 +1,27 @@
 export type DockZone = 'left' | 'right';
 
-export type PanelId = 'palette' | 'tools' | 'minimap';
+export type PanelKind = 'palette' | 'tools' | 'minimap';
+
+export type PanelId = string;
 
 export type DockColumn = PanelId[];
+
+const INSTANCE_SEP = '#';
+
+export const baseKind = (id: PanelId): PanelKind => id.split(INSTANCE_SEP)[0] as PanelKind;
+
+export const instancePanelId = (kind: PanelKind, n: number): PanelId => `${kind}${INSTANCE_SEP}${n}`;
+
+export const isPanelId = (id: unknown): id is PanelId => typeof id === 'string' && PANELS[baseKind(id)] !== undefined;
+
+export const panelMeta = (id: PanelId): PanelMeta => PANELS[baseKind(id)];
 
 export type ResizeSide = 'top' | 'left' | 'right' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
 export type MapCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
 export interface PanelMeta {
-  id: PanelId;
+  id: PanelKind;
   title: string;
   variant: 'panel' | 'strip';
   resizable: boolean;
@@ -50,7 +62,7 @@ export const MAX_PANEL_WIDTH = 600;
 export const DEFAULT_PANEL_HEIGHT = 260;
 export const MIN_PANEL_HEIGHT = 120;
 
-export const PANELS: Record<PanelId, PanelMeta> = {
+export const PANELS: Record<PanelKind, PanelMeta> = {
   palette: {
     id: 'palette',
     title: 'Palette',
