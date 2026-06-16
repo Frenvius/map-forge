@@ -13,6 +13,7 @@ import {
   HoverInfo,
   HoverItem,
   SpawnForm,
+  SelectedItem,
   CreatureForm,
   WaypointForm,
   MapCanvasInputs,
@@ -631,6 +632,9 @@ export function useMapInteraction(deps: InteractionDeps) {
     return { x: pos.x, y: pos.y, z: pos.z, hasTile: found >= 0, item };
   }
 
+  const toSelected = (info: HoverInfo): SelectedItem | null =>
+    info.item ? { ...info.item, x: info.x, y: info.y, z: info.z } : null;
+
   function groundAt(pos: Position): HoverItem | null {
     const { items, itemNames } = inputs.current;
     const ct = tiles.get(Math.floor(pos.x / CHUNK), Math.floor(pos.y / CHUNK), pos.z, scene.frameTick.current);
@@ -676,7 +680,7 @@ export function useMapInteraction(deps: InteractionDeps) {
       .then(() => {
         selection.selectTile(dest, false);
         atlas.version.current++;
-        inputs.current.onSelect(hoverAt(dest).item);
+        inputs.current.onSelect(toSelected(hoverAt(dest)));
       })
       .catch((err) => console.error('Failed to move item', err))
       .finally(() => {
@@ -821,7 +825,7 @@ export function useMapInteraction(deps: InteractionDeps) {
       .then(() => {
         atlas.version.current++;
         const tile = scene.hoveredTile.current;
-        if (tile) inputs.current.onSelect(hoverAt(tile).item);
+        if (tile) inputs.current.onSelect(toSelected(hoverAt(tile)));
       })
       .catch((err) => console.error('Failed to refresh after history', err));
   }
@@ -989,7 +993,7 @@ export function useMapInteraction(deps: InteractionDeps) {
       scene.moveDest.current = pos;
       scene.moveDrag.current = { from: pos, startX: e.clientX, startY: e.clientY, active: false };
     }
-    inputs.current.onSelect(hoverAt(pos).item);
+    inputs.current.onSelect(toSelected(hoverAt(pos)));
   }
 
   function onMouseMove(e: React.MouseEvent) {
@@ -1055,7 +1059,7 @@ export function useMapInteraction(deps: InteractionDeps) {
         housePaintBox(bs, !bs.additive);
       } else {
         selection.selectBox(bs.startTile.z, bs.startTile.x, bs.startTile.y, bs.curTile.x, bs.curTile.y, bs.additive);
-        inputs.current.onSelect(hoverAt(bs.curTile).item);
+        inputs.current.onSelect(toSelected(hoverAt(bs.curTile)));
       }
     }
     finishMove();
@@ -1103,7 +1107,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     const tile = tileAt(e);
     const info = hoverAt(tile);
     if (!selectByPriority(tile)) selection.selectTile(tile, false);
-    inputs.current.onSelect(info.item);
+    inputs.current.onSelect(toSelected(info));
     inputs.current.onHover(info);
     const dest = inputs.current.map.teleports.get(`${tile.x},${tile.y},${tile.z}`) ?? null;
     const spawnSel = selection.spawn.current;

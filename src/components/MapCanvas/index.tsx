@@ -321,6 +321,7 @@ const MapCanvas = (props: MapCanvasProps) => {
           onSelectHouse={interaction.selectHouse}
           onCopyPosition={interaction.copyPosition}
           onSelectGround={interaction.selectGround}
+          onItemProperties={props.onItemProperties}
           onAddWaypoint={interaction.addWaypointHere}
           onSelectCreature={interaction.selectCreature}
           onSpawnProperties={interaction.spawnProperties}

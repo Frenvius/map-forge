@@ -9,6 +9,7 @@ interface ToolbarProps {
   hasActive: boolean;
   recent: string[];
   minimapOpen: boolean;
+  propertiesOpen: boolean;
   onNew: () => void;
   onOpen: () => void;
   onSave: () => void;
@@ -21,6 +22,7 @@ interface ToolbarProps {
   onMapProperties: () => void;
   onMapStatistics: () => void;
   onOpenPreferences: () => void;
+  onToggleProperties: () => void;
   onOpenRecent: (path: string) => void;
   onSelectPaletteCategory: (category: PaletteCategoryId) => void;
   onAbout: () => void;
@@ -31,6 +33,7 @@ const Toolbar = ({
   hasActive,
   recent,
   minimapOpen,
+  propertiesOpen,
   onNew,
   onOpen,
   onSave,
@@ -44,6 +47,7 @@ const Toolbar = ({
   onMapProperties,
   onMapStatistics,
   onOpenPreferences,
+  onToggleProperties,
   onSelectPaletteCategory,
   onAbout
 }: ToolbarProps) => {
@@ -92,10 +96,12 @@ const Toolbar = ({
         onOpenRecent={onOpenRecent}
         onNewPalette={onNewPalette}
         onClearRecent={onClearRecent}
+        propertiesOpen={propertiesOpen}
         onToggleMinimap={onToggleMinimap}
         onMapProperties={onMapProperties}
         onMapStatistics={onMapStatistics}
         onOpenPreferences={onOpenPreferences}
+        onToggleProperties={onToggleProperties}
         onSelectPaletteCategory={onSelectPaletteCategory}
       />
 

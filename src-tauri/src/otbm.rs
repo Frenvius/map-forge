@@ -31,11 +31,37 @@ const OTBM_ATTR_COUNT: u8 = 15;
 const OTBM_ATTR_CHARGES: u8 = 22;
 const OTBM_ATTR_TIER: u8 = 41;
 
+#[derive(Default, Clone)]
+pub struct ItemAttrs {
+	pub action_id: u16,
+	pub unique_id: u16,
+	pub text: String,
+	pub desc: String,
+	pub charges: u16,
+	pub tier: u8,
+}
+
+impl ItemAttrs {
+	pub fn is_default(&self) -> bool {
+		self.action_id == 0
+			&& self.unique_id == 0
+			&& self.text.is_empty()
+			&& self.desc.is_empty()
+			&& self.charges == 0
+			&& self.tier == 0
+	}
+}
+
+pub fn attrs_key(z: u8, x: u16, y: u16, idx: u8) -> u64 {
+	((z as u64) << 40) | ((x as u64) << 24) | ((y as u64) << 8) | (idx as u64)
+}
+
 pub trait OtbmVisitor {
 	fn header(&mut self, width: u16, height: u16);
 	fn progress(&mut self, pos: usize, total: usize);
 	fn tile(&mut self, x: u16, y: u16, z: u8, items: &[(u16, u8)]);
 	fn tile_flags(&mut self, _x: u16, _y: u16, _z: u8, _flags: u32) {}
+	fn tile_item_attrs(&mut self, _x: u16, _y: u16, _z: u8, _stack_idx: u8, _attrs: ItemAttrs) {}
 	fn teleport(&mut self, sx: u16, sy: u16, sz: u8, dx: u16, dy: u16, dz: u8);
 
 	fn identifier(&mut self, _start: usize, _end: usize) {}
@@ -315,6 +341,8 @@ impl<'a, V: OtbmVisitor> Parser<'a, V> {
 		let item_idx = self.scratch.len();
 		self.scratch.push((id, 1));
 
+		let mut ia = ItemAttrs::default();
+
 		while let Some(attr) = self.r.data_u8() {
 			let ok = match attr {
 				OTBM_ATTR_COUNT => match self.r.data_u8() {
@@ -331,10 +359,48 @@ impl<'a, V: OtbmVisitor> Parser<'a, V> {
 					}
 					None => false,
 				},
-				OTBM_ATTR_TIER | OTBM_ATTR_RUNE_CHARGES => self.r.skip_data(1),
-				OTBM_ATTR_ACTION_ID | OTBM_ATTR_UNIQUE_ID | OTBM_ATTR_CHARGES | OTBM_ATTR_DEPOT_ID => self.r.skip_data(2),
-				OTBM_ATTR_TEXT | OTBM_ATTR_DESC | OTBM_ATTR_DESCRIPTION => match self.r.data_u16() {
-					Some(len) => self.r.skip_data(len as usize),
+				OTBM_ATTR_ACTION_ID => match self.r.data_u16() {
+					Some(v) => {
+						ia.action_id = v;
+						true
+					}
+					None => false,
+				},
+				OTBM_ATTR_UNIQUE_ID => match self.r.data_u16() {
+					Some(v) => {
+						ia.unique_id = v;
+						true
+					}
+					None => false,
+				},
+				OTBM_ATTR_CHARGES => match self.r.data_u16() {
+					Some(v) => {
+						ia.charges = v;
+						true
+					}
+					None => false,
+				},
+				OTBM_ATTR_DEPOT_ID => self.r.skip_data(2),
+				OTBM_ATTR_TIER => match self.r.data_u8() {
+					Some(v) => {
+						ia.tier = v;
+						true
+					}
+					None => false,
+				},
+				OTBM_ATTR_RUNE_CHARGES => self.r.skip_data(1),
+				OTBM_ATTR_TEXT => match self.r.data_string() {
+					Some(s) => {
+						ia.text = s;
+						true
+					}
+					None => false,
+				},
+				OTBM_ATTR_DESC | OTBM_ATTR_DESCRIPTION => match self.r.data_string() {
+					Some(s) => {
+						ia.desc = s;
+						true
+					}
 					None => false,
 				},
 				OTBM_ATTR_TELE_DEST => {
@@ -349,6 +415,11 @@ impl<'a, V: OtbmVisitor> Parser<'a, V> {
 				break;
 			}
 		}
+
+		if !ia.is_default() {
+			self.v.tile_item_attrs(tile_x, tile_y, base_z, item_idx as u8, ia);
+		}
+
 		self.skip_subtree()
 	}
 

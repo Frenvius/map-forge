@@ -22,6 +22,7 @@ interface TileContextMenuProps {
   onSelectCreature: (pos: Position) => void;
   onWaypointProperties: (pos: Position) => void;
   onAddWaypoint: (pos: Position) => void;
+  onItemProperties?: () => void;
 }
 
 interface ItemProps {
@@ -75,8 +76,9 @@ const TileContextMenu = ({
   onSpawnProperties,
   onCreatureProperties,
   onSelectCreature,
-  onWaypointProperties,
-  onAddWaypoint
+  onAddWaypoint,
+  onItemProperties,
+  onWaypointProperties
 }: TileContextMenuProps) => {
   const { item, ground, dest, tile, spawn, creature, waypoint, houseId, hasSelection, canPaste } = menu;
 
@@ -147,7 +149,7 @@ const TileContextMenu = ({
       ) : waypoint ? (
         <Item label="Waypoint Properties..." onClick={() => onWaypointProperties(waypoint)} />
       ) : (
-        <Item disabled label="Properties" />
+        <Item disabled={!item} label="Properties" onClick={onItemProperties} />
       )}
     </div>
   );

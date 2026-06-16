@@ -416,6 +416,7 @@ const App = () => {
           item={selectedItem}
           dragHandle={handle}
           mapId={active.map.id}
+          itemNames={itemNames}
           items={assets.items ?? null}
           onClose={() => setPropertiesOpen(false)}
         />

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use tauri::ipc::Response;
 
 use crate::otb::OtbItems;
-use crate::otbm::{read_otbm_floor, OtbmVisitor};
+use crate::otbm::{read_otbm_floor, ItemAttrs, OtbmVisitor};
 use crate::otbm_footer::MapIndex;
 use crate::{MapState, MinimapPaletteState, OtbState};
 
@@ -119,6 +119,7 @@ pub struct MapModel {
 	pub(crate) towns: Vec<Town>,
 	pub(crate) waypoints: Vec<Waypoint>,
 	pub(crate) house_tile_count: u32,
+	pub(crate) item_attrs: HashMap<u64, ItemAttrs>,
 	history: History,
 }
 
@@ -265,6 +266,7 @@ pub(crate) fn build_map_model(
 		towns: Vec::new(),
 		waypoints: Vec::new(),
 		house_tile_count: 0,
+		item_attrs: HashMap::new(),
 		history: History::default(),
 	}
 }
@@ -424,6 +426,23 @@ pub(crate) fn house_id_at(m: &MapModel, z: u8, x: u16, y: u16) -> u32 {
 		return h;
 	}
 	base_house_id(m, z, chunk_key, x, y)
+}
+
+pub(crate) fn base_subtype(m: &MapModel, z: u8, chunk_key: u32, x: u16, y: u16, item_idx: usize) -> u8 {
+	if let Some(&(start, end)) = m.floors.get(&z).and_then(|f| f.get(&chunk_key)) {
+		for t in start as usize..end as usize {
+			if m.tile_x[t] == x && m.tile_y[t] == y {
+				let s = m.item_off[t] as usize;
+				let e = m.item_off[t + 1] as usize;
+				let global = s + item_idx;
+				if global < e {
+					return m.subtypes[global];
+				}
+				return 1;
+			}
+		}
+	}
+	1
 }
 
 pub(crate) fn base_door_id(m: &MapModel, z: u8, chunk_key: u32, x: u16, y: u16) -> u8 {
@@ -657,8 +676,12 @@ impl MapModel {
 				flags: Vec::new(),
 				house_ids: Vec::new(),
 				door_ids: Vec::new(),
+				attrs: Vec::new(),
 			};
 			read_otbm_floor(&slice, &mut col)?;
+			for (x, y, idx, a) in &col.attrs {
+				self.item_attrs.insert(crate::otbm::attrs_key(z, *x, *y, *idx), a.clone());
+			}
 			self.append_chunk(z, key, &col);
 			self.loaded_chunks.insert(ckey(z, key));
 		}
@@ -912,6 +935,7 @@ pub(crate) fn empty_model(width: u16, height: u16) -> MapModel {
 		towns: Vec::new(),
 		waypoints: Vec::new(),
 		house_tile_count: 0,
+		item_attrs: HashMap::new(),
 		history: History::default(),
 	}
 }
@@ -970,6 +994,7 @@ pub(crate) fn lazy_model(width: u16, height: u16, idx: &MapIndex, source: std::p
 		towns: idx.towns.clone(),
 		waypoints: Vec::new(),
 		house_tile_count: idx.house_tile_count,
+		item_attrs: HashMap::new(),
 		history: History::default(),
 	}
 }
@@ -986,6 +1011,7 @@ struct FloorCollector<'a> {
 	flags: Vec<u32>,
 	house_ids: Vec<u32>,
 	door_ids: Vec<u8>,
+	attrs: Vec<(u16, u16, u8, ItemAttrs)>,
 }
 
 impl OtbmVisitor for FloorCollector<'_> {
@@ -1027,6 +1053,9 @@ impl OtbmVisitor for FloorCollector<'_> {
 		if let Some(last) = self.door_ids.last_mut() {
 			*last = door_id;
 		}
+	}
+	fn tile_item_attrs(&mut self, x: u16, y: u16, _z: u8, stack_idx: u8, attrs: ItemAttrs) {
+		self.attrs.push((x, y, stack_idx, attrs));
 	}
 }
 
@@ -1086,6 +1115,68 @@ pub fn get_minimap(
 	let model = guard.maps.get_mut(&map_id).ok_or("map not loaded - call open_otbm first")?;
 	let payload = model.window_minimap(z, x, y, w, h, &palette_guard, otb)?;
 	Ok(Response::new(payload))
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TileItemEntry {
+	pub server_id: u16,
+	pub client_id: u16,
+	pub subtype: u8,
+	pub action_id: u16,
+	pub unique_id: u16,
+	pub text: String,
+	pub desc: String,
+	pub charges: u16,
+	pub tier: u8,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TilePropertiesPayload {
+	pub flags: u32,
+	pub house_id: u32,
+	pub door_id: u8,
+	pub items: Vec<TileItemEntry>,
+}
+
+#[tauri::command]
+pub fn get_tile_items(
+	map_id: u32,
+	z: u8,
+	x: u16,
+	y: u16,
+	otb_state: tauri::State<OtbState>,
+	map_state: tauri::State<MapState>,
+) -> Result<TilePropertiesPayload, String> {
+	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb = otb_guard.as_ref().ok_or("items.otb not loaded")?;
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+	let chunk_key = chunk_key_of(x, y);
+	m.ensure_chunks(z, &[chunk_key], otb)?;
+	let tile_flags = flags_at(m, z, x, y);
+	let tile_house = house_id_at(m, z, x, y);
+	let tile_door = door_id_at(m, z, x, y);
+	let stack = stack_at(m, z, x, y);
+	let mut items = Vec::with_capacity(stack.len());
+	for (i, &(cid, sid)) in stack.iter().enumerate() {
+		let key = crate::otbm::attrs_key(z, x, y, i as u8);
+		let a = m.item_attrs.get(&key);
+		let sub = base_subtype(m, z, chunk_key, x, y, i);
+		items.push(TileItemEntry {
+			server_id: sid,
+			client_id: cid,
+			subtype: sub,
+			action_id: a.map_or(0, |a| a.action_id),
+			unique_id: a.map_or(0, |a| a.unique_id),
+			text: a.map_or_else(String::new, |a| a.text.clone()),
+			desc: a.map_or_else(String::new, |a| a.desc.clone()),
+			charges: a.map_or(0, |a| a.charges),
+			tier: a.map_or(0, |a| a.tier),
+		});
+	}
+	Ok(TilePropertiesPayload { flags: tile_flags, house_id: tile_house, door_id: tile_door, items })
 }
 
 #[tauri::command]

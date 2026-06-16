@@ -332,3 +332,26 @@ export async function fetchMapChunks(mapId: number, z: number, keys: number[]): 
   }
   return result;
 }
+
+export interface TileItemEntry {
+  tier: number;
+  desc: string;
+  text: string;
+  charges: number;
+  subtype: number;
+  serverId: number;
+  clientId: number;
+  actionId: number;
+  uniqueId: number;
+}
+
+export interface TilePropertiesPayload {
+  flags: number;
+  doorId: number;
+  houseId: number;
+  items: TileItemEntry[];
+}
+
+export async function getTileItems(mapId: number, z: number, x: number, y: number): Promise<TilePropertiesPayload> {
+  return invoke<TilePropertiesPayload>('get_tile_items', { mapId, z, x, y });
+}

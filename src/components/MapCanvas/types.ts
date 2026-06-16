@@ -36,6 +36,12 @@ export interface HoverItem {
   count: number;
 }
 
+export interface SelectedItem extends HoverItem {
+  x: number;
+  y: number;
+  z: number;
+}
+
 export interface HoverInfo {
   x: number;
   y: number;
@@ -101,8 +107,9 @@ export interface MapCanvasProps {
   onZoomChange: (zoom: number) => void;
   onFloorChange: (z: number) => void;
   onHover: (info: HoverInfo | null) => void;
-  onSelect: (item: HoverItem | null) => void;
+  onSelect: (item: SelectedItem | null) => void;
   onStatus: (message: string) => void;
+  onItemProperties?: () => void;
   onEdit?: (z: number) => void;
   paused?: boolean;
   initialCenter: { x: number; y: number };

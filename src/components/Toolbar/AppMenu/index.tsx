@@ -23,6 +23,7 @@ interface AppMenuProps {
   hasActive: boolean;
   recent: string[];
   minimapOpen: boolean;
+  propertiesOpen: boolean;
   onNew: () => void;
   onOpen: () => void;
   onSave: () => void;
@@ -35,6 +36,7 @@ interface AppMenuProps {
   onMapProperties: () => void;
   onMapStatistics: () => void;
   onOpenPreferences: () => void;
+  onToggleProperties: () => void;
   onOpenRecent: (path: string) => void;
   onSelectPaletteCategory: (category: PaletteCategoryId) => void;
   onAbout: () => void;
@@ -61,7 +63,9 @@ const AppMenu = ({
   onOpenRecent,
   onMapProperties,
   onMapStatistics,
+  propertiesOpen,
   onOpenPreferences,
+  onToggleProperties,
   onSelectPaletteCategory,
   onAbout
 }: AppMenuProps) => {
@@ -195,6 +199,9 @@ const AppMenu = ({
           <MenubarCheckboxItem checked={minimapOpen} onCheckedChange={onToggleMinimap} onSelect={(e) => e.preventDefault()}>
             Minimap
             <MenubarShortcut>M</MenubarShortcut>
+          </MenubarCheckboxItem>
+          <MenubarCheckboxItem checked={propertiesOpen} onCheckedChange={onToggleProperties} onSelect={(e) => e.preventDefault()}>
+            Item Properties
           </MenubarCheckboxItem>
           <MenubarSeparator />
           <MenubarItem disabled={loading} onSelect={onNewPalette}>

@@ -1,6 +1,6 @@
 export type DockZone = 'left' | 'right';
 
-export type PanelKind = 'palette' | 'tools' | 'minimap';
+export type PanelKind = 'palette' | 'tools' | 'minimap' | 'properties';
 
 export type PanelId = string;
 
@@ -92,6 +92,16 @@ export const PANELS: Record<PanelKind, PanelMeta> = {
     minWidth: 160,
     minHeight: 160,
     cornerDockable: true
+  },
+  properties: {
+    id: 'properties',
+    title: 'Item Properties',
+    variant: 'panel',
+    resizable: true,
+    stackable: true,
+    minWidth: MIN_PANEL_WIDTH,
+    minHeight: 200,
+    cornerDockable: false
   }
 };
 

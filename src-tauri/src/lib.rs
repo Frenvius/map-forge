@@ -46,7 +46,7 @@ use map_edit::{
 };
 use map_load::open_otbm;
 use map_meta::{get_map_properties, get_towns, get_waypoints, map_statistics, set_map_properties, set_towns};
-use map_model::{close_map, get_map_chunks, get_minimap, new_otbm, redo_edit, set_minimap_palette, undo_edit, MapStore};
+use map_model::{close_map, get_map_chunks, get_minimap, get_tile_items, new_otbm, redo_edit, set_minimap_palette, undo_edit, MapStore};
 use map_save::save_otbm;
 
 pub(crate) type OtbState = Arc<Mutex<Option<OtbItems>>>;
@@ -133,6 +133,7 @@ pub fn run() {
 			paste_selection,
 			undo_edit,
 			redo_edit,
+			get_tile_items,
 			get_map_chunks,
 			get_minimap,
 			set_minimap_palette,
