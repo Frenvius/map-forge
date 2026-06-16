@@ -1,8 +1,10 @@
 import React from 'react';
-import { Copy, Plus, Search, Trash2, MapPin, LocateFixed } from 'lucide-react';
+import { Copy, Plus, Trash2, MapPin, LocateFixed } from 'lucide-react';
 
 import { Waypoint, MapWaypoints } from '~/domain/waypoint';
 import { sortWaypoints, removeWaypoint, renameWaypoint } from '~/usecase/waypointEdits';
+
+import PaletteSearch from './PaletteSearch';
 
 interface WaypointsListProps {
   waypoints: MapWaypoints | null;
@@ -30,22 +32,16 @@ const WaypointsList = ({ waypoints, onGoto, onCopyPosition, onEdit, onAdd }: Way
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex flex-shrink-0 items-center gap-1.5 border-b border-border/50 px-2 py-1.5">
-        <Search className="h-3 w-3 text-muted-foreground" />
-        <input
-          type="text"
-          value={query}
-          placeholder="Search waypoints..."
-          onChange={(e) => setQuery(e.target.value)}
-          className="w-full bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
-        />
-        <button
-          onClick={onAdd}
-          title="Add waypoint at view center"
-          className="rounded p-0.5 text-muted-foreground hover:bg-item-hover hover:text-foreground"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
+      <div className="flex-shrink-0 border-b border-border/50 p-2">
+        <PaletteSearch value={query} onChange={setQuery} placeholder="Search waypoints...">
+          <button
+            onClick={onAdd}
+            title="Add waypoint at view center"
+            className="rounded p-0.5 text-muted-foreground hover:bg-item-hover hover:text-foreground"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </PaletteSearch>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto py-1">

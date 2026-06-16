@@ -1,11 +1,12 @@
 import React from 'react';
-import { Plus, Home, Search, Trash2, Pencil, DoorOpen, CircleSlash2 } from 'lucide-react';
+import { Plus, Home, Trash2, Pencil, DoorOpen, CircleSlash2 } from 'lucide-react';
 
 import { Town } from '~/domain/map';
 import { cn } from '~/usecase/classNames';
 import { useTool } from '~/usecase/context/ToolContext';
 import { House, MapHouses, sortHouses, nextHouseId } from '~/domain/house';
 
+import PaletteSearch from './PaletteSearch';
 import EditHouseDialog from './EditHouseDialog';
 
 interface HousesListProps {
@@ -122,15 +123,7 @@ const HousesList = ({ houses, towns, onEdit, onGoto }: HousesListProps) => {
           ))}
           <option value="none">No Town</option>
         </select>
-        <div className="flex items-center gap-1.5">
-          <Search className="h-3 w-3 text-muted-foreground" />
-          <input
-            type="text"
-            value={query}
-            placeholder="Search houses..."
-            onChange={(e) => setQuery(e.target.value)}
-            className="w-full bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
-          />
+        <PaletteSearch value={query} onChange={setQuery} placeholder="Search houses...">
           {activeHouseId != null && (
             <button
               title="Deselect house"
@@ -147,7 +140,7 @@ const HousesList = ({ houses, towns, onEdit, onGoto }: HousesListProps) => {
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
-        </div>
+        </PaletteSearch>
       </div>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto py-1">

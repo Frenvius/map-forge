@@ -16,6 +16,7 @@ import { Select, SelectItem, SelectValue, SelectContent, SelectTrigger } from '~
 import { PaletteData, PaletteBrush, PaletteTileset, PaletteCategoryId, PALETTE_CATEGORIES } from '~/domain/palette';
 
 import HousesList from './HousesList';
+import PaletteSearch from './PaletteSearch';
 import WaypointsList from './WaypointsList';
 import BrushThumbnail from './BrushThumbnail';
 
@@ -108,6 +109,7 @@ const PalettePanel = ({
   const [tilesetName, setTilesetName] = React.useState<string>('');
   const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
   const [tiles, setTiles] = React.useState<Tile[]>([]);
+  const [query, setQuery] = React.useState('');
   const [renderVersion, setRenderVersion] = React.useState(0);
 
   const tilesets = data[category];
@@ -115,6 +117,21 @@ const PalettePanel = ({
     () => tilesets.find((t) => t.name === tilesetName) ?? tilesets[0] ?? null,
     [tilesets, tilesetName]
   );
+
+  const sourceBrushes = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return current?.brushes ?? [];
+    const seen = new Set<string>();
+    const out: PaletteBrush[] = [];
+    for (const ts of tilesets) {
+      for (const brush of ts.brushes) {
+        if (seen.has(brush.key) || !brush.name.toLowerCase().includes(q)) continue;
+        seen.add(brush.key);
+        out.push(brush);
+      }
+    }
+    return out;
+  }, [query, tilesets, current]);
 
   React.useEffect(() => {
     if (pending.current?.category === category) return;
@@ -159,7 +176,7 @@ const PalettePanel = ({
 
   React.useEffect(() => {
     let cancelled = false;
-    const brushes = current?.brushes ?? [];
+    const brushes = sourceBrushes;
     setTiles(brushes.map((brush) => ({ brush, layout: null })));
     if (brushes.length === 0) return;
 
@@ -195,7 +212,7 @@ const PalettePanel = ({
     return () => {
       cancelled = true;
     };
-  }, [current, items, outfits, sprPath, transparency]);
+  }, [sourceBrushes, items, outfits, sprPath, transparency]);
 
   function handleSelect(tile: Tile) {
     const brush = tile.brush;
@@ -240,6 +257,10 @@ const PalettePanel = ({
   const isHouses = category === 'houses';
   const isCreature = category === 'creature';
   const isList = isWaypoints || isHouses;
+
+  React.useEffect(() => {
+    setQuery('');
+  }, [category]);
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden rounded-lg bg-card shadow-island">
@@ -308,6 +329,8 @@ const PalettePanel = ({
             </Select>
           </div>
         )}
+
+        {!isList && <PaletteSearch value={query} onChange={setQuery} placeholder="Search..." />}
       </div>
 
       {isWaypoints ? (
@@ -323,7 +346,9 @@ const PalettePanel = ({
       ) : (
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-2">
           {tiles.length === 0 ? (
-            isCreature && creatureNeedsPicker ? (
+            query.trim() ? (
+              <div className="px-1 py-6 text-center text-xs text-muted-foreground">No matches.</div>
+            ) : isCreature && creatureNeedsPicker ? (
               <div className="px-3 py-6 text-center text-xs text-muted-foreground">
                 No monster/npc folder for this map. Use <span className="text-foreground">Data</span> in the header to select it.
               </div>
