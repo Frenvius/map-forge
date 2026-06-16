@@ -304,7 +304,9 @@ const MapCanvas = (props: MapCanvasProps) => {
           WebGL unavailable: {glError}
         </div>
       )}
-      <RenderStats jsRef={jsRef} fpsRef={fpsRef} maxRef={maxRef} stallRef={stallRef} chunkRef={chunkRef} />
+      {settings.showRenderStats && (
+        <RenderStats jsRef={jsRef} fpsRef={fpsRef} maxRef={maxRef} stallRef={stallRef} chunkRef={chunkRef} />
+      )}
 
       {interaction.menu && (
         <TileContextMenu

@@ -18,6 +18,7 @@ interface ToolbarProps {
   onMapStatistics: () => void;
   onOpenPreferences: () => void;
   onOpenRecent: (path: string) => void;
+  onAbout: () => void;
 }
 
 const Toolbar = ({
@@ -34,7 +35,8 @@ const Toolbar = ({
   onOpenRecent,
   onMapProperties,
   onMapStatistics,
-  onOpenPreferences
+  onOpenPreferences,
+  onAbout
 }: ToolbarProps) => {
   const win = getCurrentWindow();
   const stop = (e: React.MouseEvent) => e.stopPropagation();
@@ -72,6 +74,7 @@ const Toolbar = ({
         onOpen={onOpen}
         onSave={onSave}
         loading={loading}
+        onAbout={onAbout}
         onSaveAs={onSaveAs}
         hasActive={hasActive}
         onCloseMap={onCloseMap}
@@ -100,7 +103,7 @@ const Toolbar = ({
         </button>
         <button
           onMouseDown={stop}
-          onClick={() => win.close()}
+          onClick={() => void (loading ? win.close() : win.destroy())}
           className="flex h-8 w-9 items-center justify-center text-muted-foreground hover:bg-[#c42b1c] hover:text-white"
         >
           <X className="h-4 w-4" />

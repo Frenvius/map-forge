@@ -16,6 +16,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
   const [showCreatures, setShowCreatures] = useSetting('showCreatures', true);
   const [showWaypoints, setShowWaypoints] = useSetting('showWaypoints', true);
   const [showHouses, setShowHouses] = useSetting('showHouses', true);
+  const [showRenderStats, setShowRenderStats] = useSetting('showRenderStats', true);
   const [zoneVisibility, setZoneVisibility] = useSetting<ZoneVisibility>('zoneVisibility', DEFAULT_ZONE_VISIBILITY, {
     revive: reviveZones
   });
@@ -47,8 +48,13 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
   const toggleCreatures = React.useCallback(() => setShowCreatures((v) => !v), [setShowCreatures]);
   const toggleWaypoints = React.useCallback(() => setShowWaypoints((v) => !v), [setShowWaypoints]);
   const toggleHouses = React.useCallback(() => setShowHouses((v) => !v), [setShowHouses]);
+  const toggleRenderStats = React.useCallback(() => setShowRenderStats((v) => !v), [setShowRenderStats]);
   const toggleZone = React.useCallback(
     (key: keyof ZoneVisibility) => setZoneVisibility((v) => ({ ...v, [key]: !v[key] })),
+    [setZoneVisibility]
+  );
+  const setAllZones = React.useCallback(
+    (visible: boolean) => setZoneVisibility({ pz: visible, nopvp: visible, nologout: visible, pvp: visible }),
     [setZoneVisibility]
   );
 
@@ -59,6 +65,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       showCreatures,
       showWaypoints,
       showHouses,
+      showRenderStats,
       spawnSize,
       spawnTime,
       autoCreateSpawn,
@@ -72,7 +79,9 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       toggleCreatures,
       toggleWaypoints,
       toggleHouses,
-      toggleZone
+      toggleRenderStats,
+      toggleZone,
+      setAllZones
     }),
     [
       automagic,
@@ -80,6 +89,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       showCreatures,
       showWaypoints,
       showHouses,
+      showRenderStats,
       spawnSize,
       spawnTime,
       autoCreateSpawn,
@@ -93,7 +103,9 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       toggleCreatures,
       toggleWaypoints,
       toggleHouses,
-      toggleZone
+      toggleRenderStats,
+      toggleZone,
+      setAllZones
     ]
   );
 

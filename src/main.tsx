@@ -18,6 +18,7 @@ import { openDataDir } from '~/adapter/assets';
 import { PANELS, PanelId } from '~/domain/dock';
 import ToolsPanel from '~/components/ToolsPanel';
 import Preferences from '~/components/Preferences';
+import AboutDialog from '~/components/AboutDialog';
 import { MIN_ZOOM, MAX_ZOOM } from '~/usecase/zoom';
 import PalettePanel from '~/components/PalettePanel';
 import { serializeHouseXml } from '~/adapter/houses';
@@ -75,6 +76,7 @@ const App = () => {
   const [townsOpen, setTownsOpen] = React.useState(false);
   const [mapPropsOpen, setMapPropsOpen] = React.useState(false);
   const [statsOpen, setStatsOpen] = React.useState(false);
+  const [aboutOpen, setAboutOpen] = React.useState(false);
   const [preferencesOpen, setPreferencesOpen] = React.useState(false);
   const [prefsTab, setPrefsTab] = React.useState<'general' | 'editor' | 'client'>('general');
   const openPreferences = React.useCallback((tab: 'general' | 'editor' | 'client' = 'general') => {
@@ -416,6 +418,7 @@ const App = () => {
         onClearRecent={clearRecent}
         onEditTowns={openEditTowns}
         onSave={() => void handleSave()}
+        onAbout={() => setAboutOpen(true)}
         onMapProperties={openMapProperties}
         onMapStatistics={openMapStatistics}
         onSaveAs={() => void handleSaveAs()}
@@ -435,6 +438,8 @@ const App = () => {
           reloadEditor();
         }}
       />
+
+      <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
 
       <MapTowns open={townsOpen} onGoto={gotoPosition} onOpenChange={setTownsOpen} mapId={active?.map.id ?? null} />
 
