@@ -65,10 +65,6 @@ impl NodeWriter {
 	pub fn raw_escaped(&mut self, bytes: &[u8]) {
 		self.buf.extend_from_slice(bytes);
 	}
-
-	pub fn footer(&mut self, bytes: &[u8]) {
-		self.buf.extend_from_slice(bytes);
-	}
 }
 
 #[cfg(test)]

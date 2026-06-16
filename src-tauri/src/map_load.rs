@@ -20,6 +20,12 @@ fn read_head(path: &std::path::Path, max: usize) -> Result<Vec<u8>, String> {
 }
 
 fn read_footer_index(path: &std::path::Path) -> Option<MapIndex> {
+	let sidecar = path.with_extension("otmi");
+	if let Ok(bytes) = std::fs::read(&sidecar) {
+		if let Some(idx) = MapIndex::decode(&bytes) {
+			return Some(idx);
+		}
+	}
 	let mut f = std::fs::File::open(path).ok()?;
 	let size = f.metadata().ok()?.len();
 	if size < 8 {
