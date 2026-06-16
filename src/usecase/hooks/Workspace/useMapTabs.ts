@@ -6,7 +6,7 @@ import { snapZoom } from '~/usecase/zoom';
 import { getMapView, setMapView } from '~/adapter/mapViews';
 import { newOtbm, openOtbm, closeMap, saveOtbm } from '~/adapter/map';
 import { addRecentMap, loadRecentMaps, clearRecentMaps } from '~/adapter/recentMaps';
-import { loadOtb, LoadedAssets, defaultDataDir, resolveMapItems, loadItemNamesPath, peekOtbmVersion } from '~/adapter/assets';
+import { loadOtb, LoadedAssets, defaultDataDir, resolveMapItems, peekOtbmVersion, loadItemNamesPath } from '~/adapter/assets';
 
 const NEW_MAP_WIDTH = 1024;
 const NEW_MAP_HEIGHT = 1024;
@@ -23,12 +23,15 @@ export interface MapTab {
   path?: string;
   otbPath: string;
   itemNames: Map<number, string>;
+  version: number;
 }
 
 interface MapTabsActions {
   setStatus: (status: string) => void;
   setError: (error: string | null) => void;
   onAfterSave?: (mapId: number, path: string) => Promise<void>;
+  version: number;
+  switchVersion: (v: number) => Promise<void>;
 }
 
 export interface MapTabsApi {
@@ -53,7 +56,10 @@ export interface MapTabsApi {
   setView: (cx: number, cy: number) => void;
 }
 
-export const useMapTabs = (assets: LoadedAssets | null, { setStatus, setError, onAfterSave }: MapTabsActions): MapTabsApi => {
+export const useMapTabs = (
+  assets: LoadedAssets | null,
+  { setStatus, setError, onAfterSave, version, switchVersion }: MapTabsActions
+): MapTabsApi => {
   const [tabs, setTabs] = React.useState<MapTab[]>([]);
   const [recent, setRecent] = React.useState<string[]>([]);
   const [activeId, setActiveId] = React.useState<string | null>(null);
@@ -66,38 +72,60 @@ export const useMapTabs = (assets: LoadedAssets | null, { setStatus, setError, o
   const [itemNames, setItemNames] = React.useState<Map<number, string> | null>(null);
   const loadedOtbPath = React.useRef<string | null>(null);
 
-  const startupOtb = `${defaultDataDir()}/items.otb`;
+  const prepareItems = async (path?: string): Promise<{ otbPath: string; names: Map<number, string>; version: number }> => {
+    let detectedVersion = version;
+    let peekedDataDir: string | null = null;
 
-  const prepareItems = async (path?: string): Promise<{ otbPath: string; names: Map<number, string> }> => {
+    if (path) {
+      const peeked = await peekOtbmVersion(path).catch(() => null);
+      if (peeked?.version) detectedVersion = peeked.version;
+      if (peeked?.data_dir) peekedDataDir = peeked.data_dir;
+    }
+
+    if (detectedVersion !== version) {
+      await switchVersion(detectedVersion);
+    }
+
     const found = path ? await resolveMapItems(path).catch(() => null) : null;
     let otbPath: string | null = found?.otb ?? null;
 
-    if (!otbPath && path) {
-      const ver = await peekOtbmVersion(path).catch(() => null);
-      if (ver?.data_dir) otbPath = `${ver.data_dir}/items.otb`;
+    if (!otbPath && peekedDataDir) {
+      otbPath = `${peekedDataDir}/items.otb`;
     }
 
-    if (!otbPath) otbPath = startupOtb;
+    if (!otbPath) otbPath = `${defaultDataDir()}/items.otb`;
 
     if (otbPath !== loadedOtbPath.current) {
       await loadOtb(otbPath);
       loadedOtbPath.current = otbPath;
     }
+
     const names = found
       ? found.xml
         ? await loadItemNamesPath(found.xml)
         : new Map<number, string>()
-      : (assets?.itemNames ?? new Map<number, string>());
-    return { otbPath, names };
+      : await loadItemNamesPath(`${defaultDataDir()}/items.xml`).catch(() => new Map<number, string>());
+
+    return { otbPath, names, version: detectedVersion };
   };
 
   React.useEffect(() => {
     if (!active) return;
-    if (active.otbPath && active.otbPath !== loadedOtbPath.current) {
-      loadedOtbPath.current = active.otbPath;
-      void loadOtb(active.otbPath).catch(() => undefined);
-    }
+    let cancelled = false;
+    void (async () => {
+      if (active.version !== version) {
+        await switchVersion(active.version).catch(() => undefined);
+      }
+      if (cancelled) return;
+      if (active.otbPath && active.otbPath !== loadedOtbPath.current) {
+        loadedOtbPath.current = active.otbPath;
+        await loadOtb(active.otbPath).catch(() => undefined);
+      }
+    })();
     setItemNames(active.itemNames);
+    return () => {
+      cancelled = true;
+    };
   }, [activeId]);
 
   React.useEffect(() => {
@@ -139,7 +167,7 @@ export const useMapTabs = (assets: LoadedAssets | null, { setStatus, setError, o
   const addTab = (
     title: string,
     data: MapMeta,
-    items: { otbPath: string; names: Map<number, string> },
+    items: { otbPath: string; names: Map<number, string>; version: number },
     path?: string,
     initial?: InitialView
   ) => {
@@ -149,7 +177,18 @@ export const useMapTabs = (assets: LoadedAssets | null, { setStatus, setError, o
     const zoom = initial?.zoom ?? 1;
     setTabs((prev) => [
       ...prev,
-      { id, title, map: data, floorZ, zoom, center, path, otbPath: items.otbPath, itemNames: items.names }
+      {
+        id,
+        title,
+        map: data,
+        floorZ,
+        zoom,
+        center,
+        path,
+        otbPath: items.otbPath,
+        itemNames: items.names,
+        version: items.version
+      }
     ]);
     setItemNames(items.names);
     setActiveId(id);

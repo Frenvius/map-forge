@@ -38,10 +38,11 @@ import CreatureDataDialog from '~/components/CreatureDataDialog';
 import StatusBar, { StatusBarApi } from '~/components/StatusBar';
 import { useMapTabs } from '~/usecase/hooks/Workspace/useMapTabs';
 import { DragHandleProps } from '~/components/Dock/DockablePanel';
-import { HoverInfo, HoverItem } from '~/components/MapCanvas/types';
+import ItemPropertiesPanel from '~/components/ItemPropertiesPanel';
 import { useTool, ToolProvider } from '~/usecase/context/ToolContext';
 import { useMapSpawns } from '~/usecase/hooks/Workspace/useMapSpawns';
 import { useMapHouses } from '~/usecase/hooks/Workspace/useMapHouses';
+import { HoverInfo, SelectedItem } from '~/components/MapCanvas/types';
 import { addWaypoint, nextWaypointName } from '~/usecase/waypointEdits';
 import { useMapCreatures } from '~/usecase/hooks/Workspace/useMapCreatures';
 import { useMapWaypoints } from '~/usecase/hooks/Workspace/useMapWaypoints';
@@ -67,6 +68,7 @@ const App = () => {
     assetsMissing,
     retryAssets,
     minimapReady,
+    switchVersion,
     setStatus,
     setError
   } = useAssetsBundle();
@@ -74,6 +76,8 @@ const App = () => {
   const { setPaletteCategory } = useTool();
 
   const [minimapOpen, setMinimapOpen] = useSetting('minimapOpen', false);
+  const [propertiesOpen, setPropertiesOpen] = useSetting('propertiesOpen', false);
+  const [selectedItem, setSelectedItem] = React.useState<SelectedItem | null>(null);
   const [placingWaypoint, setPlacingWaypoint] = React.useState<string | null>(null);
   const [townsOpen, setTownsOpen] = React.useState(false);
   const [mapPropsOpen, setMapPropsOpen] = React.useState(false);
@@ -100,7 +104,10 @@ const App = () => {
   const housesDirty = React.useRef(false);
 
   const handleHover = React.useCallback((info: HoverInfo | null) => statusApiRef.current?.setHover(info), []);
-  const handleSelect = React.useCallback((item: HoverItem | null) => statusApiRef.current?.setSelectedItem(item), []);
+  const handleSelect = React.useCallback((item: SelectedItem | null) => {
+    setSelectedItem(item);
+    statusApiRef.current?.setSelectedItem(item);
+  }, []);
   const handleStatus = React.useCallback((message: string) => statusApiRef.current?.flash(message), []);
 
   const persistSpawns = React.useCallback(async (mapId: number, path: string) => {
@@ -180,7 +187,7 @@ const App = () => {
     setFloorZ,
     setZoom,
     setView
-  } = useMapTabs(assets, { setStatus, setError, onAfterSave: persistSidecars });
+  } = useMapTabs(assets, { setStatus, setError, onAfterSave: persistSidecars, version, switchVersion });
 
   const {
     creatureDb,
@@ -265,6 +272,7 @@ const App = () => {
   const isContentReady = (id: PanelId) => {
     const kind = baseKind(id);
     if (kind === 'minimap') return minimapOpen && !!assets && !!active && minimapReady;
+    if (kind === 'properties') return propertiesOpen && !!assets && !!active;
     return kind === 'tools' || !!(assets && palette);
   };
 
@@ -272,6 +280,23 @@ const App = () => {
 
   const toggleMinimap = () => setMinimapOpen((v) => !v);
   const closeMinimap = () => setMinimapOpen(false);
+
+  const ensurePropertiesPlaced = React.useCallback(() => {
+    const placed = [...dock.layout.left.flat(), ...dock.layout.right.flat(), ...Object.keys(dock.layout.float)];
+    if (!placed.includes('properties')) dock.floatPanel('properties');
+  }, [dock]);
+
+  const toggleProperties = React.useCallback(() => {
+    setPropertiesOpen((prev) => {
+      if (!prev) ensurePropertiesPlaced();
+      return !prev;
+    });
+  }, [ensurePropertiesPlaced]);
+
+  const openProperties = React.useCallback(() => {
+    ensurePropertiesPlaced();
+    setPropertiesOpen(true);
+  }, [ensurePropertiesPlaced]);
 
   const editWaypoints = (next: MapWaypoints) => (waypointEditRef.current ?? handleEditWaypoints)(next);
 
@@ -339,6 +364,7 @@ const App = () => {
   }, []);
 
   React.useEffect(() => {
+    setSelectedItem(null);
     statusApiRef.current?.setSelectedItem(null);
     spawnsDirty.current = false;
     waypointsDirty.current = false;
@@ -381,6 +407,17 @@ const App = () => {
           creatureNeedsPicker={creatureNeedsPicker}
           onCopyWaypointPosition={copyWaypointPosition}
           onClose={isPrimary ? undefined : () => dock.closePanel(id)}
+        />
+      );
+    }
+    if (kind === 'properties' && assets && active && propertiesOpen) {
+      return (
+        <ItemPropertiesPanel
+          item={selectedItem}
+          dragHandle={handle}
+          mapId={active.map.id}
+          items={assets.items ?? null}
+          onClose={() => setPropertiesOpen(false)}
         />
       );
     }
@@ -427,11 +464,13 @@ const App = () => {
         onEditTowns={openEditTowns}
         onNewPalette={dock.newPalette}
         onToggleMinimap={toggleMinimap}
+        propertiesOpen={propertiesOpen}
         onSave={() => void handleSave()}
         onAbout={() => setAboutOpen(true)}
         onMapProperties={openMapProperties}
         onMapStatistics={openMapStatistics}
         onSaveAs={() => void handleSaveAs()}
+        onToggleProperties={toggleProperties}
         onOpenPreferences={() => openPreferences()}
         onOpenRecent={(path) => void openPath(path)}
         onSelectPaletteCategory={setPaletteCategory}
@@ -490,15 +529,16 @@ const App = () => {
             onHousesDirty={markHousesDirty}
             waypointEditRef={waypointEditRef}
             placingWaypoint={placingWaypoint}
+            onItemProperties={openProperties}
             onEditWaypoints={handleEditWaypoints}
             onPlaceWaypoint={() => setPlacingWaypoint(null)}
             onEdit={(z) => minimapApiRef.current?.markDirty(z)}
           />
         ) : assetsMissing ? (
           <AssetsMissing
+            error={error}
             dataDir={dataDir}
             version={version}
-            error={error}
             onRetry={retryAssets}
             clientConfigured={clientConfigured}
             onOpenSettings={() => openPreferences('client')}

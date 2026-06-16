@@ -113,6 +113,7 @@ export interface OtbmVersionInfo {
   items_major: number;
   items_minor: number;
   data_dir: string | null;
+  version: number | null;
 }
 
 export async function peekOtbmVersion(path: string): Promise<OtbmVersionInfo> {
@@ -140,9 +141,8 @@ export async function loadAssets(dataDir: string, clientDir: string, version = D
   await invoke<number>('load_materials', { dataDir }).catch(() => undefined);
   const itemNames = await loadItemNames(dataDir);
   const creatures = await loadCreatureDb(dataDir);
-  const [spawnMarkerClientId, waypointMarkerClientId] = otbItemCount > 0
-    ? await mapClientIds([SPAWN_MARKER_SERVER_ID, WAYPOINT_MARKER_SERVER_ID])
-    : [0, 0];
+  const [spawnMarkerClientId, waypointMarkerClientId] =
+    otbItemCount > 0 ? await mapClientIds([SPAWN_MARKER_SERVER_ID, WAYPOINT_MARKER_SERVER_ID]) : [0, 0];
 
   const datResponse = await invoke<Uint8Array | ArrayBuffer>('parse_dat_file_bin', { path: datPath, version });
   const datBuf = datResponse instanceof Uint8Array ? datResponse : new Uint8Array(datResponse);

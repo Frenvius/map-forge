@@ -14,6 +14,7 @@ export interface SpriteAtlas {
   compositeId: (key: string) => number;
   loadMissing: (sprPath: string, missing: Iterable<number>, transparency: boolean) => void;
   evict: (tick: number) => void;
+  clear: () => void;
 }
 
 const COMPOSITE_BASE = 0x40000000;
@@ -86,5 +87,19 @@ export function useSpriteAtlas(gl: React.MutableRefObject<GLRenderer | null>): S
     if (removed > 0) epoch.current++;
   }
 
-  return { data, lastUsed, version, epoch, slotFor, compositeId, loadMissing, evict };
+  function clear() {
+    data.current = new Map();
+    lastUsed.current = new Map();
+    requested.current = new Set();
+    loading.current = false;
+    slot.current = new Map();
+    freeSlots.current = [];
+    nextSlot.current = 0;
+    composites.current = new Map();
+    nextComposite.current = COMPOSITE_BASE;
+    epoch.current++;
+    version.current++;
+  }
+
+  return { data, lastUsed, version, epoch, slotFor, compositeId, loadMissing, evict, clear };
 }

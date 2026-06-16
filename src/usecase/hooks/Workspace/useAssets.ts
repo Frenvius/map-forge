@@ -18,6 +18,7 @@ export interface AssetsState {
   retryAssets: () => void;
   minimapColors: number[] | null;
   minimapReady: boolean;
+  switchVersion: (v: number) => Promise<void>;
   setStatus: React.Dispatch<React.SetStateAction<string>>;
   setError: React.Dispatch<React.SetStateAction<string | null>>;
 }
@@ -33,8 +34,27 @@ export const useAssets = (): AssetsState => {
   const [assetsMissing, setAssetsMissing] = React.useState(false);
   const [reloadKey, setReloadKey] = React.useState(0);
   const [minimapReady, setMinimapReady] = React.useState(false);
+  const loadedVersionRef = React.useRef(0);
 
   const retryAssets = React.useCallback(() => setReloadKey((k) => k + 1), []);
+
+  const switchVersion = React.useCallback(async (v: number) => {
+    if (v === loadedVersionRef.current) return;
+    const config = await loadClientConfig();
+    const clientDir = (config.paths[v] ?? '').trim();
+    if (!clientDir) throw new Error(`No client folder configured for version ${v}`);
+
+    const resolvedDataDir = await initDataDir(v);
+    const a = await loadAssets(resolvedDataDir, clientDir, v);
+
+    setAssets(a);
+    setDataDir(resolvedDataDir);
+    setVersion(v);
+    loadedVersionRef.current = v;
+
+    const pal = await loadPalette(resolvedDataDir).catch(() => null);
+    setPalette(pal);
+  }, []);
 
   const minimapColors = React.useMemo(() => {
     if (!assets) return null;
@@ -69,6 +89,7 @@ export const useAssets = (): AssetsState => {
       if (cancelled) return;
       setDataDir(resolvedDataDir);
       setVersion(v);
+      loadedVersionRef.current = v;
 
       const clientDir = (config.paths[v] ?? '').trim();
       if (!clientDir) {
@@ -112,6 +133,7 @@ export const useAssets = (): AssetsState => {
     retryAssets,
     minimapColors,
     minimapReady,
+    switchVersion,
     setStatus,
     setError
   };

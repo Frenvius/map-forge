@@ -80,6 +80,7 @@ pub struct OtbmVersionInfo {
     pub items_major: u32,
     pub items_minor: u32,
     pub data_dir: Option<String>,
+    pub version: Option<u32>,
 }
 
 #[tauri::command]
@@ -91,11 +92,13 @@ pub fn peek_otbm_version(path: String) -> Result<OtbmVersionInfo, String> {
     buf.truncate(n);
 
     let (otbm_version, items_major, items_minor) = read_otbm_version(&buf)?;
-    let data_dir = data_dir_for_otb_id(items_minor).and_then(|d| {
+    let dir_name = data_dir_for_otb_id(items_minor);
+    let version = dir_name.and_then(|d| d.parse::<u32>().ok());
+    let data_dir = dir_name.and_then(|d| {
         let dir = crate::commands::default_data_dir(d.parse::<u32>().unwrap_or(0));
         let otb = std::path::Path::new(&dir).join("items.otb");
         otb.is_file().then_some(dir)
     });
 
-    Ok(OtbmVersionInfo { otbm_version, items_major, items_minor, data_dir })
+    Ok(OtbmVersionInfo { otbm_version, items_major, items_minor, data_dir, version })
 }

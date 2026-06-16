@@ -61,6 +61,7 @@ export function useMapRenderer(deps: RendererDeps) {
   const { canvasRef, gl, camera, inputs, atlas, tiles, meshes, selection, scene, stats } = deps;
   const { frameTick, lastChunksDrawn } = scene;
   const prevPreviewKeys = React.useRef<string[]>([]);
+  const prevSprPath = React.useRef('');
 
   function flushTileRequests() {
     if (inputs.current.paused) return;
@@ -523,6 +524,13 @@ export function useMapRenderer(deps: RendererDeps) {
     if (!canvas || !renderer) return;
 
     const { sprPath, transparency, floorZ } = inputs.current;
+    if (sprPath !== prevSprPath.current) {
+      if (prevSprPath.current) {
+        atlas.clear();
+        meshes.clear();
+      }
+      prevSprPath.current = sprPath;
+    }
     const zoom = camera.zoomRef.current;
     frameTick.current++;
 
