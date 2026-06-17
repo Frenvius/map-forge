@@ -27,6 +27,7 @@ export interface EditorSettingsValue {
   toggleHouses: () => void;
   toggleTooltips: () => void;
   toggleTooltipType: (key: TooltipTypeKey) => void;
+  toggleTooltipTypes: (keys: TooltipTypeKey[]) => void;
   toggleRenderStats: () => void;
   toggleZone: (key: keyof ZoneVisibility) => void;
   setAllZones: (visible: boolean) => void;

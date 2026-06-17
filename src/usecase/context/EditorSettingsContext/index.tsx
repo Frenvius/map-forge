@@ -60,6 +60,16 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
     (key: TooltipTypeKey) => setTooltipTypes((v) => ({ ...v, [key]: !v[key] })),
     [setTooltipTypes]
   );
+  const toggleTooltipTypes = React.useCallback(
+    (keys: TooltipTypeKey[]) =>
+      setTooltipTypes((v) => {
+        const next = !keys.every((k) => v[k]);
+        const updated = { ...v };
+        for (const k of keys) updated[k] = next;
+        return updated;
+      }),
+    [setTooltipTypes]
+  );
   const toggleRenderStats = React.useCallback(() => setShowRenderStats((v) => !v), [setShowRenderStats]);
   const toggleZone = React.useCallback(
     (key: keyof ZoneVisibility) => setZoneVisibility((v) => ({ ...v, [key]: !v[key] })),
@@ -95,6 +105,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       toggleHouses,
       toggleTooltips,
       toggleTooltipType,
+      toggleTooltipTypes,
       toggleRenderStats,
       toggleZone,
       setAllZones
@@ -123,6 +134,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       toggleHouses,
       toggleTooltips,
       toggleTooltipType,
+      toggleTooltipTypes,
       toggleRenderStats,
       toggleZone,
       setAllZones

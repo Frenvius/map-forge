@@ -1,5 +1,5 @@
+import { TileTooltip } from '~/domain/map';
 import { TooltipTypes } from '~/domain/tooltips';
-import { Position, TileTooltip } from '~/domain/map';
 
 export interface TooltipField {
   label: string;
@@ -35,12 +35,11 @@ export function resolveTooltipTheme(): TooltipTheme {
   };
 }
 
-export function buildTooltipFields(tt: TileTooltip, dest: Position | null, types: TooltipTypes): TooltipField[] {
+export function buildTooltipFields(tt: TileTooltip, types: TooltipTypes): TooltipField[] {
   const fields: TooltipField[] = [];
   if (types.actionId && tt.actionId > 0) fields.push({ label: 'Action ID', value: String(tt.actionId) });
   if (types.uniqueId && tt.uniqueId > 0) fields.push({ label: 'Unique ID', value: String(tt.uniqueId) });
   if (types.doorId && tt.doorId > 0) fields.push({ label: 'Door ID', value: String(tt.doorId) });
-  if (types.destination && dest) fields.push({ label: 'Destination', value: `${dest.x}, ${dest.y}, ${dest.z}` });
   if (types.description && tt.desc) fields.push({ label: 'Description', value: tt.desc });
   if (types.text && tt.text) fields.push({ label: 'Text', value: `"${tt.text}"` });
   return fields;

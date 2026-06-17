@@ -156,7 +156,6 @@ export function useMapRenderer(deps: RendererDeps) {
     const z = inputs.current.floorZ;
     const types = inputs.current.tooltipTypes;
     const theme = resolveTooltipTheme();
-    const teleports = inputs.current.map.teleports;
     const { minX, minY, maxX, maxY } = inputs.current.map.bounds;
     const minCx = Math.floor(minX / CHUNK);
     const minCy = Math.floor(minY / CHUNK);
@@ -183,8 +182,7 @@ export function useMapRenderer(deps: RendererDeps) {
           const sx = (t.x * TILE + TILE / 2 - camX) * zoom;
           const sy = (t.y * TILE - camY) * zoom;
           if (sx < -300 || sx > vw + 300 || sy < -300 || sy > vh + 300) continue;
-          const dest = teleports.get(`${t.x},${t.y},${z}`) ?? null;
-          const fields = buildTooltipFields(t, dest, types);
+          const fields = buildTooltipFields(t, types);
           const box = layoutTooltip(ctx, sx - (TILE / 2) * zoom, sy, fields);
           if (box) boxes.push({ box, tx: t.x, ty: t.y });
         }

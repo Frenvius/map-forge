@@ -2,7 +2,7 @@ import React from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Save, FilePlus, FolderOpen } from 'lucide-react';
 
-import { TOOLTIP_TYPE_LABELS } from '~/domain/tooltips';
+import { TOOLTIP_TYPE_GROUPS } from '~/domain/tooltips';
 import { PaletteCategoryId, PALETTE_CATEGORIES } from '~/domain/palette';
 import { useEditorSettings } from '~/usecase/context/EditorSettingsContext';
 import {
@@ -79,7 +79,7 @@ const AppMenu = ({
     showTooltips,
     toggleTooltips,
     tooltipTypes,
-    toggleTooltipType
+    toggleTooltipTypes
   } = useEditorSettings();
   const anyZoneVisible = zoneVisibility.pz || zoneVisibility.nopvp || zoneVisibility.nologout || zoneVisibility.pvp;
   const stop = (e: React.MouseEvent) => e.stopPropagation();
@@ -205,13 +205,13 @@ const AppMenu = ({
           <MenubarCheckboxItem checked={showTooltips} onCheckedChange={toggleTooltips} onSelect={(e) => e.preventDefault()}>
             Show tooltips
           </MenubarCheckboxItem>
-          {TOOLTIP_TYPE_LABELS.map((t) => (
+          {TOOLTIP_TYPE_GROUPS.map((t) => (
             <MenubarCheckboxItem
-              key={t.key}
+              key={t.keys.join('-')}
               disabled={!showTooltips}
-              checked={tooltipTypes[t.key]}
               onSelect={(e) => e.preventDefault()}
-              onCheckedChange={() => toggleTooltipType(t.key)}
+              checked={t.keys.every((k) => tooltipTypes[k])}
+              onCheckedChange={() => toggleTooltipTypes(t.keys)}
             >
               {t.label}
             </MenubarCheckboxItem>
