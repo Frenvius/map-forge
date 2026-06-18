@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::nodefile::{parse_node_file, Cursor};
+use super::nodefile::{parse_node_file, Cursor};
 
 const ROOT_ATTR_VERSION: u8 = 0x01;
 const ITEM_ATTR_SERVERID: u8 = 0x10;

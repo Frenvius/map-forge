@@ -34,7 +34,7 @@ fn empty_door_id(m: &MapModel, house_id: u32) -> u8 {
 	(1..=255u16).find(|&i| !used[i as usize]).map(|i| i as u8).unwrap_or(0)
 }
 use crate::materials::{self, Materials};
-use crate::otb::OtbItems;
+use crate::formats::tibia::otb::OtbItems;
 use crate::{CopyBufferState, MapState, MaterialsState, OtbState, PlaceFlags, PlacementState};
 
 pub struct CopyTile {
@@ -1087,7 +1087,7 @@ pub fn paste_selection(
 mod tests {
 	use super::*;
 	use crate::map_model::{build_map_model, stack_at};
-	use crate::otb::parse_otb;
+	use crate::formats::tibia::otb::parse_otb;
 	use std::fs;
 	use std::path::PathBuf;
 

@@ -1,18 +1,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-mod spr_manager;
-use spr_manager::{SprManager, SprManagerState};
-
-mod dat_writer;
-mod dat_reader;
-
-mod nodefile;
-mod otb;
-mod otbm;
-mod otbm_footer;
-mod otbm_write;
-use otb::OtbItems;
+mod formats;
+use formats::tibia::spr_manager::{SprManager, SprManagerState};
+use formats::tibia::otb::OtbItems;
 
 mod settings;
 use settings::{read_settings, write_settings};
@@ -20,7 +11,6 @@ use settings::{read_settings, write_settings};
 mod materials;
 use materials::Materials;
 
-mod client_version;
 mod commands;
 mod creatures;
 mod map_edit;
@@ -29,7 +19,7 @@ mod map_meta;
 mod map_model;
 mod map_save;
 
-use client_version::peek_otbm_version;
+use formats::tibia::client_version::peek_otbm_version;
 use commands::{
 	all_server_ids, close_spr_file, default_data_dir, load_materials, load_otb, map_client_ids, open_data_dir, open_spr_file,
 	open_url, parse_dat_file_bin, read_file, read_file_header, read_file_text, read_sprites_batch_rgba, read_sprites_rgba,
@@ -176,8 +166,8 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-	use super::otb::parse_otb;
-	use super::otbm::{read_otbm, OtbmVisitor};
+	use super::formats::tibia::otb::parse_otb;
+	use super::formats::tibia::otbm::{read_otbm, OtbmVisitor};
 	use std::fs;
 
 	const DATA: &str = "../data/860";

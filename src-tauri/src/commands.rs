@@ -5,10 +5,10 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use tauri::ipc::Response;
 
-use crate::dat_reader::{encode_dat_to_binary, DatReader};
+use crate::formats::tibia::dat_reader::{encode_dat_to_binary, DatReader};
 use crate::materials::Materials;
-use crate::otb::parse_otb;
-use crate::spr_manager::{SprHeader, SprManagerState};
+use crate::formats::tibia::otb::parse_otb;
+use crate::formats::tibia::spr_manager::{SprHeader, SprManagerState};
 use crate::{MaterialsState, OtbState, PlaceFlags, PlacementState};
 
 #[derive(Serialize, Deserialize)]

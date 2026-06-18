@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::{self, Read, BufReader};
-use crate::dat_writer::{ThingType, FrameDuration, FrameGroup};
+use super::dat_writer::{ThingType, FrameDuration, FrameGroup};
 
 type DatThings = (u32, Vec<ThingType>, Vec<ThingType>, Vec<ThingType>, Vec<ThingType>);
 

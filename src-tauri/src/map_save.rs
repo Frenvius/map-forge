@@ -2,11 +2,11 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 
 use crate::map_model::MapModel;
-use crate::otbm::{read_otbm, OtbmVisitor};
-use crate::otbm_footer::{ChunkEntry, MapIndex};
+use crate::formats::tibia::otbm::{read_otbm, OtbmVisitor};
+use crate::formats::tibia::otbm_footer::{ChunkEntry, MapIndex};
 
 const CHUNK: u16 = 32;
-use crate::otbm_write::NodeWriter;
+use crate::formats::tibia::otbm_write::NodeWriter;
 use crate::{MapState, MaterialsState};
 
 const OTBM_MAP_DATA: u8 = 2;
@@ -920,7 +920,7 @@ mod tests {
 		let mut counted = 0u32;
 		for c in &idx.chunks {
 			let mut sink = Cmp::default();
-			crate::otbm::read_otbm_floor(&out[c.start as usize..c.end as usize], &mut sink).unwrap();
+			crate::formats::tibia::otbm::read_otbm_floor(&out[c.start as usize..c.end as usize], &mut sink).unwrap();
 			for (&(x, y, z), _) in &sink.tiles {
 				assert_eq!(z, c.z, "tile carries the chunk's z");
 				assert_eq!((x / 32, y / 32), (c.cx, c.cy), "tile lies inside the indexed chunk");
@@ -936,7 +936,7 @@ mod tests {
 	#[test]
 	fn lazy_ensure_floor_loads_columns_from_disk() {
 		use crate::map_model::{empty_model as em, lazy_model};
-		use crate::otb::parse_otb;
+		use crate::formats::tibia::otb::parse_otb;
 		let _ = em;
 
 		let otb = parse_otb(&std::fs::read("../data/860/items.otb").unwrap()).unwrap();
@@ -946,7 +946,7 @@ mod tests {
 		let tmp = std::env::temp_dir().join("nosbor_lazy_ensure_test.otbm");
 		std::fs::write(&tmp, &out).unwrap();
 
-		let (w, h) = crate::otbm::read_otbm_header(&out).unwrap();
+		let (w, h) = crate::formats::tibia::otbm::read_otbm_header(&out).unwrap();
 		let mut model = lazy_model(w, h, &idx, tmp.clone());
 
 		assert!(model.floors.is_empty(), "no floor loaded at lazy open");
@@ -1072,7 +1072,7 @@ mod tests {
 		palette[3] = 60;
 		palette[4] = 70;
 
-		let otb = crate::otb::OtbItems { server_to_client: Map::new() };
+		let otb = crate::formats::tibia::otb::OtbItems { server_to_client: Map::new() };
 		let payload = model.window_minimap(7, 10, 10, 2, 1, &palette, &otb).unwrap();
 		assert_eq!(u16::from_le_bytes([payload[0], payload[1]]), 10);
 		assert_eq!(u16::from_le_bytes([payload[4], payload[5]]), 2);

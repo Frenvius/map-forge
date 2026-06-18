@@ -5,9 +5,9 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use tauri::ipc::Response;
 
-use crate::otb::OtbItems;
-use crate::otbm::{read_otbm_floor, ItemAttrs, OtbmVisitor};
-use crate::otbm_footer::MapIndex;
+use crate::formats::tibia::otb::OtbItems;
+use crate::formats::tibia::otbm::{read_otbm_floor, ItemAttrs, OtbmVisitor};
+use crate::formats::tibia::otbm_footer::MapIndex;
 use crate::{MapState, MinimapPaletteState, OtbState};
 
 pub(crate) const CHUNK: u32 = 32;
@@ -413,7 +413,7 @@ pub(crate) fn serialize_chunk_tooltips(m: &MapModel, z: u8, keys: &[u32]) -> Vec
 			let mut text = String::new();
 			let mut desc = String::new();
 			for i in 0..stack_len {
-				if let Some(a) = m.item_attrs.get(&crate::otbm::attrs_key(z, x, y, i as u8)) {
+				if let Some(a) = m.item_attrs.get(&crate::formats::tibia::otbm::attrs_key(z, x, y, i as u8)) {
 					if action == 0 {
 						action = a.action_id;
 					}
@@ -762,7 +762,7 @@ impl MapModel {
 			};
 			read_otbm_floor(&slice, &mut col)?;
 			for (x, y, idx, a) in &col.attrs {
-				self.item_attrs.insert(crate::otbm::attrs_key(z, *x, *y, *idx), a.clone());
+				self.item_attrs.insert(crate::formats::tibia::otbm::attrs_key(z, *x, *y, *idx), a.clone());
 			}
 			self.append_chunk(z, key, &col);
 			self.loaded_chunks.insert(ckey(z, key));
@@ -1259,7 +1259,7 @@ pub fn get_tile_items(
 	let stack = stack_at(m, z, x, y);
 	let mut items = Vec::with_capacity(stack.len());
 	for (i, &(cid, sid)) in stack.iter().enumerate() {
-		let key = crate::otbm::attrs_key(z, x, y, i as u8);
+		let key = crate::formats::tibia::otbm::attrs_key(z, x, y, i as u8);
 		let a = m.item_attrs.get(&key);
 		let sub = base_subtype(m, z, chunk_key, x, y, i);
 		items.push(TileItemEntry {

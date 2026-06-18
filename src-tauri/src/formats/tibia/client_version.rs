@@ -1,4 +1,4 @@
-use crate::otbm::read_otbm_version;
+use super::otbm::read_otbm_version;
 use serde::Serialize;
 
 struct VersionEntry {

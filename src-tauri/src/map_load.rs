@@ -6,9 +6,9 @@ use tauri::ipc::Response;
 use tauri::Emitter;
 
 use crate::map_model::{build_map_model, lazy_model, serialize_meta, store_map, MapModel, Town, Waypoint};
-use crate::otb::OtbItems;
-use crate::otbm::{attrs_key, read_otbm, read_otbm_header, ItemAttrs, OtbmVisitor};
-use crate::otbm_footer::MapIndex;
+use crate::formats::tibia::otb::OtbItems;
+use crate::formats::tibia::otbm::{attrs_key, read_otbm, read_otbm_header, ItemAttrs, OtbmVisitor};
+use crate::formats::tibia::otbm_footer::MapIndex;
 use crate::{MapState, OtbState};
 
 fn read_head(path: &std::path::Path, max: usize) -> Result<Vec<u8>, String> {
