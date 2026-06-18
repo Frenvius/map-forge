@@ -6,4 +6,5 @@ pub mod otb;
 pub mod otbm;
 pub mod otbm_footer;
 pub mod otbm_write;
+pub mod providers;
 pub mod spr_manager;

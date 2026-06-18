@@ -7,14 +7,7 @@ use rayon::prelude::*;
 
 const DEFAULT_SPRITE_SIZE: usize = 32;
 
-/// SPR file header information
-#[derive(Debug, Clone, Serialize)]
-pub struct SprHeader {
-    pub signature: u32,
-    pub sprite_count: u32,
-    pub extended: bool,
-    pub sprite_size: u32,
-}
+pub use crate::formats::SpriteHeader as SprHeader;
 
 /// Sprite data returned to frontend
 #[derive(Debug, Clone, Serialize)]
@@ -715,5 +708,30 @@ pub fn compress_to_rle(pixels: &[u8], transparent: bool, sprite_data_size: usize
     compressed
 }
 
-/// Type alias for thread-safe SPR manager
 pub type SprManagerState = Arc<Mutex<SprManager>>;
+
+impl crate::formats::SpriteProvider for SprManager {
+    fn sprite_size(&self) -> u32 {
+        self.sprite_size as u32
+    }
+
+    fn open(&mut self, path: &str, extended: bool) -> Result<SprHeader, String> {
+        self.open_file(path.to_string(), extended)
+    }
+
+    fn close(&mut self, path: &str) -> Result<(), String> {
+        self.close_file(path)
+    }
+
+    fn read_sprites_rgba(&mut self, path: &str, ids: &[u32], transparent: bool) -> Result<Vec<u8>, String> {
+        SprManager::read_sprites_rgba(self, path, ids.to_vec(), transparent)
+    }
+
+    fn read_sprites_batch_rgba(&mut self, path: &str, start_id: u32, count: u32, transparent: bool) -> Result<Vec<u8>, String> {
+        SprManager::read_sprites_batch_rgba(self, path, start_id, count, transparent)
+    }
+
+    fn read_sprites_rgba_lz4(&mut self, path: &str, ids: &[u32], transparent: bool) -> Result<Vec<u8>, String> {
+        SprManager::read_sprites_rgba_lz4(self, path, ids.to_vec(), transparent)
+    }
+}

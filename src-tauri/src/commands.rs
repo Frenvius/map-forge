@@ -5,10 +5,8 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use tauri::ipc::Response;
 
-use crate::formats::tibia::dat_reader::{encode_dat_to_binary, DatReader};
 use crate::materials::Materials;
-use crate::formats::tibia::otb::parse_otb;
-use crate::formats::tibia::spr_manager::{SprHeader, SprManagerState};
+use crate::formats::{FormatManagerState, SpriteHeader};
 use crate::{MaterialsState, OtbState, PlaceFlags, PlacementState};
 
 #[derive(Serialize, Deserialize)]
@@ -83,21 +81,21 @@ pub fn read_file_header(path: String, bytes: usize) -> Result<FileBytes, String>
 }
 
 #[tauri::command]
-pub fn open_spr_file(path: String, extended: bool, spr_state: tauri::State<SprManagerState>) -> Result<SprHeader, String> {
-	let mut manager = spr_state.lock().map_err(|e| format!("Lock error: {}", e))?;
-	manager.open_file(path, extended)
+pub fn open_spr_file(path: String, extended: bool, fm: tauri::State<FormatManagerState>) -> Result<SpriteHeader, String> {
+	let mut mgr = fm.lock().map_err(|e| format!("Lock error: {}", e))?;
+	mgr.sprite().open(&path, extended)
 }
 
 #[tauri::command]
-pub fn close_spr_file(path: String, spr_state: tauri::State<SprManagerState>) -> Result<(), String> {
-	let mut manager = spr_state.lock().map_err(|e| format!("Lock error: {}", e))?;
-	manager.close_file(&path)
+pub fn close_spr_file(path: String, fm: tauri::State<FormatManagerState>) -> Result<(), String> {
+	let mut mgr = fm.lock().map_err(|e| format!("Lock error: {}", e))?;
+	mgr.sprite().close(&path)
 }
 
 #[tauri::command]
-pub fn read_sprites_rgba(path: String, ids: Vec<u32>, transparent: bool, spr_state: tauri::State<SprManagerState>) -> Result<Response, String> {
-	let mut manager = spr_state.lock().map_err(|e| format!("Lock error: {}", e))?;
-	let bytes = manager.read_sprites_rgba(&path, ids, transparent)?;
+pub fn read_sprites_rgba(path: String, ids: Vec<u32>, transparent: bool, fm: tauri::State<FormatManagerState>) -> Result<Response, String> {
+	let mut mgr = fm.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let bytes = mgr.sprite().read_sprites_rgba(&path, &ids, transparent)?;
 	Ok(Response::new(bytes))
 }
 
@@ -107,46 +105,32 @@ pub fn read_sprites_batch_rgba(
 	start_id: u32,
 	count: u32,
 	transparent: bool,
-	spr_state: tauri::State<SprManagerState>,
+	fm: tauri::State<FormatManagerState>,
 ) -> Result<Response, String> {
-	let mut manager = spr_state.lock().map_err(|e| format!("Lock error: {}", e))?;
-	let bytes = manager.read_sprites_batch_rgba(&path, start_id, count, transparent)?;
+	let mut mgr = fm.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let bytes = mgr.sprite().read_sprites_batch_rgba(&path, start_id, count, transparent)?;
 	Ok(Response::new(bytes))
 }
 
 #[tauri::command]
-pub fn read_sprites_rgba_lz4(path: String, ids: Vec<u32>, transparent: bool, spr_state: tauri::State<SprManagerState>) -> Result<Response, String> {
-	let mut manager = spr_state.lock().map_err(|e| format!("Lock error: {}", e))?;
-	let bytes = manager.read_sprites_rgba_lz4(&path, ids, transparent)?;
+pub fn read_sprites_rgba_lz4(path: String, ids: Vec<u32>, transparent: bool, fm: tauri::State<FormatManagerState>) -> Result<Response, String> {
+	let mut mgr = fm.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let bytes = mgr.sprite().read_sprites_rgba_lz4(&path, &ids, transparent)?;
 	Ok(Response::new(bytes))
 }
 
 #[tauri::command]
-pub fn parse_dat_file_bin(path: String, version: u32, placement_state: tauri::State<PlacementState>) -> Result<Response, String> {
-	let mut reader = DatReader::open(&path)?;
-	reader.set_version(version);
-	let (signature, items, outfits, effects, missiles) =
-		reader.read_dat().map_err(|e| format!("DAT parse error (version {}): {}", version, e))?;
+pub fn parse_dat_file_bin(path: String, version: u32, fm: tauri::State<FormatManagerState>, placement_state: tauri::State<PlacementState>) -> Result<Response, String> {
+	let mut mgr = fm.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let result = mgr.metadata().read_metadata(&path, version)?;
 
-	let mut placement: HashMap<u16, PlaceFlags> = HashMap::with_capacity(items.len());
-	for it in &items {
-		let top_order = if it.is_ground_border {
-			1
-		} else if it.is_on_bottom {
-			2
-		} else if it.is_on_top {
-			3
-		} else {
-			0
-		};
-		if it.is_ground || top_order != 0 {
-			placement.insert(it.id as u16, PlaceFlags { ground: it.is_ground, top_order });
-		}
+	let mut placement: HashMap<u16, PlaceFlags> = HashMap::with_capacity(result.placement.len());
+	for (id, ground, top_order) in &result.placement {
+		placement.insert(*id, PlaceFlags { ground: *ground, top_order: *top_order });
 	}
 	*placement_state.lock().map_err(|e| format!("Lock error: {}", e))? = placement;
 
-	let buffer = encode_dat_to_binary(signature, &items, &outfits, &effects, &missiles);
-	Ok(Response::new(buffer))
+	Ok(Response::new(result.encoded))
 }
 
 #[tauri::command]
@@ -158,30 +142,31 @@ pub fn load_materials(data_dir: String, materials_state: tauri::State<MaterialsS
 }
 
 #[tauri::command]
-pub fn load_otb(path: String, otb_state: tauri::State<OtbState>) -> Result<usize, String> {
+pub fn load_otb(path: String, fm: tauri::State<FormatManagerState>, otb_state: tauri::State<OtbState>) -> Result<usize, String> {
 	let bytes = fs::read(&path).map_err(|e| format!("Failed to read {}: {}", path, e))?;
-	let items = parse_otb(&bytes)?;
-	let count = items.server_to_client.len();
+	let count = fm.lock().map_err(|e| format!("Lock error: {}", e))?.item_db_mut().load(&bytes)?;
+
+	let items = crate::formats::tibia::otb::parse_otb(&bytes)?;
 	*otb_state.lock().map_err(|e| format!("Lock error: {}", e))? = Some(items);
 	Ok(count)
 }
 
 #[tauri::command]
-pub fn map_client_ids(server_ids: Vec<u16>, otb_state: tauri::State<OtbState>) -> Result<Vec<u32>, String> {
-	let guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
-	let otb = guard.as_ref().ok_or("OTB not loaded")?;
+pub fn map_client_ids(server_ids: Vec<u16>, fm: tauri::State<FormatManagerState>) -> Result<Vec<u32>, String> {
+	let mgr = fm.lock().map_err(|e| format!("Lock error: {}", e))?;
 	Ok(server_ids
 		.into_iter()
-		.map(|sid| otb.client_id(sid).map(u32::from).unwrap_or(0))
+		.map(|sid| mgr.item_db().client_id(sid).map(u32::from).unwrap_or(0))
 		.collect())
 }
 
 #[tauri::command]
-pub fn all_server_ids(otb_state: tauri::State<OtbState>) -> Result<Vec<u16>, String> {
-	let guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
-	let otb = guard.as_ref().ok_or("OTB not loaded")?;
-	let mut ids: Vec<u16> = otb.server_to_client.keys().copied().collect();
-	ids.sort_unstable();
+pub fn all_server_ids(fm: tauri::State<FormatManagerState>) -> Result<Vec<u16>, String> {
+	let mgr = fm.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let ids = mgr.item_db().all_server_ids();
+	if ids.is_empty() {
+		return Err("OTB not loaded".to_string());
+	}
 	Ok(ids)
 }
 

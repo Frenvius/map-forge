@@ -8,6 +8,11 @@ edition = "2021"
 name = "nosbor_map_editor_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+default = ["tibia"]
+tibia = []
+bpak = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

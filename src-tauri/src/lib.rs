@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 mod formats;
-use formats::tibia::spr_manager::{SprManager, SprManagerState};
+use formats::{FormatManager, FormatManagerState};
 use formats::tibia::otb::OtbItems;
 
 mod settings;
@@ -58,7 +58,11 @@ pub(crate) type CopyBufferState = Arc<Mutex<Option<CopyBuffer>>>;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-	let spr_manager: SprManagerState = Arc::new(Mutex::new(SprManager::new()));
+	let format_manager: FormatManagerState = Arc::new(Mutex::new(FormatManager::new(
+		Box::new(formats::tibia::spr_manager::SprManager::new()),
+		Box::new(formats::tibia::providers::TibiaMetadataProvider),
+		Box::new(formats::tibia::providers::TibiaItemDatabase::new()),
+	)));
 	let otb_store: OtbState = Arc::new(Mutex::new(None));
 	let map_store: MapState = Arc::new(Mutex::new(MapStore::default()));
 	let materials_store: MaterialsState = Arc::new(Mutex::new(None));
@@ -76,7 +80,7 @@ pub fn run() {
 	}
 
 	builder
-		.manage(spr_manager)
+		.manage(format_manager)
 		.manage(otb_store)
 		.manage(map_store)
 		.manage(materials_store)
