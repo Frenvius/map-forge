@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { ThingType } from '~/domain/tibia';
 import { CreatureLook } from '~/domain/creature';
 import { loadCreatureDb } from '~/adapter/creatures';
-import { decodeDatResponse } from '~/adapter/datDecoder';
+import { decodeDatResponse } from '~/lib/formats/tibia/datDecoder';
 
 export const DEFAULT_VERSION = 860;
 

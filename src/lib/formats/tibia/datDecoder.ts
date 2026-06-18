@@ -1,4 +1,4 @@
-import { ThingType, ThingCategory, createThingType } from '~/domain/tibia';
+import { ThingType, ThingCategory, createThingType } from '~/lib/formats/tibia/types';
 
 const FLAG_IS_GROUND = 1 << 0;
 const FLAG_IS_GROUND_BORDER = 1 << 1;
