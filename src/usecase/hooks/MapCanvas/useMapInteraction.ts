@@ -61,7 +61,14 @@ type EditEntry =
   | { kind: 'item' }
   | { kind: 'spawn'; before: MapSpawns; after: MapSpawns }
   | { kind: 'waypoint'; before: MapWaypoints; after: MapWaypoints }
-  | { kind: 'selection'; before: SelectionSnapshot; after: SelectionSnapshot };
+  | {
+      kind: 'compound';
+      selBefore: SelectionSnapshot;
+      selAfter: SelectionSnapshot;
+      hasItem: boolean;
+      spawnBefore: MapSpawns | null;
+      spawnAfter: MapSpawns | null;
+    };
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -98,11 +105,24 @@ export function useMapInteraction(deps: InteractionDeps) {
     redoTimeline.current = [];
   }
 
-  function recordSelection(before: SelectionSnapshot) {
-    const after = selection.snapshot();
-    if (selectionSig(before) === selectionSig(after)) return;
-    undoTimeline.current.push({ kind: 'selection', before, after });
+  function pushCompound(
+    selBefore: SelectionSnapshot,
+    opts: { hasItem?: boolean; spawnBefore?: MapSpawns | null; spawnAfter?: MapSpawns | null }
+  ) {
+    undoTimeline.current.push({
+      kind: 'compound',
+      selBefore,
+      selAfter: selection.snapshot(),
+      hasItem: !!opts.hasItem,
+      spawnBefore: opts.spawnBefore ?? null,
+      spawnAfter: opts.spawnAfter ?? null
+    });
     redoTimeline.current = [];
+  }
+
+  function recordSelection(before: SelectionSnapshot) {
+    if (selectionSig(before) === selectionSig(selection.snapshot())) return;
+    pushCompound(before, {});
   }
 
   function editSpawns(next: MapSpawns) {
@@ -258,14 +278,13 @@ export function useMapInteraction(deps: InteractionDeps) {
       }
       return;
     }
+    const selBefore = selection.snapshot();
     const base = inputs.current.spawns ?? emptyMapSpawns();
-    if (md.kind === 'creature') {
-      editSpawns(moveCreature(base, md.from, dest));
-      selection.selectCreature(dest);
-    } else {
-      editSpawns(moveSpawn(base, md.from, dest));
-      selection.selectSpawn(dest);
-    }
+    const model = md.kind === 'creature' ? moveCreature(base, md.from, dest) : moveSpawn(base, md.from, dest);
+    inputs.current.onEditSpawns(model);
+    if (md.kind === 'creature') selection.selectCreature(dest);
+    else selection.selectSpawn(dest);
+    pushCompound(selBefore, { hasItem: false, spawnBefore: base, spawnAfter: model });
   }
 
   function tileFromClient(clientX: number, clientY: number): Position {
@@ -690,11 +709,15 @@ export function useMapInteraction(deps: InteractionDeps) {
     const { creatures, spawns } = selectedMarkers();
     if (!s && creatures.length === 0 && spawns.length === 0) return;
 
+    const selBefore = selection.snapshot();
+    const spawnBase = inputs.current.spawns ?? emptyMapSpawns();
+    let spawnModel: MapSpawns | null = null;
     if (creatures.length > 0 || spawns.length > 0) {
-      let model = inputs.current.spawns ?? emptyMapSpawns();
+      let model = spawnBase;
       for (const c of creatures) model = moveCreature(model, c, { x: c.x + dx, y: c.y + dy, z: c.z });
       for (const sp of spawns) model = moveSpawn(model, sp, { x: sp.x + dx, y: sp.y + dy, z: sp.z });
-      editSpawns(model);
+      spawnModel = model;
+      inputs.current.onEditSpawns(model);
       selection.selectCreature(null);
       selection.selectSpawn(null);
       selection.creatures.current.clear();
@@ -704,6 +727,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     }
 
     if (!s) {
+      pushCompound(selBefore, { hasItem: false, spawnBefore: spawnBase, spawnAfter: spawnModel });
       inputs.current.onSelect(null);
       return;
     }
@@ -717,13 +741,13 @@ export function useMapInteraction(deps: InteractionDeps) {
       dx,
       dy
     );
-    recordItemEdit();
     moveSelection(inputs.current.map.id, s.zs, s.xs, s.ys, s.all, dx, dy, inputs.current.automagic)
       .then((touched) => refetchTagged(touched))
       .then(() => {
         selection.setTiles(
           s.xs.map((x, i) => ({ x: x + dx, y: s.ys[i] + dy, z: s.zs[i], all: s.all[i] })).filter((t) => t.x >= 0 && t.y >= 0)
         );
+        pushCompound(selBefore, { hasItem: true, spawnBefore: spawnModel ? spawnBase : null, spawnAfter: spawnModel });
         atlas.version.current++;
         inputs.current.onSelect(toSelected(hoverAt(dest)));
       })
@@ -744,13 +768,17 @@ export function useMapInteraction(deps: InteractionDeps) {
       return;
     }
 
+    const selBefore = selection.snapshot();
     const { creatures, spawns } = selectedMarkers();
     const markerCount = creatures.length + spawns.length;
+    const spawnBase = inputs.current.spawns ?? emptyMapSpawns();
+    let spawnModel: MapSpawns | null = null;
     if (markerCount > 0) {
-      let model = inputs.current.spawns ?? emptyMapSpawns();
+      let model = spawnBase;
       for (const c of creatures) model = removeCreatureAt(model, c);
       for (const sp of spawns) model = removeSpawnAt(model, sp);
-      editSpawns(model);
+      spawnModel = model;
+      inputs.current.onEditSpawns(model);
       selection.selectCreature(null);
       selection.selectSpawn(null);
       selection.creatures.current.clear();
@@ -760,13 +788,13 @@ export function useMapInteraction(deps: InteractionDeps) {
     const s = selectionArrays();
     if (s) {
       const count = s.xs.length;
-      recordItemEdit();
       deleteSelection(inputs.current.map.id, s.zs, s.xs, s.ys, s.all, inputs.current.automagic)
         .then((touched) => {
           selection.clear();
           return refetchTagged(touched);
         })
         .then(() => {
+          pushCompound(selBefore, { hasItem: true, spawnBefore: spawnModel ? spawnBase : null, spawnAfter: spawnModel });
           atlas.version.current++;
           inputs.current.onSelect(null);
           if (!silent) emit(`Deleted ${plural(count + markerCount, 'object')}`);
@@ -779,6 +807,8 @@ export function useMapInteraction(deps: InteractionDeps) {
     }
 
     if (markerCount > 0) {
+      selection.clear();
+      pushCompound(selBefore, { hasItem: false, spawnBefore: spawnBase, spawnAfter: spawnModel });
       inputs.current.onSelect(null);
       if (!silent) emit(`Deleted ${plural(markerCount, 'object')}`);
     }
@@ -928,9 +958,19 @@ export function useMapInteraction(deps: InteractionDeps) {
         emit('Undo');
         return;
       }
-      if (e.kind === 'selection') {
+      if (e.kind === 'compound') {
         redoTimeline.current.push(e);
-        selection.restore(e.before);
+        if (e.spawnBefore) inputs.current.onEditSpawns(e.spawnBefore);
+        selection.restore(e.selBefore);
+        if (e.hasItem) {
+          try {
+            applyHistory(await undoEdit(inputs.current.map.id));
+          } catch (err) {
+            console.error('Undo failed', err);
+            emit('Undo failed');
+            return;
+          }
+        }
         emit('Undo');
         return;
       }
@@ -966,9 +1006,19 @@ export function useMapInteraction(deps: InteractionDeps) {
         emit('Redo');
         return;
       }
-      if (e.kind === 'selection') {
+      if (e.kind === 'compound') {
         undoTimeline.current.push(e);
-        selection.restore(e.after);
+        if (e.spawnAfter) inputs.current.onEditSpawns(e.spawnAfter);
+        selection.restore(e.selAfter);
+        if (e.hasItem) {
+          try {
+            applyHistory(await redoEdit(inputs.current.map.id));
+          } catch (err) {
+            console.error('Redo failed', err);
+            emit('Redo failed');
+            return;
+          }
+        }
         emit('Redo');
         return;
       }
