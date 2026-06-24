@@ -35,6 +35,8 @@ fn empty_door_id(m: &MapModel, house_id: u32) -> u8 {
 }
 use crate::materials::{self, Materials};
 use crate::formats::tibia::otb::OtbItems;
+use crate::lua_host::LuaState;
+use crate::scripting::ScopedLua;
 use crate::{CopyBufferState, MapState, MaterialsState, OtbState, PlaceFlags, PlacementState};
 
 pub struct CopyTile {
@@ -67,18 +69,10 @@ fn is_ground_item(place: &HashMap<u16, PlaceFlags>, mats: Option<&Materials>, cl
 }
 
 fn order_class(place: &HashMap<u16, PlaceFlags>, mats: Option<&Materials>, client: u16, server: u16) -> i32 {
-	if is_ground_item(place, mats, client, server) {
-		return GROUND_CLASS;
-	}
-	if mats.is_some_and(|m| m.is_border_item(server)) {
-		return BORDER_CLASS;
-	}
-	match place.get(&client).map_or(0, |p| p.top_order) {
-		1 => 1,
-		2 => 2,
-		3 => 3,
-		_ => NORMAL_CLASS,
-	}
+	let is_ground = is_ground_item(place, mats, client, server);
+	let is_border = !is_ground && mats.is_some_and(|m| m.is_border_item(server));
+	let top_order = place.get(&client).map_or(0, |p| p.top_order);
+	crate::scripting::stack_class(is_ground, is_border, top_order)
 }
 
 fn same_brush(mats: Option<&Materials>, brush_server: u16, item_server: u16) -> bool {
@@ -97,9 +91,10 @@ fn same_brush(mats: Option<&Materials>, brush_server: u16, item_server: u16) -> 
 }
 
 fn insert_ordered(stack: &mut Vec<(u16, u16)>, place: &HashMap<u16, PlaceFlags>, mats: Option<&Materials>, client: u16, server: u16) {
+	let ground = crate::scripting::ground_class();
 	let class = order_class(place, mats, client, server);
-	if class == GROUND_CLASS {
-		let head_ground = stack.first().is_some_and(|&(c, s)| order_class(place, mats, c, s) == GROUND_CLASS);
+	if class == ground {
+		let head_ground = stack.first().is_some_and(|&(c, s)| order_class(place, mats, c, s) == ground);
 		if head_ground {
 			stack[0] = (client, server);
 		} else {
@@ -108,7 +103,7 @@ fn insert_ordered(stack: &mut Vec<(u16, u16)>, place: &HashMap<u16, PlaceFlags>,
 		return;
 	}
 	let mut idx = 0;
-	if stack.first().is_some_and(|&(c, s)| order_class(place, mats, c, s) == GROUND_CLASS) {
+	if stack.first().is_some_and(|&(c, s)| order_class(place, mats, c, s) == ground) {
 		idx = 1;
 	}
 	while idx < stack.len() {
@@ -402,11 +397,19 @@ fn run_paint(
 					continue;
 				}
 				let (tx, ty) = (tx as u16, ty as u16);
+				let has_ground = stack_at(m, z, tx, ty).first().is_some_and(|&(c, s)| is_ground_item(place, Some(mats), c, s));
+				if !crate::scripting::allow_place(item, has_ground) {
+					continue;
+				}
 				let client = otb.client_id(item).unwrap_or(0);
 				insert_ordered(tile_stack_mut(m, z, tx, ty), place, Some(mats), client, item);
 				touched.insert(chunk_key_of(tx, ty));
 				painted.insert((tx, ty));
 			}
+			continue;
+		}
+		let has_ground = stack_at(m, z, x, y).first().is_some_and(|&(c, s)| is_ground_item(place, mats, c, s));
+		if !crate::scripting::allow_place(server_id, has_ground) {
 			continue;
 		}
 		insert_ordered(tile_stack_mut(m, z, x, y), place, mats, client_id, server_id);
@@ -438,6 +441,7 @@ pub fn paint_tiles(
 	map_state: tauri::State<MapState>,
 	materials_state: tauri::State<MaterialsState>,
 	placement_state: tauri::State<PlacementState>,
+	lua_state: tauri::State<LuaState>,
 ) -> Result<Vec<u32>, String> {
 	if xs.len() != ys.len() {
 		return Err("xs and ys length mismatch".into());
@@ -450,6 +454,9 @@ pub fn paint_tiles(
 	let materials_guard = materials_state.lock().map_err(|e| format!("Lock error: {}", e))?;
 	let mats = materials_guard.as_ref();
 	let place = placement_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+
+	let lua_guard = lua_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let _lua = ScopedLua::enter(&lua_guard);
 
 	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
 	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
@@ -890,7 +897,11 @@ pub fn delete_item(
 
 	let stack = tile_stack_mut(m, z, x, y);
 	let before = stack.len();
-	stack.retain(|&(c, s)| matches!(order_class(&place, mats, c, s), GROUND_CLASS | BORDER_CLASS));
+	let (g, b) = (crate::scripting::ground_class(), crate::scripting::border_class());
+	stack.retain(|&(c, s)| {
+		let cl = order_class(&place, mats, c, s);
+		cl == g || cl == b
+	});
 	let removed_any = stack.len() != before;
 
 	let mut touched: HashSet<u32> = [chunk_key_of(x, y)].into_iter().collect();
@@ -971,7 +982,11 @@ pub fn erase_area(
 	let (min_x, max_x) = (x0.min(x1), x0.max(x1));
 	let (min_y, max_y) = (y0.min(y1), y0.max(y1));
 	m.ensure_span(z, min_x, min_y, max_x, max_y, otb)?;
-	let kept = |c: u16, s: u16| matches!(order_class(&place, mats, c, s), GROUND_CLASS | BORDER_CLASS);
+	let (g, b) = (crate::scripting::ground_class(), crate::scripting::border_class());
+	let kept = |c: u16, s: u16| {
+		let cl = order_class(&place, mats, c, s);
+		cl == g || cl == b
+	};
 	let in_rect = |x: u16, y: u16| x >= min_x && x <= max_x && y >= min_y && y <= max_y;
 
 	let mut to_erase: Vec<(u16, u16)> = Vec::new();
@@ -1230,6 +1245,31 @@ mod tests {
 
 		insert_ordered(&mut stack, &place, None, 10, 101);
 		assert_eq!(stack, vec![(10, 101), (20, 200), (30, 300)]);
+	}
+
+	#[test]
+	fn lua_veto_blocks_placement() {
+		use crate::lua_host::LuaHost;
+		use std::path::PathBuf;
+		let otb = parse_otb(&fs::read(format!("{}/items.otb", DATA)).unwrap()).unwrap();
+		let mats = load_materials();
+		let grass = otb.client_id(4526).unwrap_or(0);
+		let mut place = HashMap::new();
+		place.insert(grass, PlaceFlags { ground: true, top_order: 0 });
+		let mut m = build_map_model(100, 100, &[], &[], &[], &[], &[], &[], &[], &[], &[], &[], &[], Vec::new(), 0);
+
+		let host = LuaHost::new(PathBuf::from("."));
+		host.lua
+			.load("nosbor = {}\nfunction nosbor.allow_place(s, hg) return s ~= 4526 end")
+			.exec()
+			.unwrap();
+		let _s = ScopedLua::enter(&host);
+
+		run_paint(&mut m, Some(&mats), &place, &otb, 7, &[50], &[50], 4526, grass, true, false, false);
+		assert!(stack_at(&m, 7, 50, 50).is_empty(), "lua veto blocks grass (4526)");
+
+		run_paint(&mut m, Some(&mats), &place, &otb, 7, &[51], &[51], 4527, otb.client_id(4527).unwrap_or(0), false, false, false);
+		assert!(!stack_at(&m, 7, 51, 51).is_empty(), "non-vetoed id still places");
 	}
 
 	#[test]

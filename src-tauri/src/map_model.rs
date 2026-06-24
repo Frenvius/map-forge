@@ -1164,7 +1164,8 @@ pub fn get_map_chunks(
 	map_state: tauri::State<MapState>,
 ) -> Result<Response, String> {
 	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
-	let otb = otb_guard.as_ref().ok_or("items.otb not loaded")?;
+	let empty = OtbItems::default();
+	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
 	let model = guard.maps.get_mut(&map_id).ok_or("map not loaded - call open_otbm first")?;
 	model.ensure_chunks(z, &keys, otb)?;
@@ -1180,7 +1181,8 @@ pub fn get_chunk_tooltips(
 	map_state: tauri::State<MapState>,
 ) -> Result<Response, String> {
 	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
-	let otb = otb_guard.as_ref().ok_or("items.otb not loaded")?;
+	let empty = OtbItems::default();
+	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
 	let model = guard.maps.get_mut(&map_id).ok_or("map not loaded - call open_otbm first")?;
 	model.ensure_chunks(z, &keys, otb)?;
@@ -1208,7 +1210,8 @@ pub fn get_minimap(
 ) -> Result<Response, String> {
 	let palette_guard = palette_state.lock().map_err(|e| format!("Lock error: {}", e))?;
 	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
-	let otb = otb_guard.as_ref().ok_or("items.otb not loaded")?;
+	let empty = OtbItems::default();
+	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
 	let model = guard.maps.get_mut(&map_id).ok_or("map not loaded - call open_otbm first")?;
 	let payload = model.window_minimap(z, x, y, w, h, &palette_guard, otb)?;
@@ -1248,7 +1251,8 @@ pub fn get_tile_items(
 	map_state: tauri::State<MapState>,
 ) -> Result<TilePropertiesPayload, String> {
 	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
-	let otb = otb_guard.as_ref().ok_or("items.otb not loaded")?;
+	let empty = OtbItems::default();
+	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
 	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
 	let chunk_key = chunk_key_of(x, y);

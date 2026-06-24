@@ -27,14 +27,18 @@ pub fn write_file_text(path: String, contents: String) -> Result<(), String> {
 	fs::write(&path, contents).map_err(|e| format!("Failed to write file {}: {}", path, e))
 }
 
-#[tauri::command]
-pub fn default_data_dir(version: u32) -> String {
-	let v = version.to_string();
+pub fn data_dir_for(version: u32, client_data: Option<String>) -> String {
 	let exe = std::env::current_exe().ok();
 	let exe_dir = exe.as_deref().and_then(|e| e.parent());
+	let sub = client_data.unwrap_or_else(|| format!("data{}{}", std::path::MAIN_SEPARATOR, version));
 	exe_dir
-		.map(|b| b.join("data").join(&v).to_string_lossy().into_owned())
-		.unwrap_or_else(|| format!("data{}{}", std::path::MAIN_SEPARATOR, v))
+		.map(|b| b.join(&sub).to_string_lossy().into_owned())
+		.unwrap_or(sub)
+}
+
+#[tauri::command]
+pub fn default_data_dir(version: u32, lua_state: tauri::State<crate::lua_host::LuaState>) -> String {
+	data_dir_for(version, crate::lua_format::lua_app_config(&lua_state).client_data)
 }
 
 #[tauri::command]
@@ -152,8 +156,20 @@ pub fn load_otb(path: String, fm: tauri::State<FormatManagerState>, otb_state: t
 }
 
 #[tauri::command]
-pub fn map_client_ids(server_ids: Vec<u16>, fm: tauri::State<FormatManagerState>) -> Result<Vec<u32>, String> {
+pub fn map_client_ids(
+	server_ids: Vec<u16>,
+	fm: tauri::State<FormatManagerState>,
+	client_ids: tauri::State<crate::lua_format::ClientIdState>,
+) -> Result<Vec<u32>, String> {
 	let mgr = fm.lock().map_err(|e| format!("Lock error: {}", e))?;
+	if mgr.item_db().all_server_ids().is_empty() {
+		drop(mgr);
+		let map = client_ids.lock().map_err(|e| format!("Lock error: {}", e))?;
+		return Ok(server_ids
+			.into_iter()
+			.map(|sid| u32::from(map.get(&sid).copied().unwrap_or(sid)))
+			.collect());
+	}
 	Ok(server_ids
 		.into_iter()
 		.map(|sid| mgr.item_db().client_id(sid).map(u32::from).unwrap_or(0))
@@ -161,13 +177,23 @@ pub fn map_client_ids(server_ids: Vec<u16>, fm: tauri::State<FormatManagerState>
 }
 
 #[tauri::command]
-pub fn all_server_ids(fm: tauri::State<FormatManagerState>) -> Result<Vec<u16>, String> {
+pub fn all_server_ids(
+	fm: tauri::State<FormatManagerState>,
+	itemdb: tauri::State<crate::lua_format::ItemDbState>,
+) -> Result<Vec<u16>, String> {
 	let mgr = fm.lock().map_err(|e| format!("Lock error: {}", e))?;
 	let ids = mgr.item_db().all_server_ids();
-	if ids.is_empty() {
-		return Err("OTB not loaded".to_string());
+	if !ids.is_empty() {
+		return Ok(ids);
 	}
-	Ok(ids)
+	drop(mgr);
+	let db = itemdb.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let mut v: Vec<u16> = db.items.keys().filter_map(|&k| u16::try_from(k).ok()).collect();
+	v.sort_unstable();
+	if v.is_empty() {
+		return Err("No items loaded".to_string());
+	}
+	Ok(v)
 }
 
 #[tauri::command]

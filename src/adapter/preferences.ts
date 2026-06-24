@@ -6,6 +6,13 @@ import { DEFAULT_COPY_POSITION_FORMAT } from '~/usecase/positionFormat';
 const KEY = 'clientConfig';
 const GENERAL_KEY = 'generalConfig';
 const EDITOR_KEY = 'editorConfig';
+export async function loadAssetPath(key: string): Promise<string> {
+  return getSetting<string>(key, '');
+}
+
+export async function saveAssetPath(key: string, path: string): Promise<void> {
+  await setSetting(key, path);
+}
 
 export interface ClientConfig {
   defaultVersion: number;

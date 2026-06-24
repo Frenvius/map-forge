@@ -1,10 +1,13 @@
 import React from 'react';
+import { invoke } from '@tauri-apps/api/core';
 
 import { PaletteData } from '~/domain/palette';
 import { loadPalette } from '~/adapter/palette';
 import { setMinimapPalette } from '~/adapter/minimap';
-import { loadClientConfig } from '~/adapter/preferences';
+import { loadClientConfig, loadAssetPath } from '~/adapter/preferences';
 import { loadAssets, initDataDir, LoadedAssets } from '~/adapter/assets';
+import { uiConfig, loadScriptedAssets, loadScriptedItemdb } from '~/adapter/scripts';
+import { buildScriptedAssets } from '~/usecase/scriptedAssets';
 
 export interface AssetsState {
   assets: LoadedAssets | null;
@@ -21,6 +24,7 @@ export interface AssetsState {
   switchVersion: (v: number) => Promise<void>;
   setStatus: React.Dispatch<React.SetStateAction<string>>;
   setError: React.Dispatch<React.SetStateAction<string | null>>;
+  setAssets: React.Dispatch<React.SetStateAction<LoadedAssets | null>>;
 }
 
 export const useAssets = (): AssetsState => {
@@ -91,6 +95,36 @@ export const useAssets = (): AssetsState => {
       setVersion(v);
       loadedVersionRef.current = v;
 
+      const ui = await uiConfig().catch(() => null);
+      if (ui?.assets && !ui.clientVersions) {
+        const saved = await loadAssetPath(ui.assets.setting).catch(() => '');
+        if (!saved) {
+          setClientConfigured(false);
+          setAssetsMissing(true);
+          setStatus(`Select ${ui.assets.label} in Preferences`);
+          return;
+        }
+        setClientConfigured(true);
+        try {
+          const dir = saved.replace(/[^\\/]+$/, '');
+          if (ui.assets.itemdb) await loadScriptedItemdb(`${dir}${ui.assets.itemdb}`).catch(() => 0);
+          await loadScriptedAssets(saved);
+          const scripted = await buildScriptedAssets(saved);
+          if (cancelled) return;
+          setAssets(scripted);
+          await invoke('load_materials', { dataDir: resolvedDataDir }).catch(() => undefined);
+          const pal = await loadPalette(resolvedDataDir).catch(() => null);
+          setPalette(pal);
+          setStatus(`${ui.assets.label} ready - ${scripted.items.size} items${pal ? '' : ', no materials'}.`);
+        } catch (e) {
+          if (cancelled) return;
+          setAssetsMissing(true);
+          setError(`Failed to load ${ui.assets.label}: ${e}`);
+          setStatus('Asset load failed');
+        }
+        return;
+      }
+
       const clientDir = (config.paths[v] ?? '').trim();
       if (!clientDir) {
         setClientConfigured(false);
@@ -135,6 +169,7 @@ export const useAssets = (): AssetsState => {
     minimapReady,
     switchVersion,
     setStatus,
-    setError
+    setError,
+    setAssets
   };
 };

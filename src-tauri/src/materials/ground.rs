@@ -255,7 +255,8 @@ impl Materials {
 			let Some(border) = self.borders.get(&cluster.border_id) else {
 				continue;
 			};
-			let packed = self.border_types[(cluster.alignment & 0xFF) as usize];
+			let mask = (cluster.alignment & 0xFF) as u8;
+			let packed = crate::scripting::border_type(mask).unwrap_or(self.border_types[mask as usize]);
 			for shift in 0..4 {
 				let direction = ((packed >> (shift * 8)) & 0xFF) as u8;
 				if direction == BORDER_NONE {

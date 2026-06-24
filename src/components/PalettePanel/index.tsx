@@ -189,12 +189,18 @@ const PalettePanel = ({
           brushes
             .filter((b) => b.kind !== 'creature' && b.lookServerId != null)
             .map((b) => b.lookServerId as number)
-            .filter((id) => !serverToClient.current.has(id))
+            .filter((id) => {
+              const cached = serverToClient.current.get(id);
+              return cached === undefined || cached === 0;
+            })
         )
       ];
       if (needed.length > 0) {
         const clientIds = await mapClientIds(needed);
-        needed.forEach((sid, i) => serverToClient.current.set(sid, clientIds[i] ?? 0));
+        needed.forEach((sid, i) => {
+          const cid = clientIds[i] ?? 0;
+          if (cid !== 0) serverToClient.current.set(sid, cid);
+        });
       }
       if (cancelled) return;
 

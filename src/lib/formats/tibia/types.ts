@@ -1,3 +1,5 @@
+import type { Thing } from '~/domain/thing';
+
 export enum ThingCategory {
   ITEM = 'item',
   OUTFIT = 'outfit',
@@ -58,7 +60,7 @@ export interface Sprite {
   compressedPixels?: Uint8Array;
 }
 
-export interface ThingType {
+export interface ThingType extends Thing {
   id: number;
   width: number;
   height: number;
@@ -242,7 +244,7 @@ export function isValidSpriteId(spriteId: number, spritesCount?: number): boolea
 }
 
 export function getTextureIndex(
-  thing: ThingType,
+  thing: Thing,
   layer: number,
   patternX: number,
   patternY: number,
@@ -267,11 +269,11 @@ export function stackFrame(count: number): number {
   return 7;
 }
 
-export function isCountStack(thing: ThingType): boolean {
+export function isCountStack(thing: Thing): boolean {
   return thing.stackable && thing.width <= 1 && thing.height <= 1 && thing.layers <= 1;
 }
 
-export function stackSpriteIndex(thing: ThingType, count: number): number {
+export function stackSpriteIndex(thing: Thing, count: number): number {
   const v = stackFrame(count);
   const n = thing.spriteIndex.length;
   if (n <= 1) return 0;
@@ -279,7 +281,7 @@ export function stackSpriteIndex(thing: ThingType, count: number): number {
 }
 
 export function getSpriteIndex(
-  thing: ThingType,
+  thing: Thing,
   width: number,
   height: number,
   layer: number,

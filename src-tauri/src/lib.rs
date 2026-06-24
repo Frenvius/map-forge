@@ -13,11 +13,14 @@ use materials::Materials;
 
 mod commands;
 mod creatures;
+mod lua_format;
+mod lua_host;
 mod map_edit;
 mod map_load;
 mod map_meta;
 mod map_model;
 mod map_save;
+mod scripting;
 
 use formats::tibia::client_version::peek_otbm_version;
 use commands::{
@@ -34,6 +37,12 @@ use map_edit::{
 	paint_zone, paste_selection,
 	preview_paint, set_house, CopyBuffer,
 };
+use lua_format::{
+	item_name, item_names, item_sprite, load_scripted_assets, load_scripted_itemdb, open_scripted_map, registered_formats,
+	app_config, lua_app_config, scripted_things, ui_config, ClientIdState, ItemDb, ItemDbState, ItemSpriteState, ThingDef,
+	ThingsState,
+};
+use lua_host::{list_scripts, read_script, reload_scripts, scripts_dir, write_script, LuaHost, LuaState};
 use map_load::open_otbm;
 use map_meta::{get_map_properties, get_towns, get_waypoints, map_statistics, set_map_properties, set_towns};
 use map_model::{
@@ -70,6 +79,11 @@ pub fn run() {
 	let copy_buffer: CopyBufferState = Arc::new(Mutex::new(None));
 	let minimap_palette: MinimapPaletteState = Arc::new(Mutex::new(Vec::new()));
 	let creature_watcher: CreatureWatcherState = Mutex::new(None);
+	let lua_host: LuaState = Arc::new(Mutex::new(LuaHost::new(scripts_dir())));
+	let item_db: ItemDbState = Arc::new(Mutex::new(ItemDb::default()));
+	let item_sprites: ItemSpriteState = Arc::new(Mutex::new(HashMap::new()));
+	let scripted_things_state: ThingsState = Arc::new(Mutex::new(Vec::<ThingDef>::new()));
+	let client_id_state: ClientIdState = Arc::new(Mutex::new(HashMap::new()));
 
 	let mut builder = tauri::Builder::default()
 		.plugin(tauri_plugin_dialog::init());
@@ -88,7 +102,26 @@ pub fn run() {
 		.manage(copy_buffer)
 		.manage(minimap_palette)
 		.manage(creature_watcher)
+		.manage(lua_host)
+		.manage(item_db)
+		.manage(item_sprites)
+		.manage(scripted_things_state)
+		.manage(client_id_state)
 		.invoke_handler(tauri::generate_handler![
+			reload_scripts,
+			list_scripts,
+			read_script,
+			write_script,
+			open_scripted_map,
+			load_scripted_itemdb,
+			load_scripted_assets,
+			scripted_things,
+			registered_formats,
+			item_name,
+			item_names,
+			item_sprite,
+			ui_config,
+			app_config,
 			read_file,
 			read_file_text,
 			write_file_text,
@@ -148,6 +181,25 @@ pub fn run() {
 			peek_otbm_version
 		])
 		.setup(move |app| {
+			{
+				use tauri::Manager;
+				let state = app.state::<LuaState>().inner().clone();
+				let locked = state.lock();
+				if let Ok(mut h) = locked {
+					match h.load_all() {
+						Ok(n) => println!("[lua] loaded {} script(s) from {}", n, h.dir.display()),
+						Err(e) => {
+							h.last_error = Some(e.clone());
+							eprintln!("[lua] load failed: {}", e);
+						}
+					}
+				}
+				if let Some(name) = lua_app_config(&state).name {
+					if let Some(window) = app.get_webview_window("main") {
+						let _ = window.set_title(&name);
+					}
+				}
+			}
 			#[cfg(target_os = "macos")]
 			{
 				use tauri::Manager;

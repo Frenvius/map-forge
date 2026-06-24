@@ -36,6 +36,7 @@ interface AppMenuProps {
   onToggleMinimap: () => void;
   onMapProperties: () => void;
   onMapStatistics: () => void;
+  onOpenScripts: () => void;
   onOpenPreferences: () => void;
   onToggleProperties: () => void;
   onOpenRecent: (path: string) => void;
@@ -65,6 +66,7 @@ const AppMenu = ({
   onMapProperties,
   onMapStatistics,
   propertiesOpen,
+  onOpenScripts,
   onOpenPreferences,
   onToggleProperties,
   onSelectPaletteCategory,
@@ -181,6 +183,7 @@ const AppMenu = ({
             </MenubarSubContent>
           </MenubarSub>
           <MenubarSeparator />
+          <MenubarItem onSelect={onOpenScripts}>Lua Scripts...</MenubarItem>
           <MenubarItem onSelect={onOpenPreferences}>
             Preferences...
             <MenubarShortcut>Ctrl+,</MenubarShortcut>

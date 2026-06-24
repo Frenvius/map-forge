@@ -364,6 +364,20 @@ mod tests {
 	}
 
 	#[test]
+	fn lua_wall_segment_matches_native_tables() {
+		use crate::lua_host::LuaHost;
+		use crate::scripting::{wall_segment, ScopedLua};
+		let (full, half) = build_wall_tables();
+		let mut host = LuaHost::new(PathBuf::from("../data/scripts"));
+		host.load_all().unwrap();
+		let _s = ScopedLua::enter(&host);
+		for mask in 0u8..16 {
+			assert_eq!(wall_segment(mask, false), Some(full[mask as usize]), "full mask {}", mask);
+			assert_eq!(wall_segment(mask, true), Some(half[mask as usize]), "half mask {}", mask);
+		}
+	}
+
+	#[test]
 	fn wall_tables_and_alignment_lookup() {
 		let (full, _half) = build_wall_tables();
 		assert_eq!(full[0], WALL_POLE);

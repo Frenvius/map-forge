@@ -54,7 +54,7 @@ import { MapCamera } from './useMapCamera';
 import { SpriteAtlas } from './useSpriteAtlas';
 import { ChunkTilesCache } from './useChunkTiles';
 import { ChunkMeshCache } from './useChunkMeshes';
-import { buildSelectionGhost } from './meshBuilder';
+import { buildSelectionGhost, ClipboardGhostTile } from './meshBuilder';
 import { Selection, BoxSelection, selectionSig, SelectionSnapshot } from './useSelection';
 
 type EditEntry =
@@ -94,6 +94,7 @@ export function useMapInteraction(deps: InteractionDeps) {
   const [creatureForm, setCreatureForm] = React.useState<CreatureForm | null>(null);
   const [waypointForm, setWaypointForm] = React.useState<WaypointForm | null>(null);
   const clipboardCount = React.useRef(0);
+  const clipboardGhostSource = React.useRef<ClipboardGhostTile[] | null>(null);
   const modalOpen = React.useRef(false);
   modalOpen.current = spawnForm !== null || creatureForm !== null || waypointForm !== null;
 
@@ -663,8 +664,7 @@ export function useMapInteraction(deps: InteractionDeps) {
         const top = end - 1;
         const clientId = ct.clientIds[top];
         const serverId = ct.serverIds[top];
-        const thing = items.get(clientId);
-        item = { serverId, clientId, name: itemNames.get(serverId) ?? thing?.marketName ?? '', count };
+        item = { serverId, clientId, name: itemNames.get(serverId) ?? '', count };
       }
     }
     return { x: pos.x, y: pos.y, z: pos.z, hasTile: found >= 0, item };
@@ -690,7 +690,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     const serverId = ct.serverIds[slot];
     const thing = items.get(clientId);
     if (!thing?.isGround) return null;
-    return { serverId, clientId, name: itemNames.get(serverId) ?? thing.marketName ?? '', count: 1 };
+    return { serverId, clientId, name: itemNames.get(serverId) ?? '', count: 1 };
   }
 
   function finishMove() {
@@ -856,11 +856,51 @@ export function useMapInteraction(deps: InteractionDeps) {
     return { creatures, spawns };
   }
 
+  function captureClipboardGhost(): ClipboardGhostTile[] | null {
+    const sel = [...selection.entries.current.values()];
+    if (sel.length === 0) return null;
+    let minX = Infinity;
+    let minY = Infinity;
+    let minZ = Infinity;
+    for (const t of sel) {
+      if (t.x < minX) minX = t.x;
+      if (t.y < minY) minY = t.y;
+      if (t.z < minZ) minZ = t.z;
+    }
+    const out: ClipboardGhostTile[] = [];
+    for (const t of sel) {
+      const ct = tiles.get(Math.floor(t.x / CHUNK), Math.floor(t.y / CHUNK), t.z, scene.frameTick.current);
+      if (!ct) continue;
+      let found = -1;
+      for (let i = 0; i < ct.tileX.length; i++) {
+        if (ct.tileX[i] === t.x && ct.tileY[i] === t.y) {
+          found = i;
+          break;
+        }
+      }
+      if (found < 0) continue;
+      const start = ct.itemOffset[found];
+      const end = ct.itemOffset[found + 1];
+      if (end <= start) continue;
+      const from = t.all ? start : end - 1;
+      const items: { clientId: number; count: number }[] = [];
+      for (let ii = from; ii < end; ii++) items.push({ clientId: ct.clientIds[ii], count: ct.counts[ii] });
+      out.push({ dx: t.x - minX, dy: t.y - minY, dz: t.z - minZ, items });
+    }
+    return out.length > 0 ? out : null;
+  }
+
   function copySelected(silent = false): Promise<number> {
     const s = selectionArrays();
     if (!s) {
       if (!silent) emit('Nothing to copy');
       return Promise.resolve(0);
+    }
+    try {
+      clipboardGhostSource.current = captureClipboardGhost();
+    } catch (err) {
+      console.error('Clipboard ghost capture failed', err);
+      clipboardGhostSource.current = null;
     }
     return copySelection(inputs.current.map.id, s.zs, s.xs, s.ys, s.all)
       .then((n) => {
@@ -870,7 +910,7 @@ export function useMapInteraction(deps: InteractionDeps) {
       })
       .catch((err) => {
         console.error('Copy failed', err);
-        emit('Copy failed');
+        emit(`Copy failed: ${err}`);
         return 0;
       });
   }
@@ -901,7 +941,7 @@ export function useMapInteraction(deps: InteractionDeps) {
       })
       .catch((err) => {
         console.error('Paste failed', err);
-        emit('Paste failed');
+        emit(`Paste failed: ${err}`);
       });
   }
 
@@ -1047,6 +1087,13 @@ export function useMapInteraction(deps: InteractionDeps) {
       return;
     }
     if (e.button !== 0) return;
+
+    if (scene.pasteGhost.current) {
+      const pos = tileAt(e);
+      scene.pasteGhost.current = null;
+      pasteAt(pos);
+      return;
+    }
 
     if (inputs.current.placingWaypoint) {
       const pos = tileAt(e);
@@ -1267,6 +1314,11 @@ export function useMapInteraction(deps: InteractionDeps) {
   function onContextMenu(e: React.MouseEvent) {
     e.preventDefault();
     if (modalOpen.current || !canvasRef.current) return;
+    if (scene.pasteGhost.current) {
+      scene.pasteGhost.current = null;
+      emit('Paste cancelled');
+      return;
+    }
     if (inputs.current.activeBrush) inputs.current.onSelectBrush(null);
     if (inputs.current.activeTool !== 'select') inputs.current.onToolChange('select');
     const tile = tileAt(e);
@@ -1390,6 +1442,11 @@ export function useMapInteraction(deps: InteractionDeps) {
         inputs.current.onPlaceWaypoint();
         return;
       }
+      if (e.key === 'Escape' && scene.pasteGhost.current) {
+        scene.pasteGhost.current = null;
+        emit('Paste cancelled');
+        return;
+      }
       if (modalOpen.current) return;
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
@@ -1415,8 +1472,12 @@ export function useMapInteraction(deps: InteractionDeps) {
       }
       if (mod && key === 'v') {
         e.preventDefault();
-        const t = scene.hoveredTile.current;
-        if (t) pasteAt(t);
+        if (clipboardCount.current === 0) {
+          emit('Clipboard empty');
+          return;
+        }
+        scene.pasteGhost.current = clipboardGhostSource.current ?? [];
+        emit('Click to paste, Esc to cancel');
         return;
       }
       if (

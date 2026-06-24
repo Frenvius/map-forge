@@ -94,6 +94,11 @@ export async function openOtbm(path: string, onProgress?: OtbmProgress): Promise
   }
 }
 
+export async function openScriptedMap(path: string): Promise<MapMeta> {
+  const response = await invoke<Uint8Array | ArrayBuffer>('open_scripted_map', { path });
+  return decodeMeta(toUint8(response));
+}
+
 export async function newOtbm(width: number, height: number): Promise<MapMeta> {
   const response = await invoke<Uint8Array | ArrayBuffer>('new_otbm', { width, height });
   return decodeMeta(toUint8(response));

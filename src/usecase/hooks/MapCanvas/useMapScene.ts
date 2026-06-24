@@ -2,6 +2,8 @@ import React from 'react';
 
 import { Position, PreviewTile } from '~/domain/map';
 
+import { ClipboardGhostTile } from './meshBuilder';
+
 export interface MoveDrag {
   from: Position;
   startX: number;
@@ -40,6 +42,7 @@ export interface MapScene {
   moveDrag: React.MutableRefObject<MoveDrag | null>;
   moveDest: React.MutableRefObject<Position | null>;
   pendingMove: React.MutableRefObject<Float32Array | null>;
+  pasteGhost: React.MutableRefObject<ClipboardGhostTile[] | null>;
   markerDrag: React.MutableRefObject<MarkerDrag | null>;
   markerDest: React.MutableRefObject<Position | null>;
   spawnResize: React.MutableRefObject<{ center: Position; radius: number } | null>;
@@ -67,6 +70,7 @@ export function useMapScene(): MapScene {
     moveDrag: React.useRef<MoveDrag | null>(null),
     moveDest: React.useRef<Position | null>(null),
     pendingMove: React.useRef<Float32Array | null>(null),
+    pasteGhost: React.useRef<ClipboardGhostTile[] | null>(null),
     markerDrag: React.useRef<MarkerDrag | null>(null),
     markerDest: React.useRef<Position | null>(null),
     spawnResize: React.useRef<{ center: Position; radius: number } | null>(null)

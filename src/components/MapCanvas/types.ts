@@ -2,6 +2,7 @@ import React from 'react';
 
 import { ToolId } from '~/domain/tools';
 import { ThingType } from '~/domain/tibia';
+import { Thing } from '~/domain/thing';
 import { MapHouses } from '~/domain/house';
 import { MapSpawns } from '~/domain/creature';
 import { ZoneVisibility } from '~/domain/zones';
@@ -121,7 +122,7 @@ export interface MapCanvasProps {
 }
 
 export interface MapCanvasContextInputs {
-  items: Map<number, ThingType>;
+  items: Map<number, Thing>;
   outfits: Map<number, ThingType>;
   itemNames: Map<number, string>;
   sprPath: string;

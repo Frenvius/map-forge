@@ -4,8 +4,9 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import { MapMeta } from '~/domain/map';
 import { snapZoom } from '~/usecase/zoom';
 import { getMapView, setMapView } from '~/adapter/mapViews';
-import { newOtbm, openOtbm, closeMap, saveOtbm } from '~/adapter/map';
 import { addRecentMap, loadRecentMaps, clearRecentMaps } from '~/adapter/recentMaps';
+import { newOtbm, openOtbm, closeMap, saveOtbm, openScriptedMap } from '~/adapter/map';
+import { registeredFormats, itemNames as fetchItemNames } from '~/adapter/scripts';
 import { loadOtb, LoadedAssets, defaultDataDir, resolveMapItems, peekOtbmVersion, loadItemNamesPath } from '~/adapter/assets';
 
 const NEW_MAP_WIDTH = 1024;
@@ -72,7 +73,13 @@ export const useMapTabs = (
   const [itemNames, setItemNames] = React.useState<Map<number, string> | null>(null);
   const loadedOtbPath = React.useRef<string | null>(null);
 
-  const prepareItems = async (path?: string): Promise<{ otbPath: string; names: Map<number, string>; version: number }> => {
+  const prepareItems = async (
+    path?: string,
+    scripted = false
+  ): Promise<{ otbPath: string; names: Map<number, string>; version: number }> => {
+    if (scripted) {
+      return { otbPath: '', names: new Map<number, string>(), version };
+    }
     let detectedVersion = version;
     let peekedDataDir: string | null = null;
 
@@ -209,16 +216,25 @@ export const useMapTabs = (
     setProgress({ value: 0, label: 'Reading map...' });
     setStatus('Reading map...');
     try {
-      const items = await prepareItems(path);
-      const data = await openOtbm(path, (_phase, value) => {
-        setProgress({ value, label: 'Reading map...' });
-      });
-      const name = path.split(/[\\/]/).pop() ?? 'map.otbm';
+      const isOtbm = path.toLowerCase().endsWith('.otbm');
+      const items = await prepareItems(path, !isOtbm);
+      let tabItems = items;
+      let data: MapMeta;
+      if (isOtbm) {
+        data = await openOtbm(path, (_phase, value) => {
+          setProgress({ value, label: 'Reading map...' });
+        });
+      } else {
+        const names = await fetchItemNames().catch(() => new Map<number, string>());
+        if (names.size > 0) tabItems = { ...items, names };
+        data = await openScriptedMap(path);
+      }
+      const name = path.split(/[\\/]/).pop() ?? 'map';
       const saved = await getMapView(path);
       const initial = saved
         ? { center: { x: saved.cx, y: saved.cy }, zoom: saved.zoom, floor: saved.floor }
         : { center: { x: data.center.x, y: data.center.y }, zoom: 1, floor: data.center.floor };
-      addTab(name, data, items, path, initial);
+      addTab(name, data, tabItems, path, initial);
       const dims = `${data.bounds.minX}..${data.bounds.maxX} x ${data.bounds.minY}..${data.bounds.maxY}`;
       setStatus(`${name} - ${data.tileCount} tiles - ${dims} - ${data.width}x${data.height}`);
       void addRecentMap(path).then(setRecent);
@@ -233,11 +249,13 @@ export const useMapTabs = (
 
   const handleOpen = async () => {
     if (!assets) return;
+    const scripted = await registeredFormats().catch(() => []);
+    const extensions = ['otbm', ...scripted.filter((f) => f.kind === 'map').map((f) => f.ext)];
     const selected = await open({
       multiple: false,
       defaultPath: defaultDataDir(),
-      title: 'Open OTBM map',
-      filters: [{ name: 'OTBM Maps', extensions: ['otbm'] }]
+      title: 'Open map',
+      filters: [{ name: 'Maps', extensions }]
     });
     if (!selected || typeof selected !== 'string') return;
     await openPath(selected);

@@ -21,6 +21,7 @@ import AboutDialog from '~/components/AboutDialog';
 import { MIN_ZOOM, MAX_ZOOM } from '~/usecase/zoom';
 import PalettePanel from '~/components/PalettePanel';
 import { serializeHouseXml } from '~/adapter/houses';
+import ScriptEditor from '~/components/ScriptEditor';
 import MapProperties from '~/components/MapProperties';
 import MapStatistics from '~/components/MapStatistics';
 import AssetsMissing from '~/components/AssetsMissing';
@@ -84,6 +85,7 @@ const App = () => {
   const [mapPropsOpen, setMapPropsOpen] = React.useState(false);
   const [statsOpen, setStatsOpen] = React.useState(false);
   const [aboutOpen, setAboutOpen] = React.useState(false);
+  const [scriptsOpen, setScriptsOpen] = React.useState(false);
   const [preferencesOpen, setPreferencesOpen] = React.useState(false);
   const [prefsTab, setPrefsTab] = React.useState<'general' | 'editor' | 'client'>('general');
   const openPreferences = React.useCallback((tab: 'general' | 'editor' | 'client' = 'general') => {
@@ -473,6 +475,7 @@ const App = () => {
         onMapStatistics={openMapStatistics}
         onSaveAs={() => void handleSaveAs()}
         onToggleProperties={toggleProperties}
+        onOpenScripts={() => setScriptsOpen(true)}
         onOpenPreferences={() => openPreferences()}
         onOpenRecent={(path) => void openPath(path)}
         onSelectPaletteCategory={setPaletteCategory}
@@ -492,6 +495,8 @@ const App = () => {
       />
 
       <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
+
+      <ScriptEditor open={scriptsOpen} onOpenChange={setScriptsOpen} />
 
       <MapTowns open={townsOpen} onGoto={gotoPosition} onOpenChange={setTownsOpen} mapId={active?.map.id ?? null} />
 

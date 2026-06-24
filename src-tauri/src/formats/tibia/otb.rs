@@ -6,6 +6,7 @@ const ROOT_ATTR_VERSION: u8 = 0x01;
 const ITEM_ATTR_SERVERID: u8 = 0x10;
 const ITEM_ATTR_CLIENTID: u8 = 0x11;
 
+#[derive(Default)]
 pub struct OtbItems {
 	pub server_to_client: HashMap<u16, u16>,
 }

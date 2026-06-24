@@ -34,6 +34,7 @@ import {
   appendCreatures,
   buildCreatureGhost,
   buildSelectionGhost,
+  buildClipboardGhost,
   buildSpawnAreaGhost,
   spawnCountsForChunk
 } from './meshBuilder';
@@ -801,8 +802,15 @@ export function useMapRenderer(deps: RendererDeps) {
       }
     }
 
-    const placing = inputs.current.placingWaypoint;
     const hover = scene.hoveredTile.current;
+    const pasteSrc = scene.pasteGhost.current;
+    if (pasteSrc && hover) {
+      const ctx = { items: inputs.current.items, tiles, atlas };
+      const ghost = buildClipboardGhost(ctx, frameTick.current, floorZ, pasteSrc, hover.x, hover.y, hover.z, missing);
+      if (ghost) renderer.drawGhost(ghost, camX, camY, scale, 0.6);
+    }
+
+    const placing = inputs.current.placingWaypoint;
     if (placing && hover && hover.z === floorZ && inputs.current.waypointMarkerClientId) {
       const markerThing = inputs.current.items.get(inputs.current.waypointMarkerClientId);
       const ghost = markerThing ? buildThingGhost(markerThing, hover.x, hover.y, atlas, frameTick.current, missing) : null;

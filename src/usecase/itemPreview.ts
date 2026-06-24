@@ -1,7 +1,8 @@
 import { LoadedSprite } from '~/domain/sprite';
-import { ThingType, getSpriteIndex, SPRITE_SIZE } from '~/domain/tibia';
+import { getSpriteIndex, SPRITE_SIZE } from '~/domain/tibia';
+import { Thing } from '~/domain/thing';
 
-export function buildItemPreview(thing: ThingType | undefined, spriteData: Map<number, LoadedSprite>, tileSize = SPRITE_SIZE): string | undefined {
+export function buildItemPreview(thing: Thing | undefined, spriteData: Map<number, LoadedSprite>, tileSize = SPRITE_SIZE): string | undefined {
   if (!thing || thing.spriteIndex.length === 0) return undefined;
   const w = Math.max(1, thing.width);
   const h = Math.max(1, thing.height);

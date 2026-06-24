@@ -55,6 +55,10 @@ impl FormatManager {
         &mut *self.sprite
     }
 
+    pub fn set_sprite(&mut self, sprite: Box<dyn SpriteProvider>) {
+        self.sprite = sprite;
+    }
+
     pub fn metadata(&mut self) -> &mut dyn MetadataProvider {
         &mut *self.metadata
     }

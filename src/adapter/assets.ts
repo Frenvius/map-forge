@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 
 import { ThingType } from '~/domain/tibia';
+import { Thing } from '~/domain/thing';
 import { CreatureLook } from '~/domain/creature';
 import { loadCreatureDb } from '~/adapter/creatures';
 import { decodeDatResponse } from '~/lib/formats/tibia/datDecoder';
@@ -30,7 +31,7 @@ const SPAWN_MARKER_SERVER_ID = 1507;
 const WAYPOINT_MARKER_SERVER_ID = 1397;
 
 export interface LoadedAssets {
-  items: Map<number, ThingType>;
+  items: Map<number, Thing>;
   outfits: Map<number, ThingType>;
   itemNames: Map<number, string>;
   creatures: Map<string, CreatureLook>;

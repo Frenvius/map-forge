@@ -2,7 +2,7 @@ import React from 'react';
 import { X } from 'lucide-react';
 
 import { cn } from '~/usecase/classNames';
-import { ThingType } from '~/domain/tibia';
+import { Thing } from '~/domain/thing';
 import { LoadedSprite } from '~/domain/sprite';
 import { loadSprites } from '~/adapter/sprites';
 import { Hint } from '~/components/commons/ui/tooltip';
@@ -20,7 +20,7 @@ interface ItemPropertiesPanelProps {
   onClose?: () => void;
   item: SelectedItem | null;
   dragHandle?: DragHandleProps;
-  items: Map<number, ThingType> | null;
+  items: Map<number, Thing> | null;
   itemNames: Map<number, string> | null;
 }
 
@@ -32,7 +32,7 @@ const ItemSprite = ({
 }: {
   version: number;
   clientId: number;
-  items: Map<number, ThingType>;
+  items: Map<number, Thing>;
   cache: Map<number, LoadedSprite>;
 }) => {
   const ref = React.useRef<HTMLCanvasElement>(null);
@@ -127,19 +127,10 @@ const ItemPropertiesPanel = ({ mapId, item, items, itemNames, dragHandle, onClos
   }, [data, items, assets]);
 
   const sel: TileItemEntry | null = data && selectedIdx >= 0 ? (data.items[selectedIdx] ?? null) : null;
-  const selThing: ThingType | null = sel && items ? (items.get(sel.clientId) ?? null) : null;
+  const selThing: Thing | null = sel && items ? (items.get(sel.clientId) ?? null) : null;
+  const selAttrs = selThing?.attrs ? Object.entries(selThing.attrs) : [];
 
-  const nameOf = (e: TileItemEntry) => {
-    if (itemNames) {
-      const n = itemNames.get(e.serverId);
-      if (n) return n;
-    }
-    if (items) {
-      const t = items.get(e.clientId);
-      if (t?.marketName) return t.marketName;
-    }
-    return '';
-  };
+  const nameOf = (e: TileItemEntry) => itemNames?.get(e.serverId) ?? '';
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden rounded-lg bg-card shadow-island">
@@ -214,7 +205,7 @@ const ItemPropertiesPanel = ({ mapId, item, items, itemNames, dragHandle, onClos
                 </div>
               </div>
 
-              {(selThing?.writable || selThing?.writableOnce || sel.text) && (
+              {sel.text && (
                 <div className="border-b border-border/50 px-2 pb-1.5 pt-1.5">
                   <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Text Description
@@ -250,6 +241,18 @@ const ItemPropertiesPanel = ({ mapId, item, items, itemNames, dragHandle, onClos
                       <span className="font-mono text-foreground">{sel.tier}</span>
                     </div>
                   )}
+                </div>
+              )}
+
+              {selAttrs.length > 0 && (
+                <div className="border-t border-border/50 px-2 pb-1.5 pt-1.5">
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Attributes</div>
+                  {selAttrs.map(([k, v]) => (
+                    <div key={k} className="flex items-center justify-between py-0.5">
+                      <span className="text-muted-foreground">{k}:</span>
+                      <span className="font-mono text-foreground">{String(v)}</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </>

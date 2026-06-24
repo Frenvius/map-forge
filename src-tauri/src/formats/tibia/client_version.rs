@@ -95,7 +95,7 @@ pub fn peek_otbm_version(path: String) -> Result<OtbmVersionInfo, String> {
     let dir_name = data_dir_for_otb_id(items_minor);
     let version = dir_name.and_then(|d| d.parse::<u32>().ok());
     let data_dir = dir_name.and_then(|d| {
-        let dir = crate::commands::default_data_dir(d.parse::<u32>().unwrap_or(0));
+        let dir = crate::commands::data_dir_for(d.parse::<u32>().unwrap_or(0), None);
         let otb = std::path::Path::new(&dir).join("items.otb");
         otb.is_file().then_some(dir)
     });

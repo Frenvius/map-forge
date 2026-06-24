@@ -140,9 +140,9 @@ impl Materials {
 
 	pub fn wall_id_for(&self, own: u32, tiledata: u32, seed: u32) -> Option<u16> {
 		let idx = (tiledata & 0x0F) as usize;
-		let full = self.full_border_types[idx] as usize;
+		let full = crate::scripting::wall_segment(idx as u8, false).unwrap_or(self.full_border_types[idx]) as usize;
 		self.pick_wall_alignment(own, full, seed).or_else(|| {
-			let half = self.half_border_types[idx] as usize;
+			let half = crate::scripting::wall_segment(idx as u8, true).unwrap_or(self.half_border_types[idx]) as usize;
 			self.pick_wall_alignment(own, half, seed)
 		})
 	}

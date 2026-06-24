@@ -1,5 +1,6 @@
 import { PaletteBrush } from '~/domain/palette';
 import { ThingType, getSpriteIndex, SPRITE_SIZE } from '~/domain/tibia';
+import { Thing } from '~/domain/thing';
 import { isColorized, OutfitColors } from '~/domain/outfit';
 
 export interface SpriteCell {
@@ -19,10 +20,10 @@ export interface BrushSpriteLayout {
 
 export function resolveBrushThing(
   brush: PaletteBrush,
-  items: Map<number, ThingType>,
+  items: Map<number, Thing>,
   outfits: Map<number, ThingType>,
   serverToClient: Map<number, number>
-): ThingType | null {
+): Thing | null {
   if (brush.kind === 'creature') {
     if (brush.lookType == null) return null;
     return outfits.get(brush.lookType) ?? null;
@@ -33,7 +34,7 @@ export function resolveBrushThing(
   return items.get(clientId) ?? null;
 }
 
-export function brushSpriteLayout(thing: ThingType, isCreature: boolean, colors?: OutfitColors, tileSize = SPRITE_SIZE): BrushSpriteLayout {
+export function brushSpriteLayout(thing: Thing, isCreature: boolean, colors?: OutfitColors, tileSize = SPRITE_SIZE): BrushSpriteLayout {
   const cols = Math.max(1, thing.width);
   const rows = Math.max(1, thing.height);
   const patternX = isCreature ? Math.min(2, Math.max(0, thing.patternX - 1)) : 0;

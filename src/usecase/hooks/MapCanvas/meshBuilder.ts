@@ -4,6 +4,7 @@ import { SpawnArea, CreaturePlacement } from '~/domain/creature';
 import { isColorized, OutfitColors, colorizeOutfit } from '~/domain/outfit';
 import { TILE, CHUNK, MAX_ELEVATION } from '~/components/MapCanvas/constants';
 import { ThingType, isCountStack, getSpriteIndex, stackSpriteIndex } from '~/domain/tibia';
+import { Thing } from '~/domain/thing';
 
 import { SpriteAtlas } from './useSpriteAtlas';
 import { ChunkTilesCache } from './useChunkTiles';
@@ -38,7 +39,7 @@ export function spawnCountsForChunk(areas: SpawnArea[], cx: number, cy: number):
 }
 
 export interface MeshContext {
-  items: Map<number, ThingType>;
+  items: Map<number, Thing>;
   tiles: ChunkTilesCache;
   atlas: SpriteAtlas;
 }
@@ -212,7 +213,7 @@ export function buildSpawnAreaGhost(
 }
 
 export function buildThingGhost(
-  thing: ThingType,
+  thing: Thing,
   x: number,
   y: number,
   atlas: SpriteAtlas,
@@ -239,6 +240,66 @@ export function buildThingGhost(
       }
     }
   }
+  return inst.length > 0 ? new Float32Array(inst) : null;
+}
+
+export interface ClipboardGhostTile {
+  dx: number;
+  dy: number;
+  dz: number;
+  items: { clientId: number; count: number }[];
+}
+
+export function buildClipboardGhost(
+  ctx: MeshContext,
+  tick: number,
+  floorZ: number,
+  source: ClipboardGhostTile[],
+  baseX: number,
+  baseY: number,
+  baseZ: number,
+  missing: Set<number>
+): Float32Array | null {
+  const { items, atlas } = ctx;
+  const inst: number[] = [];
+
+  for (const tile of source) {
+    if (baseZ + tile.dz !== floorZ) continue;
+    const tx = baseX + tile.dx;
+    const ty = baseY + tile.dy;
+    let drawElevation = 0;
+    for (const it of tile.items) {
+      const thing = items.get(it.clientId);
+      if (!thing || thing.spriteIndex.length === 0) continue;
+      const px = thing.patternX > 0 ? tx % thing.patternX : 0;
+      const py = thing.patternY > 0 ? ty % thing.patternY : 0;
+      const countStack = isCountStack(thing);
+      const stackIdx = countStack ? stackSpriteIndex(thing, it.count) : 0;
+      const ox = (thing.offsetX || 0) + drawElevation;
+      const oy = (thing.offsetY || 0) + drawElevation;
+      for (let l = 0; l < thing.layers; l++) {
+        for (let h = 0; h < thing.height; h++) {
+          for (let w = 0; w < thing.width; w++) {
+            const sid = thing.spriteIndex[countStack ? stackIdx : getSpriteIndex(thing, w, h, l, px, py, 0, 0)];
+            if (!sid) continue;
+            const data = atlas.data.current.get(sid);
+            if (!data) {
+              missing.add(sid);
+              continue;
+            }
+            atlas.lastUsed.current.set(sid, tick);
+            if (data.empty) continue;
+            const slot = atlas.slotFor(sid, data);
+            if (slot < 0) continue;
+            const { u0, v0 } = slotUV(slot);
+            inst.push((tx - w) * TILE - ox, (ty - h) * TILE - oy, u0, v0, 0, 1, 0);
+          }
+        }
+      }
+      if (thing.hasElevation) drawElevation = Math.min(drawElevation + thing.elevation, MAX_ELEVATION);
+    }
+  }
+
   return inst.length > 0 ? new Float32Array(inst) : null;
 }
 
