@@ -450,7 +450,10 @@ pub fn paint_tiles(
 	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
 	let empty_otb = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty_otb);
-	let client_id = otb.client_id(server_id).unwrap_or(0);
+	let client_id = match otb_guard.as_ref() {
+		Some(o) => o.client_id(server_id).unwrap_or(0),
+		None => server_id,
+	};
 
 	let materials_guard = materials_state.lock().map_err(|e| format!("Lock error: {}", e))?;
 	let mats = materials_guard.as_ref();
@@ -678,7 +681,10 @@ pub fn preview_paint(
 	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
 	let empty_otb = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty_otb);
-	let client_id = otb.client_id(server_id).unwrap_or(0);
+	let client_id = match otb_guard.as_ref() {
+		Some(o) => o.client_id(server_id).unwrap_or(0),
+		None => server_id,
+	};
 	let materials_guard = materials_state.lock().map_err(|e| format!("Lock error: {}", e))?;
 	let Some(mats) = materials_guard.as_ref() else {
 		return Ok(empty());

@@ -64,6 +64,7 @@ export interface UiConfig {
 export interface AppConfig {
   name: string | null;
   dataDir: string | null;
+  floorOffset: number | null;
 }
 
 export async function appConfig(): Promise<AppConfig> {

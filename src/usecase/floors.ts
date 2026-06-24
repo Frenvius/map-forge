@@ -2,6 +2,16 @@ export const GROUND_LAYER = 7;
 export const MAP_MAX_LAYER = 15;
 export const MAP_MIN_LAYER = 0;
 
+let floorShiftTiles = 1;
+
+export function setFloorShift(tiles: number): void {
+  floorShiftTiles = Number.isFinite(tiles) && tiles >= 0 ? tiles : 1;
+}
+
+export function floorShift(): number {
+  return floorShiftTiles;
+}
+
 export interface FloorRange {
   startZ: number;
   endZ: number;
@@ -35,7 +45,7 @@ export function selectionFloorBoxes(
   const deepest = mode === 'current' ? current : mode === 'lower' ? MAP_MAX_LAYER : visibleFloorRange(current).startZ;
   const boxes: FloorBox[] = [];
   for (let z = current; z <= deepest; z++) {
-    const shift = compensate ? z - current : 0;
+    const shift = compensate ? (z - current) * floorShiftTiles : 0;
     const fax = ax - shift;
     const fay = ay - shift;
     const fbx = bx - shift;

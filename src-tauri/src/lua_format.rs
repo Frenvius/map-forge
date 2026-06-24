@@ -13,7 +13,7 @@ use tauri::State;
 use crate::formats::{FormatManagerState, SpriteHeader, SpriteProvider};
 use crate::lua_host::LuaState;
 use crate::map_model::{build_map_model, serialize_meta, store_map, MapModel};
-use crate::MapState;
+use crate::{MapState, PlaceFlags, PlacementState};
 
 const SPRITE_SIZE: u32 = 32;
 
@@ -210,6 +210,9 @@ struct TileAcc {
 	y: u16,
 	z: u8,
 	items: Vec<u16>,
+	flags: u32,
+	house: u32,
+	door: u8,
 }
 
 #[derive(Default)]
@@ -297,7 +300,7 @@ fn with_tile<R>(x: u16, y: u16, z: u8, f: impl FnOnce(&mut TileAcc) -> R) -> Opt
 		let mut guard = b.borrow_mut();
 		let b = guard.as_mut()?;
 		let idx = *b.index.entry((x, y, z)).or_insert_with(|| {
-			b.tiles.push(TileAcc { x, y, z, items: Vec::new() });
+			b.tiles.push(TileAcc { x, y, z, items: Vec::new(), flags: 0, house: 0, door: 0 });
 			b.tiles.len() - 1
 		});
 		Some(f(&mut b.tiles[idx]))
@@ -332,6 +335,17 @@ pub fn register(lua: &Lua) -> mlua::Result<()> {
 		"add_item",
 		lua.create_function(|_, (x, y, z, id, _attrs): (u16, u16, u8, u16, Option<Table>)| {
 			with_tile(x, y, z, |t| t.items.push(id));
+			Ok(())
+		})?,
+	)?;
+	map.set(
+		"set_flags",
+		lua.create_function(|_, (x, y, z, flags, house, door): (u16, u16, u8, u32, u32, u8)| {
+			with_tile(x, y, z, |t| {
+				t.flags = flags;
+				t.house = house;
+				t.door = door;
+			});
 			Ok(())
 		})?,
 	)?;
@@ -510,6 +524,18 @@ pub fn register(lua: &Lua) -> mlua::Result<()> {
 	)?;
 
 	nosbor.set(
+		"deflate",
+		lua.create_function(|lua, data: mlua::String| {
+			use flate2::write::ZlibEncoder;
+			use flate2::Compression;
+			let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
+			e.write_all(&data.as_bytes()).map_err(mlua::Error::external)?;
+			let out = e.finish().map_err(mlua::Error::external)?;
+			lua.create_string(&out)
+		})?,
+	)?;
+
+	nosbor.set(
 		"register_format",
 		lua.create_function(|lua, t: Table| {
 			let ext: String = t.get("ext")?;
@@ -531,6 +557,9 @@ fn take_built() -> Result<MapModel, String> {
 	let mut item_count = Vec::with_capacity(b.tiles.len());
 	let mut ids = Vec::new();
 	let mut subtypes = Vec::new();
+	let mut flags = Vec::with_capacity(b.tiles.len());
+	let mut house_ids = Vec::with_capacity(b.tiles.len());
+	let mut door_ids = Vec::with_capacity(b.tiles.len());
 	for t in &b.tiles {
 		let start = ids.len() as u32;
 		for &id in &t.items {
@@ -542,9 +571,13 @@ fn take_built() -> Result<MapModel, String> {
 		zs.push(t.z);
 		item_start.push(start);
 		item_count.push(t.items.len() as u16);
+		flags.push(t.flags);
+		house_ids.push(t.house);
+		door_ids.push(t.door);
 	}
 	Ok(build_map_model(
-		b.width, b.height, &xs, &ys, &zs, &item_start, &item_count, &ids, &ids, &subtypes, &[], &[], &[], Vec::new(), 0,
+		b.width, b.height, &xs, &ys, &zs, &item_start, &item_count, &ids, &ids, &subtypes, &flags, &house_ids, &door_ids,
+		Vec::new(), 0,
 	))
 }
 
@@ -585,6 +618,53 @@ fn format_read(lua: &Lua, ext: &str) -> Result<Function, String> {
 fn call_read(read: &Function, bytes: &[u8]) -> Result<(), String> {
 	let buf = LightUserData(bytes.as_ptr() as *mut c_void);
 	read.call::<()>((buf, bytes.len())).map_err(|e| format!("lua read error: {}", e))
+}
+
+fn format_write(lua: &Lua, ext: &str) -> Result<Function, String> {
+	let nosbor: Table = lua.globals().get("nosbor").map_err(|e| e.to_string())?;
+	let formats: Table = nosbor.get("_formats").map_err(|e| e.to_string())?;
+	let fmt: Table = formats.get(ext.to_string()).map_err(|_| format!("no registered format for .{}", ext))?;
+	fmt.get("write").map_err(|_| format!("format .{} has no write function", ext))
+}
+
+#[tauri::command]
+pub fn save_scripted_map(map_id: u32, path: String, map_state: State<MapState>, lua_state: State<LuaState>) -> Result<(), String> {
+	let ext = ext_of(&path);
+	let lua_guard = lua_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let lua = &lua_guard.lua;
+	let write = format_write(lua, &ext)?;
+
+	let guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let model = guard.maps.get(&map_id).ok_or("map not loaded")?;
+	let tiles = crate::map_save::export_tiles(model);
+
+	let build = || -> mlua::Result<mlua::String> {
+		let map_tbl = lua.create_table()?;
+		map_tbl.set("width", model.width)?;
+		map_tbl.set("height", model.height)?;
+		let tiles_tbl = lua.create_table_with_capacity(tiles.len(), 0)?;
+		for (i, t) in tiles.iter().enumerate() {
+			let tt = lua.create_table()?;
+			tt.set("x", t.x)?;
+			tt.set("y", t.y)?;
+			tt.set("z", t.z)?;
+			tt.set("flags", t.flags)?;
+			tt.set("house", t.house)?;
+			tt.set("door", t.door)?;
+			let items = lua.create_table_with_capacity(t.items.len(), 0)?;
+			for (k, &id) in t.items.iter().enumerate() {
+				items.set(k + 1, id)?;
+			}
+			tt.set("items", items)?;
+			tiles_tbl.set(i + 1, tt)?;
+		}
+		map_tbl.set("tiles", tiles_tbl)?;
+		write.call::<mlua::String>(map_tbl)
+	};
+
+	let bytes = build().map_err(|e| format!("lua write error: {}", e))?;
+	std::fs::write(&path, &bytes.as_bytes()).map_err(|e| format!("Failed to write {}: {}", path, e))?;
+	Ok(())
 }
 
 #[tauri::command]
@@ -649,6 +729,7 @@ pub fn load_scripted_assets(
 	item_sprite_state: State<ItemSpriteState>,
 	things_state: State<ThingsState>,
 	client_id_state: State<ClientIdState>,
+	placement_state: State<PlacementState>,
 	lua_state: State<LuaState>,
 ) -> Result<usize, String> {
 	let ext = ext_of(&path);
@@ -665,11 +746,20 @@ pub fn load_scripted_assets(
 		(provider, item_map, client_map, take_things())
 	};
 
+	let mut placement: HashMap<u16, PlaceFlags> = HashMap::with_capacity(things.len());
+	for t in &things {
+		if let Ok(cid) = u16::try_from(t.id) {
+			let top_order = if t.is_on_top { 3 } else if t.is_on_bottom { 1 } else { 0 };
+			placement.insert(cid, PlaceFlags { ground: t.is_ground, top_order });
+		}
+	}
+
 	let count = provider.sprites.len();
 	fm.lock().map_err(|e| format!("Lock error: {}", e))?.set_sprite(Box::new(provider));
 	*item_sprite_state.lock().map_err(|e| format!("Lock error: {}", e))? = item_map;
 	*things_state.lock().map_err(|e| format!("Lock error: {}", e))? = things;
 	*client_id_state.lock().map_err(|e| format!("Lock error: {}", e))? = client_map;
+	*placement_state.lock().map_err(|e| format!("Lock error: {}", e))? = placement;
 	Ok(count)
 }
 
@@ -733,6 +823,7 @@ pub struct AppConfig {
 	pub name: Option<String>,
 	pub data_dir: Option<String>,
 	pub client_data: Option<String>,
+	pub floor_offset: Option<f64>,
 }
 
 fn read_app_config(lua: &Lua) -> AppConfig {
@@ -757,6 +848,9 @@ fn read_app_config(lua: &Lua) -> AppConfig {
 		if !dir.is_empty() {
 			cfg.client_data = Some(dir);
 		}
+	}
+	if let Ok(offset) = app.get::<f64>("floor_offset") {
+		cfg.floor_offset = Some(offset);
 	}
 	cfg
 }

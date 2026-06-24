@@ -2,7 +2,7 @@ import React from 'react';
 
 import { isZoneTool } from '~/domain/tools';
 import { visibleZoneBits } from '~/domain/zones';
-import { visibleFloorRange } from '~/usecase/floors';
+import { visibleFloorRange, floorShift } from '~/usecase/floors';
 import { slotUV, GLRenderer } from '~/usecase/glRenderer';
 import { MapCanvasInputs } from '~/components/MapCanvas/types';
 import { SpawnArea, CreaturePlacement } from '~/domain/creature';
@@ -721,7 +721,7 @@ export function useMapRenderer(deps: RendererDeps) {
     for (let z = startZ; z >= endZ; z--) {
       if (dimLowerFloors && z === endZ) renderer.dimViewport(LOWER_FLOOR_DIM);
 
-      const shift = (z - endZ) * TILE;
+      const shift = (z - endZ) * TILE * floorShift();
       renderer.setFloorOffset(shift, shift);
 
       const fCamX = camX - shift;

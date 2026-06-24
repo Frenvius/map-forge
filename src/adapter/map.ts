@@ -99,6 +99,10 @@ export async function openScriptedMap(path: string): Promise<MapMeta> {
   return decodeMeta(toUint8(response));
 }
 
+export async function saveScriptedMap(mapId: number, path: string): Promise<void> {
+  await invoke('save_scripted_map', { mapId, path });
+}
+
 export async function newOtbm(width: number, height: number): Promise<MapMeta> {
   const response = await invoke<Uint8Array | ArrayBuffer>('new_otbm', { width, height });
   return decodeMeta(toUint8(response));

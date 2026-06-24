@@ -39,8 +39,8 @@ use map_edit::{
 };
 use lua_format::{
 	item_name, item_names, item_sprite, load_scripted_assets, load_scripted_itemdb, open_scripted_map, registered_formats,
-	app_config, lua_app_config, scripted_things, ui_config, ClientIdState, ItemDb, ItemDbState, ItemSpriteState, ThingDef,
-	ThingsState,
+	app_config, lua_app_config, save_scripted_map, scripted_things, ui_config, ClientIdState, ItemDb, ItemDbState, ItemSpriteState,
+	ThingDef, ThingsState,
 };
 use lua_host::{list_scripts, read_script, reload_scripts, scripts_dir, write_script, LuaHost, LuaState};
 use map_load::open_otbm;
@@ -113,6 +113,7 @@ pub fn run() {
 			read_script,
 			write_script,
 			open_scripted_map,
+			save_scripted_map,
 			load_scripted_itemdb,
 			load_scripted_assets,
 			scripted_things,

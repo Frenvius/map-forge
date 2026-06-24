@@ -634,6 +634,81 @@ fn build_from_model(model: &MapModel, door_set: &HashSet<u16>, report: &mut dyn 
 	Ok((w.into_bytes(), index))
 }
 
+pub(crate) struct ExportTile {
+	pub z: u8,
+	pub x: u16,
+	pub y: u16,
+	pub flags: u32,
+	pub house: u32,
+	pub door: u8,
+	pub items: Vec<u16>,
+}
+
+pub(crate) fn export_tiles(model: &MapModel) -> Vec<ExportTile> {
+	let edits = flatten_edits(model);
+	let flag_edits = flatten_flag_edits(model);
+	let house_edits = flatten_house_edits(model);
+	let door_edits = flatten_door_edits(model);
+
+	let mut out: Vec<ExportTile> = Vec::new();
+	for z in 0u8..=15 {
+		let empty_edits = HashMap::new();
+		let zedits = edits.get(&z).unwrap_or(&empty_edits);
+		let empty_flags = HashMap::new();
+		let zflags = flag_edits.get(&z).unwrap_or(&empty_flags);
+		let empty_houses = HashMap::new();
+		let zhouses = house_edits.get(&z).unwrap_or(&empty_houses);
+		let empty_doors = HashMap::new();
+		let zdoors = door_edits.get(&z).unwrap_or(&empty_doors);
+		let mut base_pos: HashSet<u32> = HashSet::new();
+
+		if let Some(floor) = model.floors.get(&z) {
+			for &(start, end) in floor.values() {
+				for t in start as usize..end as usize {
+					let (x, y) = (model.tile_x[t], model.tile_y[t]);
+					let pos = pos_key(x, y);
+					base_pos.insert(pos);
+					if zedits.contains_key(&pos) {
+						continue;
+					}
+					let s = model.item_off[t] as usize;
+					let e = model.item_off[t + 1] as usize;
+					let items: Vec<u16> = (s..e).map(|j| model.server_ids[j]).collect();
+					let flags = zflags.get(&pos).copied().unwrap_or(model.tile_flags[t]);
+					let house = zhouses.get(&pos).copied().unwrap_or_else(|| model.house_ids.get(t).copied().unwrap_or(0));
+					let door = zdoors.get(&pos).copied().unwrap_or_else(|| model.door_ids.get(t).copied().unwrap_or(0));
+					out.push(ExportTile { z, x, y, flags, house, door, items });
+				}
+			}
+		}
+		for (&pos, &stack) in zedits {
+			let flags = zflags.get(&pos).copied().unwrap_or(0);
+			let house = zhouses.get(&pos).copied().unwrap_or(0);
+			let door = zdoors.get(&pos).copied().unwrap_or(0);
+			if !stack.is_empty() || flags != 0 || house != 0 {
+				let items: Vec<u16> = stack.iter().map(|&(_c, s)| s).collect();
+				out.push(ExportTile { z, x: (pos >> 16) as u16, y: (pos & 0xFFFF) as u16, flags, house, door, items });
+			}
+		}
+		for (&pos, &flags) in zflags {
+			if base_pos.contains(&pos) || zedits.contains_key(&pos) {
+				continue;
+			}
+			let house = zhouses.get(&pos).copied().unwrap_or(0);
+			if flags != 0 || house != 0 {
+				out.push(ExportTile { z, x: (pos >> 16) as u16, y: (pos & 0xFFFF) as u16, flags, house, door: 0, items: Vec::new() });
+			}
+		}
+		for (&pos, &house) in zhouses {
+			if house != 0 && !base_pos.contains(&pos) && !zedits.contains_key(&pos) && !zflags.contains_key(&pos) {
+				let door = zdoors.get(&pos).copied().unwrap_or(0);
+				out.push(ExportTile { z, x: (pos >> 16) as u16, y: (pos & 0xFFFF) as u16, flags: 0, house, door, items: Vec::new() });
+			}
+		}
+	}
+	out
+}
+
 fn build_otbm_bytes(model: &MapModel, source: Option<&[u8]>, door_set: &HashSet<u16>, report: &mut dyn FnMut(f64, &str)) -> Result<(Vec<u8>, MapIndex), String> {
 	match source {
 		Some(bytes) => build_faithful(model, bytes, door_set, report),

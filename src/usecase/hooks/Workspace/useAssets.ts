@@ -6,8 +6,9 @@ import { loadPalette } from '~/adapter/palette';
 import { setMinimapPalette } from '~/adapter/minimap';
 import { loadClientConfig, loadAssetPath } from '~/adapter/preferences';
 import { loadAssets, initDataDir, LoadedAssets } from '~/adapter/assets';
-import { uiConfig, loadScriptedAssets, loadScriptedItemdb } from '~/adapter/scripts';
+import { uiConfig, appConfig, loadScriptedAssets, loadScriptedItemdb } from '~/adapter/scripts';
 import { buildScriptedAssets } from '~/usecase/scriptedAssets';
+import { setFloorShift } from '~/usecase/floors';
 
 export interface AssetsState {
   assets: LoadedAssets | null;
@@ -87,6 +88,8 @@ export const useAssets = (): AssetsState => {
     setAssetsMissing(false);
     setStatus('Loading client assets...');
     void (async () => {
+      const app = await appConfig().catch(() => null);
+      setFloorShift(app?.floorOffset ?? 1);
       const config = await loadClientConfig();
       const v = config.defaultVersion;
       const resolvedDataDir = await initDataDir(v);

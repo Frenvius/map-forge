@@ -5,7 +5,7 @@ import { MapMeta } from '~/domain/map';
 import { snapZoom } from '~/usecase/zoom';
 import { getMapView, setMapView } from '~/adapter/mapViews';
 import { addRecentMap, loadRecentMaps, clearRecentMaps } from '~/adapter/recentMaps';
-import { newOtbm, openOtbm, closeMap, saveOtbm, openScriptedMap } from '~/adapter/map';
+import { newOtbm, openOtbm, closeMap, saveOtbm, openScriptedMap, saveScriptedMap } from '~/adapter/map';
 import { registeredFormats, itemNames as fetchItemNames } from '~/adapter/scripts';
 import { loadOtb, LoadedAssets, defaultDataDir, resolveMapItems, peekOtbmVersion, loadItemNamesPath } from '~/adapter/assets';
 
@@ -287,7 +287,12 @@ export const useMapTabs = (
     setSaving({ value: 0, label: 'Preparing...' });
     setStatus('Saving map...');
     try {
-      await saveOtbm(tab.map.id, path, (value, label) => setSaving({ value, label }));
+      if (path.toLowerCase().endsWith('.otbm')) {
+        await saveOtbm(tab.map.id, path, (value, label) => setSaving({ value, label }));
+      } else {
+        setSaving({ value: 0.5, label: 'Writing...' });
+        await saveScriptedMap(tab.map.id, path);
+      }
       await onAfterSave?.(tab.map.id, path);
       const name = path.split(/[\\/]/).pop() ?? tab.title;
       updateActive({ path, title: name });
@@ -304,10 +309,17 @@ export const useMapTabs = (
 
   const handleSaveAs = async () => {
     if (!active) return;
+    const scripted = await registeredFormats().catch(() => []);
+    const mapExts = scripted.filter((f) => f.kind === 'map').map((f) => f.ext);
+    const currentExt = active.path?.split('.').pop()?.toLowerCase();
+    const extensions =
+      currentExt && mapExts.includes(currentExt)
+        ? [currentExt, ...mapExts.filter((e) => e !== currentExt), 'otbm']
+        : [...mapExts, 'otbm'];
     const selected = await save({
-      defaultPath: active.path ?? `${active.title.replace(/\.otbm$/i, '')}.otbm`,
-      title: 'Save OTBM map',
-      filters: [{ name: 'OTBM Maps', extensions: ['otbm'] }]
+      defaultPath: active.path ?? `${active.title.replace(/\.[^.]+$/i, '')}.${extensions[0] ?? 'otbm'}`,
+      title: 'Save map',
+      filters: [{ name: 'Maps', extensions }]
     });
     if (!selected) return;
     await saveToPath(active, selected);
