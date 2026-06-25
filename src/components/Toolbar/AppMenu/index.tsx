@@ -80,6 +80,8 @@ const AppMenu = ({
     toggleRenderStats,
     showBlocking,
     toggleBlocking,
+    showShade,
+    toggleShade,
     showTooltips,
     toggleTooltips,
     tooltipTypes,
@@ -248,6 +250,10 @@ const AppMenu = ({
           <MenubarSeparator />
           <MenubarCheckboxItem checked={showBlocking} onCheckedChange={toggleBlocking} onSelect={(e) => e.preventDefault()}>
             Show blocking
+          </MenubarCheckboxItem>
+          <MenubarCheckboxItem checked={showShade} onCheckedChange={toggleShade} onSelect={(e) => e.preventDefault()}>
+            Shade lower floors
+            <MenubarShortcut>Q</MenubarShortcut>
           </MenubarCheckboxItem>
           <MenubarSeparator />
           <MenubarCheckboxItem checked={showTooltips} onCheckedChange={toggleTooltips} onSelect={(e) => e.preventDefault()}>

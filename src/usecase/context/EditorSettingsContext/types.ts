@@ -11,6 +11,7 @@ export interface EditorSettingsValue {
   showWaypoints: boolean;
   showHouses: boolean;
   showBlocking: boolean;
+  showShade: boolean;
   showTooltips: boolean;
   tooltipTypes: TooltipTypes;
   showRenderStats: boolean;
@@ -30,6 +31,7 @@ export interface EditorSettingsValue {
   toggleWaypoints: () => void;
   toggleHouses: () => void;
   toggleBlocking: () => void;
+  toggleShade: () => void;
   toggleTooltips: () => void;
   toggleTooltipType: (key: TooltipTypeKey) => void;
   toggleTooltipTypes: (keys: TooltipTypeKey[]) => void;

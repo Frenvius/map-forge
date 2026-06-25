@@ -21,6 +21,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
   const [showWaypoints, setShowWaypoints] = useSetting('showWaypoints', true);
   const [showHouses, setShowHouses] = useSetting('showHouses', true);
   const [showBlocking, setShowBlocking] = useSetting('showBlocking', false);
+  const [showShade, setShowShade] = useSetting('showShade', true);
   const [showTooltips, setShowTooltips] = useSetting('showTooltips', true);
   const [tooltipTypes, setTooltipTypes] = useSetting<TooltipTypes>('tooltipTypes', DEFAULT_TOOLTIP_TYPES, {
     revive: reviveTooltipTypes
@@ -60,6 +61,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
   const toggleWaypoints = React.useCallback(() => setShowWaypoints((v) => !v), [setShowWaypoints]);
   const toggleHouses = React.useCallback(() => setShowHouses((v) => !v), [setShowHouses]);
   const toggleBlocking = React.useCallback(() => setShowBlocking((v) => !v), [setShowBlocking]);
+  const toggleShade = React.useCallback(() => setShowShade((v) => !v), [setShowShade]);
   const toggleTooltips = React.useCallback(() => setShowTooltips((v) => !v), [setShowTooltips]);
   const toggleTooltipType = React.useCallback(
     (key: TooltipTypeKey) => setTooltipTypes((v) => ({ ...v, [key]: !v[key] })),
@@ -94,6 +96,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       showWaypoints,
       showHouses,
       showBlocking,
+      showShade,
       showTooltips,
       tooltipTypes,
       showRenderStats,
@@ -113,6 +116,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       toggleWaypoints,
       toggleHouses,
       toggleBlocking,
+      toggleShade,
       toggleTooltips,
       toggleTooltipType,
       toggleTooltipTypes,
@@ -129,6 +133,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       showWaypoints,
       showHouses,
       showBlocking,
+      showShade,
       showTooltips,
       tooltipTypes,
       showRenderStats,
@@ -148,6 +153,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       toggleWaypoints,
       toggleHouses,
       toggleBlocking,
+      toggleShade,
       toggleTooltips,
       toggleTooltipType,
       toggleTooltipTypes,

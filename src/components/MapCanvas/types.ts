@@ -134,6 +134,7 @@ export interface MapCanvasContextInputs {
   showWaypoints: boolean;
   showHouses: boolean;
   showBlocking: boolean;
+  showShade: boolean;
   showTooltips: boolean;
   tooltipTypes: TooltipTypes;
   automagic: boolean;

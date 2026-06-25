@@ -74,7 +74,7 @@ const App = () => {
     setStatus,
     setError
   } = useAssetsBundle();
-  const { copyPositionFormat, reloadGeneral, reloadEditor } = useEditorSettings();
+  const { copyPositionFormat, reloadGeneral, reloadEditor, toggleShade } = useEditorSettings();
   const { setPaletteCategory } = useTool();
 
   const [minimapOpen, setMinimapOpen] = useSetting('minimapOpen', false);
@@ -353,7 +353,8 @@ const App = () => {
     openMapProperties,
     openMapStatistics,
     openPreferences: () => openPreferences(),
-    refreshAssets: retryAssets
+    refreshAssets: retryAssets,
+    toggleShade
   });
 
   savingRef.current = !!saving;

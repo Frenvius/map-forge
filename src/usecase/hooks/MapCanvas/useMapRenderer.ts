@@ -719,7 +719,7 @@ export function useMapRenderer(deps: RendererDeps) {
     prevPreviewKeys.current = curPreviewKeys;
 
     for (let z = startZ; z >= endZ; z--) {
-      if (dimLowerFloors && z === endZ) renderer.dimViewport(LOWER_FLOOR_DIM);
+      if (dimLowerFloors && inputs.current.showShade && z === endZ) renderer.dimViewport(LOWER_FLOOR_DIM);
 
       const shift = (z - endZ) * TILE * floorShift();
       renderer.setFloorOffset(shift, shift);
