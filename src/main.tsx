@@ -397,6 +397,7 @@ const App = () => {
       const isPrimary = id === 'palette';
       return (
         <PalettePanel
+          panelId={id}
           towns={towns}
           houses={houses}
           primary={isPrimary}

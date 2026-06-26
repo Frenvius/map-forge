@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { BrushOption } from '~/adapter/biomes';
 import { ToolId, EraserMode } from '~/domain/tools';
 import { ResolvedBiome, GenerateOptions } from '~/domain/biome';
 import { ActiveBrush, PaletteCategoryId } from '~/domain/palette';
@@ -28,6 +29,8 @@ export interface PaletteCategorySignal {
 export interface ToolContextValue {
   activeTool: ToolId;
   activeBrush: ActiveBrush | null;
+  penBrush: BrushOption | null;
+  penWidth: number;
   activeHouseId: number | null;
   ctrlErase: boolean;
   eraserMode: EraserMode;
@@ -44,10 +47,15 @@ export interface ToolContextValue {
   ) => void;
   setActiveTool: (tool: ToolId) => void;
   selectBrush: (brush: ActiveBrush | null) => void;
+  setPenBrush: (brush: BrushOption | null) => void;
+  setPenWidth: (width: number) => void;
   setActiveHouse: (id: number | null) => void;
   setEraserMode: (mode: EraserMode) => void;
   revealInPalette: (category: PaletteCategoryId, serverId: number, name?: string) => void;
   setPaletteCategory: (category: PaletteCategoryId) => void;
+  registerPalette: (id: string, category: PaletteCategoryId) => void;
+  unregisterPalette: (id: string) => void;
+  shouldHandleReveal: (id: string) => boolean;
 }
 
 export interface ToolProviderProps {

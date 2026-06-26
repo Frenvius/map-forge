@@ -49,6 +49,7 @@ function makeBrushPreview(layout: BrushSpriteLayout, cache: Map<number, LoadedSp
 }
 
 interface PalettePanelProps {
+  panelId: string;
   primary?: boolean;
   onClose?: () => void;
   dragHandle?: DragHandleProps;
@@ -81,6 +82,7 @@ const SHARED_SPRITE_CACHE = new Map<number, LoadedSprite>();
 const SHARED_SERVER_TO_CLIENT = new Map<number, number>();
 
 const PalettePanel = ({
+  panelId,
   primary,
   onClose,
   dragHandle,
@@ -98,7 +100,7 @@ const PalettePanel = ({
   onPickCreatureDir
 }: PalettePanelProps) => {
   const { assets, palette } = useAssetsBundle();
-  const { reveal, selectBrush, paletteCategory } = useTool();
+  const { reveal, selectBrush, paletteCategory, registerPalette, unregisterPalette, shouldHandleReveal } = useTool();
 
   const data = React.useMemo<PaletteData>(() => {
     const base = palette as PaletteData;
@@ -145,7 +147,7 @@ const PalettePanel = ({
   }, [query, tilesets, current]);
 
   React.useEffect(() => {
-    getSetting<PaletteCategoryId | null>('paletteCategory', null)
+    getSetting<PaletteCategoryId | null>(`paletteCategory:${panelId}`, null)
       .then((saved) => {
         if (saved && PALETTE_CATEGORIES.some((c) => c.id === saved)) setCategory(saved);
       })
@@ -153,12 +155,12 @@ const PalettePanel = ({
       .finally(() => {
         restoredRef.current = true;
       });
-  }, []);
+  }, [panelId]);
 
   React.useEffect(() => {
     if (!restoredRef.current) return;
-    setSetting('paletteCategory', category).catch(() => void 0);
-  }, [category]);
+    setSetting(`paletteCategory:${panelId}`, category).catch(() => void 0);
+  }, [category, panelId]);
 
   React.useEffect(() => {
     if (pending.current?.category === category) return;
@@ -171,7 +173,13 @@ const PalettePanel = ({
   }, [paletteCategory?.nonce]);
 
   React.useEffect(() => {
-    if (!reveal) return;
+    registerPalette(panelId, category);
+  }, [panelId, category, registerPalette]);
+
+  React.useEffect(() => () => unregisterPalette(panelId), [panelId, unregisterPalette]);
+
+  React.useEffect(() => {
+    if (!reveal || !shouldHandleReveal(panelId)) return;
     if (reveal.category === 'houses') {
       setCategory('houses');
       return;

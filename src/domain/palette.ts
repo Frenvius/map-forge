@@ -16,6 +16,8 @@ export const PALETTE_CATEGORIES: PaletteCategoryMeta[] = [
   { id: 'generator', label: 'Generator' }
 ];
 
+export const isRevealFriendly = (id: PaletteCategoryId): boolean => id !== 'generator';
+
 export type BrushKind = 'ground' | 'wall' | 'doodad' | 'rawItem' | 'creature';
 
 export interface CreatureLook {
