@@ -39,20 +39,23 @@ export function brushSpriteLayout(thing: Thing, isCreature: boolean, colors?: Ou
   const rows = Math.max(1, thing.height);
   const patternX = isCreature ? Math.min(2, Math.max(0, thing.patternX - 1)) : 0;
   const hasMask = isCreature && thing.layers >= 2 && colors != null && isColorized(colors);
+  const layerCount = isCreature ? 1 : Math.max(1, thing.layers);
   const cells: SpriteCell[] = [];
 
-  for (let h = 0; h < rows; h++) {
-    for (let w = 0; w < cols; w++) {
-      const index = getSpriteIndex(thing, w, h, 0, patternX, 0, 0, 0);
-      const spriteId = thing.spriteIndex[index];
-      if (spriteId == null || spriteId === 0) continue;
-      const cell: SpriteCell = { dx: (cols - 1 - w) * tileSize, dy: (rows - 1 - h) * tileSize, spriteId };
-      if (hasMask) {
-        const maskIndex = getSpriteIndex(thing, w, h, 1, patternX, 0, 0, 0);
-        const maskId = thing.spriteIndex[maskIndex];
-        if (maskId != null && maskId !== 0) cell.maskSpriteId = maskId;
+  for (let l = 0; l < layerCount; l++) {
+    for (let h = 0; h < rows; h++) {
+      for (let w = 0; w < cols; w++) {
+        const index = getSpriteIndex(thing, w, h, l, patternX, 0, 0, 0);
+        const spriteId = thing.spriteIndex[index];
+        if (spriteId == null || spriteId === 0) continue;
+        const cell: SpriteCell = { dx: (cols - 1 - w) * tileSize, dy: (rows - 1 - h) * tileSize, spriteId };
+        if (hasMask) {
+          const maskIndex = getSpriteIndex(thing, w, h, 1, patternX, 0, 0, 0);
+          const maskId = thing.spriteIndex[maskIndex];
+          if (maskId != null && maskId !== 0) cell.maskSpriteId = maskId;
+        }
+        cells.push(cell);
       }
-      cells.push(cell);
     }
   }
 

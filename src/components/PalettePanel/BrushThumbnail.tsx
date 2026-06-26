@@ -39,6 +39,12 @@ const BrushThumbnail = ({ layout, cache, version, size }: BrushThumbnailProps) =
     const octx = off.getContext('2d');
     if (!octx) return;
 
+    const scratch = document.createElement('canvas');
+    scratch.width = TILE;
+    scratch.height = TILE;
+    const sctx = scratch.getContext('2d');
+    if (!sctx) return;
+
     let drew = false;
     for (const cell of layout.cells) {
       const sprite = cache.get(cell.spriteId);
@@ -48,7 +54,8 @@ const BrushThumbnail = ({ layout, cache, version, size }: BrushThumbnailProps) =
         const mask = cache.get(cell.maskSpriteId);
         if (mask && !mask.empty) rgba = colorizeOutfit(sprite.rgba, mask.rgba, layout.colors);
       }
-      octx.putImageData(new ImageData(new Uint8ClampedArray(rgba), TILE, TILE), cell.dx, cell.dy);
+      sctx.putImageData(new ImageData(new Uint8ClampedArray(rgba), TILE, TILE), 0, 0);
+      octx.drawImage(scratch, cell.dx, cell.dy);
       drew = true;
     }
     if (!drew) return;

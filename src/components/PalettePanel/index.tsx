@@ -32,11 +32,17 @@ function makeBrushPreview(layout: BrushSpriteLayout, cache: Map<number, LoadedSp
   canvas.height = layout.rows * CELL_SIZE;
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
+  const scratch = document.createElement('canvas');
+  scratch.width = CELL_SIZE;
+  scratch.height = CELL_SIZE;
+  const sctx = scratch.getContext('2d');
+  if (!sctx) return null;
   let drew = false;
   for (const cell of layout.cells) {
     const sprite = cache.get(cell.spriteId);
     if (!sprite || sprite.empty) continue;
-    ctx.putImageData(new ImageData(new Uint8ClampedArray(sprite.rgba), CELL_SIZE, CELL_SIZE), cell.dx, cell.dy);
+    sctx.putImageData(new ImageData(new Uint8ClampedArray(sprite.rgba), CELL_SIZE, CELL_SIZE), 0, 0);
+    ctx.drawImage(scratch, cell.dx, cell.dy);
     drew = true;
   }
   return drew ? canvas.toDataURL() : null;
