@@ -1,6 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 
+import { Thing } from '~/domain/thing';
 import { defaultDataDir } from '~/adapter/assets';
+import { FlagIndex, buildFlagIndex } from '~/adapter/thingFlags';
 import { BrushKind, PaletteData, PaletteBrush, PaletteTileset } from '~/domain/palette';
 
 function sanitizeXml(text: string): string {
@@ -57,7 +59,21 @@ function expandRange(item: Element): number[] {
   return [];
 }
 
-type BrushIndex = Map<string, { kind: BrushKind; look?: number }>;
+export type BrushRef = { kind: BrushKind; look?: number };
+type BrushIndex = Map<string, BrushRef>;
+
+export async function loadBrushIndex(dir = defaultDataDir()): Promise<BrushIndex> {
+  const [groundsDoc, wallsDoc, doodadsDoc] = await Promise.all([
+    readXml(dir, 'grounds.xml'),
+    readXml(dir, 'walls.xml'),
+    readXml(dir, 'doodads.xml')
+  ]);
+  const index: BrushIndex = new Map();
+  indexBrushes(groundsDoc, 'ground', index);
+  indexBrushes(wallsDoc, 'wall', index);
+  indexBrushes(doodadsDoc, 'doodad', index);
+  return index;
+}
 
 function indexBrushes(doc: Document, kind: BrushKind, into: BrushIndex): void {
   for (const brushEl of topLevel(doc, 'brush')) {
@@ -94,18 +110,28 @@ function collectBrushSection(tsEl: Element, sectionTags: string[], index: BrushI
   return out;
 }
 
-function collectItemIds(tsEl: Element, tags: string[], keyTag: string, into?: Set<number>): PaletteBrush[] {
+function collectItemIds(
+  tsEl: Element,
+  tags: string[],
+  keyTag: string,
+  into?: Set<number>,
+  flagIndex?: FlagIndex
+): PaletteBrush[] {
   const tsName = tsEl.getAttribute('name') ?? '';
   const out: PaletteBrush[] = [];
   const seen = new Set<number>();
+  const push = (id: number) => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    into?.add(id);
+    out.push({ key: `${tsName}:${keyTag}:${id}`, name: `Item ${id}`, kind: 'rawItem', lookServerId: id });
+  };
   for (const tag of tags) {
     for (const section of directChildren(tsEl, tag)) {
-      for (const item of directChildren(section, 'item')) {
-        for (const id of expandRange(item)) {
-          if (seen.has(id)) continue;
-          seen.add(id);
-          into?.add(id);
-          out.push({ key: `${tsName}:${keyTag}:${id}`, name: `Item ${id}`, kind: 'rawItem', lookServerId: id });
+      for (const item of directChildren(section, 'item')) for (const id of expandRange(item)) push(id);
+      if (flagIndex) {
+        for (const flag of directChildren(section, 'flag')) {
+          for (const id of flagIndex.get(flag.getAttribute('name') ?? '') ?? []) push(id);
         }
       }
     }
@@ -116,12 +142,12 @@ function collectItemIds(tsEl: Element, tags: string[], keyTag: string, into?: Se
 const ITEM_SECTION_TAGS = ['items', 'items_and_raw'];
 const RAW_SECTION_TAGS = ['raw', 'terrain_and_raw', 'doodad_and_raw', 'items_and_raw', 'collections_and_raw'];
 
-function collectItems(tsEl: Element): PaletteBrush[] {
-  return collectItemIds(tsEl, ITEM_SECTION_TAGS, 'item');
+function collectItems(tsEl: Element, flagIndex?: FlagIndex): PaletteBrush[] {
+  return collectItemIds(tsEl, ITEM_SECTION_TAGS, 'item', undefined, flagIndex);
 }
 
-function collectRaw(tsEl: Element, claimed: Set<number>): PaletteBrush[] {
-  return collectItemIds(tsEl, RAW_SECTION_TAGS, 'raw', claimed);
+function collectRaw(tsEl: Element, claimed: Set<number>, flagIndex?: FlagIndex): PaletteBrush[] {
+  return collectItemIds(tsEl, RAW_SECTION_TAGS, 'raw', claimed, flagIndex);
 }
 
 function buildOthersTileset(serverIds: number[], claimed: Set<number>): PaletteTileset | null {
@@ -172,7 +198,7 @@ async function allServerIds(): Promise<number[]> {
   }
 }
 
-export async function loadPalette(dir = defaultDataDir()): Promise<PaletteData> {
+export async function loadPalette(dir = defaultDataDir(), items?: Map<number, Thing>): Promise<PaletteData> {
   const [tilesetsDoc, groundsDoc, wallsDoc, doodadsDoc, creaturesDoc, serverIds] = await Promise.all([
     readXml(dir, 'tilesets.xml'),
     readXml(dir, 'grounds.xml'),
@@ -182,20 +208,31 @@ export async function loadPalette(dir = defaultDataDir()): Promise<PaletteData> 
     allServerIds()
   ]);
 
+  const flagIndex = items ? await buildFlagIndex(serverIds, items) : undefined;
+
   const index: BrushIndex = new Map();
   indexBrushes(groundsDoc, 'ground', index);
   indexBrushes(wallsDoc, 'wall', index);
   indexBrushes(doodadsDoc, 'doodad', index);
 
-  const data: PaletteData = { terrain: [], doodad: [], item: [], raw: [], creature: [], waypoints: [], houses: [] };
+  const data: PaletteData = {
+    terrain: [],
+    doodad: [],
+    item: [],
+    raw: [],
+    creature: [],
+    waypoints: [],
+    houses: [],
+    generator: []
+  };
   const claimed = new Set<number>();
 
   for (const tsEl of topLevel(tilesetsDoc, 'tileset')) {
     const name = tsEl.getAttribute('name') ?? '';
     const terrain = collectBrushSection(tsEl, ['terrain', 'terrain_and_raw'], index);
     const doodad = collectBrushSection(tsEl, ['doodad', 'doodad_and_raw'], index);
-    const item = collectItems(tsEl);
-    const raw = collectRaw(tsEl, claimed);
+    const item = collectItems(tsEl, flagIndex);
+    const raw = collectRaw(tsEl, claimed, flagIndex);
     if (terrain.length) data.terrain.push({ name, brushes: terrain });
     if (doodad.length) data.doodad.push({ name, brushes: doodad });
     if (item.length) data.item.push({ name, brushes: item });

@@ -27,7 +27,13 @@ export default defineConfig(async () => ({
 	build: {
 		target: process.env.TAURI_PLATFORM == 'windows' ? 'chrome105' : 'safari13',
 		minify: !process.env.TAURI_DEBUG ? 'esbuild' : false,
-		sourcemap: !!process.env.TAURI_DEBUG
+		sourcemap: !!process.env.TAURI_DEBUG,
+		rollupOptions: {
+			input: {
+				main: path.resolve(__dirname, 'index.html'),
+				'tileset-editor': path.resolve(__dirname, 'tileset-editor.html')
+			}
+		}
 	},
 	resolve: {
 		alias: {

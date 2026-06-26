@@ -1,4 +1,4 @@
-export type PaletteCategoryId = 'terrain' | 'doodad' | 'item' | 'raw' | 'creature' | 'waypoints' | 'houses';
+export type PaletteCategoryId = 'terrain' | 'doodad' | 'item' | 'raw' | 'creature' | 'waypoints' | 'houses' | 'generator';
 
 export interface PaletteCategoryMeta {
   id: PaletteCategoryId;
@@ -12,7 +12,8 @@ export const PALETTE_CATEGORIES: PaletteCategoryMeta[] = [
   { id: 'raw', label: 'RAW Palette' },
   { id: 'creature', label: 'Creature Palette' },
   { id: 'waypoints', label: 'Waypoint Palette' },
-  { id: 'houses', label: 'House Palette' }
+  { id: 'houses', label: 'House Palette' },
+  { id: 'generator', label: 'Generator' }
 ];
 
 export type BrushKind = 'ground' | 'wall' | 'doodad' | 'rawItem' | 'creature';

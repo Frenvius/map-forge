@@ -2,6 +2,7 @@ import React from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Save, FilePlus, FolderOpen } from 'lucide-react';
 
+import { openTilesetEditor } from '~/adapter/windows';
 import { TOOLTIP_TYPE_GROUPS } from '~/domain/tooltips';
 import { PaletteCategoryId, PALETTE_CATEGORIES } from '~/domain/palette';
 import { useEditorSettings } from '~/usecase/context/EditorSettingsContext';
@@ -283,6 +284,8 @@ const AppMenu = ({
           <MenubarCheckboxItem checked={propertiesOpen} onCheckedChange={onToggleProperties} onSelect={(e) => e.preventDefault()}>
             Item Properties
           </MenubarCheckboxItem>
+          <MenubarSeparator />
+          <MenubarItem onSelect={() => void openTilesetEditor()}>Tileset Editor...</MenubarItem>
           <MenubarSeparator />
           <MenubarItem disabled={loading} onSelect={onNewPalette}>
             New Palette
