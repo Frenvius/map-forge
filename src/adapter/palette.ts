@@ -48,6 +48,17 @@ function brushLook(brushEl: Element): number | undefined {
   return numAttr(brushEl, 'server_lookid') ?? firstItemId(brushEl);
 }
 
+function groundPaintId(brushEl: Element): number | undefined {
+  let best: { id: number; chance: number } | undefined;
+  for (const item of directChildren(brushEl, 'item')) {
+    const id = numAttr(item, 'id');
+    if (id == null) continue;
+    const chance = numAttr(item, 'chance') ?? 0;
+    if (!best || chance > best.chance) best = { id, chance };
+  }
+  return best?.id;
+}
+
 function expandRange(item: Element): number[] {
   const id = numAttr(item, 'id');
   if (id != null) return [id];
@@ -59,7 +70,7 @@ function expandRange(item: Element): number[] {
   return [];
 }
 
-export type BrushRef = { kind: BrushKind; look?: number };
+export type BrushRef = { kind: BrushKind; look?: number; paint?: number };
 type BrushIndex = Map<string, BrushRef>;
 
 export async function loadBrushIndex(dir = defaultDataDir()): Promise<BrushIndex> {
@@ -79,7 +90,7 @@ function indexBrushes(doc: Document, kind: BrushKind, into: BrushIndex): void {
   for (const brushEl of topLevel(doc, 'brush')) {
     const name = brushEl.getAttribute('name');
     if (!name || into.has(name)) continue;
-    into.set(name, { kind, look: brushLook(brushEl) });
+    into.set(name, { kind, look: brushLook(brushEl), paint: kind === 'ground' ? groundPaintId(brushEl) : undefined });
   }
 }
 
@@ -95,7 +106,7 @@ function collectBrushSection(tsEl: Element, sectionTags: string[], index: BrushI
         const entry = index.get(refName);
         if (!entry || seen.has(refName)) continue;
         seen.add(refName);
-        out.push({ key: `${tsName}:${refName}`, name: refName, kind: entry.kind, lookServerId: entry.look });
+        out.push({ key: `${tsName}:${refName}`, name: refName, kind: entry.kind, lookServerId: entry.look, paintServerId: entry.paint });
       }
       for (const item of directChildren(section, 'item')) {
         for (const id of expandRange(item)) {

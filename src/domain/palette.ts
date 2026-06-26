@@ -31,6 +31,7 @@ export interface PaletteBrush {
   name: string;
   kind: BrushKind;
   lookServerId?: number;
+  paintServerId?: number;
   lookType?: number;
   isNpc?: boolean;
   creature?: CreatureLook;

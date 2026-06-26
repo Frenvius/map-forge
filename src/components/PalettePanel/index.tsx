@@ -17,6 +17,7 @@ import { Select, SelectItem, SelectValue, SelectContent, SelectTrigger } from '~
 import { PaletteData, PaletteBrush, PaletteTileset, PaletteCategoryId, PALETTE_CATEGORIES } from '~/domain/palette';
 
 import HousesList from './HousesList';
+import GeneratorView from './GeneratorView';
 import PaletteSearch from './PaletteSearch';
 import WaypointsList from './WaypointsList';
 import BrushThumbnail from './BrushThumbnail';
@@ -187,8 +188,9 @@ const PalettePanel = ({
       const needed = [
         ...new Set(
           brushes
-            .filter((b) => b.kind !== 'creature' && b.lookServerId != null)
-            .map((b) => b.lookServerId as number)
+            .filter((b) => b.kind !== 'creature')
+            .flatMap((b) => [b.lookServerId, b.paintServerId])
+            .filter((id): id is number => id != null)
             .filter((id) => {
               const cached = serverToClient.current.get(id);
               return cached === undefined || cached === 0;
@@ -259,7 +261,7 @@ const PalettePanel = ({
       });
       return;
     }
-    const serverId = brush.lookServerId;
+    const serverId = brush.paintServerId ?? brush.lookServerId;
     const clientId = serverId != null ? serverToClient.current.get(serverId) : undefined;
     const isGround = clientId ? (items.get(clientId)?.isGround ?? false) : false;
     const preview = tile.layout ? makeBrushPreview(tile.layout, spriteCache.current) : null;
@@ -278,7 +280,8 @@ const PalettePanel = ({
   const isWaypoints = category === 'waypoints';
   const isHouses = category === 'houses';
   const isCreature = category === 'creature';
-  const isList = isWaypoints || isHouses;
+  const isGenerator = category === 'generator';
+  const isList = isWaypoints || isHouses || isGenerator;
 
   React.useEffect(() => {
     setQuery('');
@@ -367,6 +370,8 @@ const PalettePanel = ({
         />
       ) : isHouses ? (
         <HousesList towns={towns} houses={houses} onGoto={onGotoHouse} onEdit={onEditHouses} />
+      ) : isGenerator ? (
+        <GeneratorView />
       ) : (
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-2">
           {tiles.length === 0 ? (
