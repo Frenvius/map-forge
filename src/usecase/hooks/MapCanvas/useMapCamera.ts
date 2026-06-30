@@ -124,8 +124,13 @@ export function useMapCamera(
       ArrowUp: [0, -1],
       ArrowDown: [0, 1],
       ArrowLeft: [-1, 0],
-      ArrowRight: [1, 0]
+      ArrowRight: [1, 0],
+      w: [0, -1],
+      s: [0, 1],
+      a: [-1, 0],
+      d: [1, 0]
     };
+    const normalize = (key: string) => (key.length === 1 ? key.toLowerCase() : key);
     const held = new Set<string>();
     const speed = 900;
     let raf = 0;
@@ -153,19 +158,20 @@ export function useMapCamera(
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!(e.key in dirs)) return;
+      const key = normalize(e.key);
+      if (!(key in dirs)) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
       e.preventDefault();
-      if (!held.has(e.key)) {
-        held.add(e.key);
+      if (!held.has(key)) {
+        held.add(key);
         if (!raf) {
           last = 0;
           raf = requestAnimationFrame(step);
         }
       }
     };
-    const onKeyUp = (e: KeyboardEvent) => held.delete(e.key);
+    const onKeyUp = (e: KeyboardEvent) => held.delete(normalize(e.key));
     const onBlur = () => held.clear();
 
     window.addEventListener('keydown', onKeyDown);
