@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, ComponentType } from 'react';
-import { Brush, Check, Eraser, Layers2, PenTool, Crosshair, MousePointer2, GripHorizontal, Skull } from 'lucide-react';
+import { Brush, Check, Skull, Eraser, Layers2, PenTool, Repeat2, Crosshair, MousePointer2, GripHorizontal } from 'lucide-react';
 import {
   IconHome,
   IconSpider,
@@ -149,10 +149,12 @@ const EraserTool = ({ selected, mode, onActivate, onPickMode }: EraserToolProps)
 
 const TileSwatch = () => {
   const { dataDir } = useAssetsBundle();
-  const { activeTile, setActiveTile, penWidth, setPenWidth } = useTool();
+  const { activeTile, setActiveTile, secondaryTile, setSecondaryTile, swapTiles, penWidth, setPenWidth } = useTool();
   const [options, setOptions] = useState<BrushOption[]>([]);
+  const [open, setOpen] = useState<'primary' | 'secondary' | null>(null);
   const [anchor, setAnchor] = useState<{ top: number; left: number } | null>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
+  const primaryRef = useRef<HTMLButtonElement>(null);
+  const secondaryRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     loadBrushOptions(dataDir)
@@ -160,40 +162,78 @@ const TileSwatch = () => {
       .catch((err) => console.error('Failed to load tile options', err));
   }, [dataDir]);
 
-  const open = () => {
-    const r = btnRef.current?.getBoundingClientRect();
-    if (r) setAnchor({ top: r.top, left: r.right + 8 });
+  const openFor = (which: 'primary' | 'secondary') => {
+    const r = (which === 'primary' ? primaryRef : secondaryRef).current?.getBoundingClientRect();
+    if (r) {
+      setAnchor({ top: r.top, left: r.right + 8 });
+      setOpen(which);
+    }
   };
 
-  const pick = (name: string) => setActiveTile(options.find((o) => o.name === name) ?? null);
+  const close = () => {
+    setOpen(null);
+    setAnchor(null);
+  };
+
+  const pick = (name: string) => {
+    const tile = options.find((o) => o.name === name) ?? null;
+    if (open === 'primary') setActiveTile(tile);
+    else setSecondaryTile(tile);
+  };
+
+  const current = open === 'primary' ? activeTile : secondaryTile;
 
   return (
     <div className="relative flex w-full flex-col items-center">
-      <Hint side="right" label={activeTile ? `Active tile: ${activeTile.name}` : 'Pick an active tile'}>
+      <div className="relative h-9 w-9">
+        <Hint side="right" label={secondaryTile ? `Secondary tile: ${secondaryTile.name}` : 'Pick a secondary tile'}>
+          <button
+            ref={secondaryRef}
+            onClick={() => openFor('secondary')}
+            className="absolute bottom-0 right-0 flex h-[22px] w-[22px] items-center justify-center overflow-hidden rounded border border-border/60 bg-muted/40 hover:bg-item-hover"
+          >
+            {secondaryTile ? (
+              <BrushImage size={20} option={secondaryTile} />
+            ) : (
+              <Brush className="h-3 w-3 text-muted-foreground" />
+            )}
+          </button>
+        </Hint>
+        <Hint side="right" label={activeTile ? `Active tile: ${activeTile.name} (X to swap)` : 'Pick an active tile (X to swap)'}>
+          <button
+            ref={primaryRef}
+            onClick={() => openFor('primary')}
+            className="absolute left-0 top-0 z-10 flex h-[22px] w-[22px] items-center justify-center overflow-hidden rounded border border-primary/70 bg-muted/40 shadow-sm hover:bg-item-hover"
+          >
+            {activeTile ? <BrushImage size={20} option={activeTile} /> : <Brush className="h-3 w-3 text-muted-foreground" />}
+          </button>
+        </Hint>
         <button
-          ref={btnRef}
-          onClick={open}
-          className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded border border-border/60 bg-muted/40 hover:bg-item-hover"
+          onClick={swapTiles}
+          title="Swap tiles (X)"
+          className="absolute -right-1.5 -top-1.5 z-20 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-popover text-muted-foreground shadow-sm hover:text-foreground"
         >
-          {activeTile ? (
-            <BrushImage size={26} option={activeTile} />
-          ) : (
-            <Brush className="h-[18px] w-[18px] text-muted-foreground" />
-          )}
+          <Repeat2 className="h-2.5 w-2.5" />
         </button>
-      </Hint>
+      </div>
 
-      {anchor && (
+      {open && anchor && (
         <>
-          <div className="fixed inset-0 z-40" onMouseDown={() => setAnchor(null)} />
+          <div onMouseDown={close} className="fixed inset-0 z-40" />
           <div
             style={{ top: anchor.top, left: anchor.left }}
             className="fixed z-50 flex w-56 flex-col gap-2 rounded-md border border-border bg-popover p-2 shadow-island"
           >
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Active tile</span>
-            <BrushSelect onChange={pick} options={options} placeholder="Select ground" value={activeTile?.name ?? ''} />
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Pen width {penWidth}</span>
-            <Slider max={5} min={1} step={0.5} value={[penWidth]} onValueChange={([v]) => setPenWidth(v)} />
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              {open === 'primary' ? 'Active tile' : 'Secondary tile'}
+            </span>
+            <BrushSelect onChange={pick} options={options} placeholder="Select ground" value={current?.name ?? ''} />
+            {open === 'primary' && (
+              <>
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Pen width {penWidth}</span>
+                <Slider max={5} min={1} step={0.5} value={[penWidth]} onValueChange={([v]) => setPenWidth(v)} />
+              </>
+            )}
           </div>
         </>
       )}

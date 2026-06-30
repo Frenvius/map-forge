@@ -15,8 +15,14 @@ export const ToolProvider = ({ children }: ToolProviderProps) => {
   const [activeTool, setActiveToolState] = React.useState<ToolId>('select');
   const [activeBrush, setActiveBrush] = React.useState<ActiveBrush | null>(null);
   const [activeTile, setActiveTile] = React.useState<BrushOption | null>(null);
+  const [secondaryTile, setSecondaryTile] = React.useState<BrushOption | null>(null);
   const [penWidth, setPenWidth] = React.useState(1);
   const tileRestored = React.useRef(false);
+  const secondaryRestored = React.useRef(false);
+  const activeTileRef = React.useRef(activeTile);
+  const secondaryTileRef = React.useRef(secondaryTile);
+  activeTileRef.current = activeTile;
+  secondaryTileRef.current = secondaryTile;
   const [activeHouseId, setActiveHouse] = React.useState<number | null>(null);
   const [ctrlErase, setCtrlErase] = React.useState(false);
   const [eraserMode, setEraserMode] = React.useState<EraserMode>('items');
@@ -37,6 +43,24 @@ export const ToolProvider = ({ children }: ToolProviderProps) => {
       window.removeEventListener('blur', clear);
     };
   }, []);
+
+  const swapTiles = React.useCallback(() => {
+    const a = activeTileRef.current;
+    setActiveTile(secondaryTileRef.current);
+    setSecondaryTile(a);
+  }, []);
+
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.key.toLowerCase() !== 'x') return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      e.preventDefault();
+      swapTiles();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [swapTiles]);
 
   const setActiveTool = React.useCallback((tool: ToolId) => {
     setActiveToolState(tool);
@@ -67,6 +91,22 @@ export const ToolProvider = ({ children }: ToolProviderProps) => {
     if (!tileRestored.current) return;
     setSetting('activeTile', activeTile).catch(() => void 0);
   }, [activeTile]);
+
+  React.useEffect(() => {
+    getSetting<BrushOption | null>('secondaryTile', null)
+      .then((saved) => {
+        if (saved && typeof saved.paintId === 'number') setSecondaryTile(saved);
+      })
+      .catch(() => void 0)
+      .finally(() => {
+        secondaryRestored.current = true;
+      });
+  }, []);
+
+  React.useEffect(() => {
+    if (!secondaryRestored.current) return;
+    setSetting('secondaryTile', secondaryTile).catch(() => void 0);
+  }, [secondaryTile]);
 
   const revealInPalette = React.useCallback((category: PaletteCategoryId, serverId: number, name?: string) => {
     setReveal((r) => ({ category, serverId, name, nonce: (r?.nonce ?? 0) + 1 }));
@@ -114,6 +154,7 @@ export const ToolProvider = ({ children }: ToolProviderProps) => {
       activeTool,
       activeBrush,
       activeTile,
+      secondaryTile,
       penWidth,
       activeHouseId,
       ctrlErase,
@@ -127,6 +168,8 @@ export const ToolProvider = ({ children }: ToolProviderProps) => {
       setActiveTool,
       selectBrush,
       setActiveTile,
+      setSecondaryTile,
+      swapTiles,
       setPenWidth,
       setActiveHouse,
       setEraserMode,
@@ -140,6 +183,7 @@ export const ToolProvider = ({ children }: ToolProviderProps) => {
       activeTool,
       activeBrush,
       activeTile,
+      secondaryTile,
       penWidth,
       activeHouseId,
       ctrlErase,
@@ -153,6 +197,8 @@ export const ToolProvider = ({ children }: ToolProviderProps) => {
       setActiveTool,
       selectBrush,
       setActiveTile,
+      setSecondaryTile,
+      swapTiles,
       setPenWidth,
       setActiveHouse,
       setEraserMode,

@@ -30,6 +30,7 @@ export interface ToolContextValue {
   activeTool: ToolId;
   activeBrush: ActiveBrush | null;
   activeTile: BrushOption | null;
+  secondaryTile: BrushOption | null;
   penWidth: number;
   activeHouseId: number | null;
   ctrlErase: boolean;
@@ -48,6 +49,8 @@ export interface ToolContextValue {
   setActiveTool: (tool: ToolId) => void;
   selectBrush: (brush: ActiveBrush | null) => void;
   setActiveTile: (tile: BrushOption | null) => void;
+  setSecondaryTile: (tile: BrushOption | null) => void;
+  swapTiles: () => void;
   setPenWidth: (width: number) => void;
   setActiveHouse: (id: number | null) => void;
   setEraserMode: (mode: EraserMode) => void;
