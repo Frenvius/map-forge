@@ -1,9 +1,10 @@
 import { invoke } from '@tauri-apps/api/core';
 
-import { ThingType } from '~/domain/tibia';
 import { Thing } from '~/domain/thing';
+import { ThingType } from '~/domain/tibia';
 import { CreatureLook } from '~/domain/creature';
 import { loadCreatureDb } from '~/adapter/creatures';
+import { CLIENT_VERSIONS } from '~/lib/formats/tibia/types';
 import { decodeDatResponse } from '~/lib/formats/tibia/datDecoder';
 
 export const DEFAULT_VERSION = 860;
@@ -135,7 +136,7 @@ interface RustSprHeader {
 
 export async function loadAssets(dataDir: string, clientDir: string, version = DEFAULT_VERSION): Promise<LoadedAssets> {
   const otfi = await readOtfi(clientDir);
-  const extended = otfi.extended ?? false;
+  const extended = otfi.extended ?? CLIENT_VERSIONS.find((c) => c.value === version)?.supportsExtended ?? false;
   const transparency = otfi.transparency ?? false;
   const datPath = `${clientDir}/${otfi.metadataFile ?? 'Tibia.dat'}`;
   const sprPath = `${clientDir}/${otfi.spritesFile ?? 'Tibia.spr'}`;
