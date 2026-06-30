@@ -23,8 +23,12 @@ import GeneratorView from './GeneratorView';
 import PaletteSearch from './PaletteSearch';
 import WaypointsList from './WaypointsList';
 import BrushThumbnail from './BrushThumbnail';
+import { useGridWindow } from './useGridWindow';
 
 const CELL_SIZE = TILE;
+const GRID_MIN_CELL = 36;
+const GRID_GAP = 4;
+const GRID_PAD = 8;
 
 function makeBrushPreview(layout: BrushSpriteLayout, cache: Map<number, LoadedSprite>): string | null {
   const canvas = document.createElement('canvas');
@@ -125,6 +129,12 @@ const PalettePanel = ({
   const [query, setQuery] = React.useState('');
   const [renderVersion, setRenderVersion] = React.useState(0);
 
+  const grid = useGridWindow(scrollRef, tiles.length, {
+    minCell: GRID_MIN_CELL,
+    gap: GRID_GAP,
+    pad: GRID_PAD
+  });
+
   const tilesets = data[category];
   const current = React.useMemo(
     () => tilesets.find((t) => t.name === tilesetName) ?? tilesets[0] ?? null,
@@ -200,19 +210,19 @@ const PalettePanel = ({
 
   React.useEffect(() => {
     const pend = pending.current;
-    if (!pend || current?.name !== pend.tilesetName || !tiles.some((t) => t.brush.key === pend.key)) return;
+    if (!pend || current?.name !== pend.tilesetName) return;
+    const idx = tiles.findIndex((t) => t.brush.key === pend.key);
+    if (idx < 0) return;
     setSelectedKey(pend.key);
-    const key = pend.key;
     pending.current = null;
-    requestAnimationFrame(() => {
-      scrollRef.current?.querySelector(`[data-brush-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest' });
-    });
+    requestAnimationFrame(() => grid.scrollToIndex(idx));
   }, [tiles, current]);
 
   React.useEffect(() => {
     let cancelled = false;
     const brushes = sourceBrushes;
     setTiles(brushes.map((brush) => ({ brush, layout: null })));
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
     if (brushes.length === 0) return;
 
     (async () => {
@@ -416,21 +426,30 @@ const PalettePanel = ({
               <div className="px-1 py-6 text-center text-xs text-muted-foreground">No brushes in this tileset.</div>
             )
           ) : (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(2.25rem,1fr))] gap-1">
-              {tiles.map((tile) => (
-                <Hint key={tile.brush.key} label={tile.brush.name}>
-                  <button
-                    data-brush-key={tile.brush.key}
-                    onClick={() => handleSelect(tile)}
-                    className={cn(
-                      'flex aspect-square items-center justify-center overflow-hidden rounded border bg-muted/40 transition-colors hover:bg-item-hover',
-                      selectedKey === tile.brush.key ? 'border-primary bg-primary/15' : 'border-border/50'
-                    )}
-                  >
-                    <BrushThumbnail size={CELL_SIZE} layout={tile.layout} version={renderVersion} cache={spriteCache.current} />
-                  </button>
-                </Hint>
-              ))}
+            <div style={{ height: grid.totalH, position: 'relative' }}>
+              <div
+                style={{
+                  transform: `translateY(${grid.startRow * grid.rowH}px)`,
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))`,
+                  gap: GRID_GAP
+                }}
+              >
+                {tiles.slice(grid.start, grid.end).map((tile) => (
+                  <Hint key={tile.brush.key} label={tile.brush.name}>
+                    <button
+                      data-brush-key={tile.brush.key}
+                      onClick={() => handleSelect(tile)}
+                      className={cn(
+                        'flex aspect-square items-center justify-center overflow-hidden rounded border bg-muted/40 transition-colors hover:bg-item-hover',
+                        selectedKey === tile.brush.key ? 'border-primary bg-primary/15' : 'border-border/50'
+                      )}
+                    >
+                      <BrushThumbnail size={CELL_SIZE} layout={tile.layout} version={renderVersion} cache={spriteCache.current} />
+                    </button>
+                  </Hint>
+                ))}
+              </div>
             </div>
           )}
         </div>
