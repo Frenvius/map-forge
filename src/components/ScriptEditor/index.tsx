@@ -1,7 +1,9 @@
 import React from 'react';
 
 import { Button } from '~/components/commons/ui/button';
+import { Checkbox } from '~/components/commons/ui/checkbox';
 import { readScript, listScripts, writeScript } from '~/adapter/scripts';
+import { isLuaEnabled, setLuaEnabled } from '~/usecase/util/luaSettings';
 import { Dialog, DialogTitle, DialogHeader, DialogFooter, DialogContent } from '~/components/commons/ui/dialog';
 
 interface ScriptEditorProps {
@@ -11,6 +13,8 @@ interface ScriptEditorProps {
 }
 
 const ScriptEditor = ({ open, onReloaded, onOpenChange }: ScriptEditorProps) => {
+  const initialEnabled = React.useRef(isLuaEnabled());
+  const [enabled, setEnabled] = React.useState(initialEnabled.current);
   const [names, setNames] = React.useState<string[]>([]);
   const [active, setActive] = React.useState<string | null>(null);
   const [content, setContent] = React.useState('');
@@ -20,6 +24,8 @@ const ScriptEditor = ({ open, onReloaded, onOpenChange }: ScriptEditorProps) => 
   React.useEffect(() => {
     if (!open) return;
     setStatus('');
+    initialEnabled.current = isLuaEnabled();
+    setEnabled(initialEnabled.current);
     void listScripts().then((list) => {
       setNames(list);
       setActive((cur) => cur ?? list[0] ?? null);
@@ -34,14 +40,21 @@ const ScriptEditor = ({ open, onReloaded, onOpenChange }: ScriptEditorProps) => 
     });
   }, [open, active]);
 
+  const toggleDirty = enabled !== initialEnabled.current;
+
   const save = () => {
-    if (!active) return;
+    if (toggleDirty) setLuaEnabled(enabled);
+    if (!active || !dirty) {
+      if (toggleDirty) window.location.reload();
+      return;
+    }
     setStatus('Saving...');
     void writeScript(active, content)
       .then((n) => {
         setDirty(false);
         setStatus(`ok: ${n} scripts loaded`);
         onReloaded?.();
+        if (toggleDirty) window.location.reload();
       })
       .catch((e) => setStatus(`error: ${e}`));
   };
@@ -49,8 +62,12 @@ const ScriptEditor = ({ open, onReloaded, onOpenChange }: ScriptEditorProps) => 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
-        <DialogHeader>
+        <DialogHeader className="flex flex-row items-center justify-between gap-3 space-y-0 pr-8">
           <DialogTitle>Lua Scripts</DialogTitle>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>{enabled ? 'Enabled' : 'Disabled'}</span>
+            <Checkbox checked={enabled} onCheckedChange={(v) => setEnabled(v === true)} />
+          </label>
         </DialogHeader>
         <div className="flex h-[60vh] gap-3 p-4">
           <div className="w-44 flex-shrink-0 overflow-y-auto rounded-md border border-border bg-input">
@@ -81,7 +98,7 @@ const ScriptEditor = ({ open, onReloaded, onOpenChange }: ScriptEditorProps) => 
           <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-          <Button size="sm" onClick={save} disabled={!active || !dirty}>
+          <Button size="sm" onClick={save} disabled={(!active || !dirty) && !toggleDirty}>
             Save + Reload
           </Button>
         </DialogFooter>

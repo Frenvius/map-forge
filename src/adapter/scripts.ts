@@ -1,5 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 
+import { isLuaEnabled } from '~/usecase/util/luaSettings';
+
 export async function listScripts(): Promise<string[]> {
   return invoke<string[]>('list_scripts');
 }
@@ -68,10 +70,12 @@ export interface AppConfig {
 }
 
 export async function appConfig(): Promise<AppConfig> {
+  if (!isLuaEnabled()) return { name: null, dataDir: null, floorOffset: null };
   return invoke<AppConfig>('app_config');
 }
 
 export async function uiConfig(): Promise<UiConfig> {
+  if (!isLuaEnabled()) return { clientVersions: true, assets: null };
   return invoke<UiConfig>('ui_config');
 }
 
@@ -87,6 +91,7 @@ export interface ScriptedFormat {
 }
 
 export async function registeredFormats(): Promise<ScriptedFormat[]> {
+  if (!isLuaEnabled()) return [];
   const list = await invoke<[string, string, string][]>('registered_formats');
   return list.map(([ext, name, kind]) => ({ ext, name, kind }));
 }
