@@ -29,6 +29,7 @@ interface ToolbarProps {
   onOpenRecent: (path: string) => void;
   onSelectPaletteCategory: (category: PaletteCategoryId) => void;
   onAbout: () => void;
+  onStatus: (message: string) => void;
 }
 
 const Toolbar = ({
@@ -53,11 +54,19 @@ const Toolbar = ({
   onOpenPreferences,
   onToggleProperties,
   onSelectPaletteCategory,
-  onAbout
+  onAbout,
+  onStatus
 }: ToolbarProps) => {
   const win = getCurrentWindow();
   const updater = useUpdater();
   const stop = (e: React.MouseEvent) => e.stopPropagation();
+
+  const handleCheckUpdates = async () => {
+    onStatus('Checking for updates...');
+    const result = await updater.checkForUpdate();
+    if (result === 'up-to-date') onStatus("You're on the latest version");
+    else if (result === 'error') onStatus('Could not check for updates');
+  };
 
   const onDragStart = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
@@ -108,6 +117,7 @@ const Toolbar = ({
         onMapStatistics={onMapStatistics}
         onOpenPreferences={onOpenPreferences}
         onToggleProperties={onToggleProperties}
+        onCheckUpdates={() => void handleCheckUpdates()}
         onSelectPaletteCategory={onSelectPaletteCategory}
       />
 

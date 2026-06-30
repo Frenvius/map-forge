@@ -492,6 +492,7 @@ const App = () => {
         onToggleMinimap={toggleMinimap}
         propertiesOpen={propertiesOpen}
         onSave={() => void handleSave()}
+        onStatus={handleStatus}
         onAbout={() => setAboutOpen(true)}
         onMapProperties={openMapProperties}
         onMapStatistics={openMapStatistics}

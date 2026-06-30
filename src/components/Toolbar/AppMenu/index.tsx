@@ -1,6 +1,6 @@
 import React from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { Save, FilePlus, FolderOpen } from 'lucide-react';
+import { Save, FilePlus, FolderOpen, RefreshCw } from 'lucide-react';
 
 import { openDataDir } from '~/adapter/assets';
 import { openTilesetEditor } from '~/adapter/windows';
@@ -44,6 +44,7 @@ interface AppMenuProps {
   onToggleProperties: () => void;
   onOpenRecent: (path: string) => void;
   onSelectPaletteCategory: (category: PaletteCategoryId) => void;
+  onCheckUpdates: () => void;
   onAbout: () => void;
 }
 
@@ -73,6 +74,7 @@ const AppMenu = ({
   onOpenPreferences,
   onToggleProperties,
   onSelectPaletteCategory,
+  onCheckUpdates,
   onAbout
 }: AppMenuProps) => {
   const {
@@ -324,6 +326,11 @@ const AppMenu = ({
           <MenubarItem disabled={!dataDir} onSelect={() => void openDataDir(dataDir.replace(/[\\/][^\\/]+$/, ''))}>
             <FolderOpen className="mr-2 h-3.5 w-3.5" />
             Open Data Folder
+          </MenubarItem>
+          <MenubarSeparator />
+          <MenubarItem onSelect={onCheckUpdates}>
+            <RefreshCw className="mr-2 h-3.5 w-3.5" />
+            Check for Updates
           </MenubarItem>
           <MenubarSeparator />
           <MenubarItem onSelect={onAbout}>About</MenubarItem>
