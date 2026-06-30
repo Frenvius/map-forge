@@ -82,15 +82,24 @@ export const useMapTabs = (
     }
     let detectedVersion = version;
     let peekedDataDir: string | null = null;
+    let stampedMinor: number | null = null;
 
     if (path) {
       const peeked = await peekOtbmVersion(path).catch(() => null);
       if (peeked?.version) detectedVersion = peeked.version;
       if (peeked?.data_dir) peekedDataDir = peeked.data_dir;
+      if (peeked) stampedMinor = peeked.items_minor;
     }
 
     if (detectedVersion !== version) {
-      await switchVersion(detectedVersion);
+      try {
+        await switchVersion(detectedVersion);
+      } catch {
+        setStatus(
+          `Map stamps items v${stampedMinor ?? '?'} (client ${detectedVersion}); no assets configured. Opened with ${version} - pair a client folder in Preferences or change version in Map > Properties.`
+        );
+        detectedVersion = version;
+      }
     }
 
     const found = path ? await resolveMapItems(path).catch(() => null) : null;
