@@ -293,7 +293,10 @@ const App = () => {
 
   const dock = useDock(isContentReady);
 
-  const toggleMinimap = () => setMinimapOpen((v) => !v);
+  const toggleMinimap = () => {
+    if (!minimapOpen) dock.ensureMinimapOnScreen();
+    setMinimapOpen((v) => !v);
+  };
   const closeMinimap = () => setMinimapOpen(false);
 
   const ensurePropertiesPlaced = React.useCallback(() => {

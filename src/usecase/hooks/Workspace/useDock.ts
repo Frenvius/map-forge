@@ -13,7 +13,9 @@ import {
   DropTarget,
   DockLayout,
   CORNER_MARGIN,
+  MIN_PANEL_WIDTH,
   instancePanelId,
+  MIN_PANEL_HEIGHT,
   DEFAULT_MAX_STACK,
   DEFAULT_FLOAT_WIDTH,
   DEFAULT_MINIMAP_SIZE,
@@ -78,6 +80,7 @@ export interface DockApi {
   resetLayout: () => void;
   reloadConfig: () => void;
   floatPanel: (id: PanelId) => void;
+  ensureMinimapOnScreen: () => void;
   dockToCorner: (id: PanelId, corner: MapCorner) => void;
   newPalette: () => void;
   closePanel: (id: PanelId) => void;
@@ -258,6 +261,24 @@ export const useDock = (isContentReady: (id: PanelId) => boolean): DockApi => {
     });
   };
 
+  const ensureMinimapOnScreen = () => {
+    const ws = workspaceRef.current?.getBoundingClientRect();
+    if (!ws) return;
+    setLayout((prev) => {
+      const rect = floatRectOf(prev, 'minimap');
+      if (!rect) return prev;
+      const w = rect.width >= MIN_PANEL_WIDTH ? rect.width : DEFAULT_MINIMAP_SIZE;
+      const h = rect.height >= MIN_PANEL_HEIGHT ? rect.height : DEFAULT_MINIMAP_SIZE;
+      const onScreen =
+        w === rect.width && h === rect.height && rect.x >= 0 && rect.y >= 0 && rect.x + w <= ws.width && rect.y + h <= ws.height;
+      if (onScreen) return prev;
+      const dock = { x: Math.max(8, ws.width - w - 16), y: Math.max(8, ws.height - h - 16), width: w, height: h };
+      const next = floatAt(prev, 'minimap', dock);
+      saveDockLayout(next);
+      return next;
+    });
+  };
+
   const floatPanel = (id: PanelId) => {
     setLayout((prev) => {
       const ws = workspaceRef.current?.getBoundingClientRect();
@@ -309,6 +330,13 @@ export const useDock = (isContentReady: (id: PanelId) => boolean): DockApi => {
       const reset = await getSetting('minimapReset', false);
       const placed = !!zoneOf(loaded, 'minimap') || isFloating(loaded, 'minimap');
       if (reset && placed) {
+        const rect = floatRectOf(loaded, 'minimap');
+        if (rect && (rect.width < MIN_PANEL_WIDTH || rect.height < MIN_PANEL_HEIGHT)) {
+          const healed = floatAt(loaded, 'minimap', defaultMinimapRect());
+          saveDockLayout(healed);
+          setLayout(healed);
+          return;
+        }
         setLayout(loaded);
         return;
       }
@@ -326,7 +354,7 @@ export const useDock = (isContentReady: (id: PanelId) => boolean): DockApi => {
   React.useEffect(() => {
     const onResize = () => {
       const ws = workspaceRef.current?.getBoundingClientRect();
-      if (!ws) return;
+      if (!ws || ws.width <= 0 || ws.height <= 0) return;
       setLayout((prev) => {
         const next = clampFloatsToBounds(prev, { width: ws.width, height: ws.height });
         if (next !== prev) saveDockLayout(next);
@@ -369,6 +397,7 @@ export const useDock = (isContentReady: (id: PanelId) => boolean): DockApi => {
     resetLayout,
     reloadConfig,
     floatPanel,
+    ensureMinimapOnScreen,
     dockToCorner,
     newPalette,
     closePanel
