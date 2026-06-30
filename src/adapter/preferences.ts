@@ -66,10 +66,14 @@ export async function saveGeneralConfig(config: GeneralConfig): Promise<void> {
 
 export interface EditorConfig {
   autoCreateSpawn: boolean;
+  eraseMonsters: boolean;
+  eraseSpawns: boolean;
 }
 
 export const defaultEditorConfig: EditorConfig = {
-  autoCreateSpawn: true
+  autoCreateSpawn: true,
+  eraseMonsters: true,
+  eraseSpawns: true
 };
 
 export async function loadEditorConfig(): Promise<EditorConfig> {

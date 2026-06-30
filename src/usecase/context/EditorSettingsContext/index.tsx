@@ -36,6 +36,8 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
   const [spawnSize, setSpawnSize] = React.useState(defaultGeneralConfig.spawnSize);
   const [spawnTime, setSpawnTime] = React.useState(defaultGeneralConfig.spawnTime);
   const [autoCreateSpawn, setAutoCreateSpawn] = React.useState(defaultEditorConfig.autoCreateSpawn);
+  const [eraseMonsters, setEraseMonsters] = React.useState(defaultEditorConfig.eraseMonsters);
+  const [eraseSpawns, setEraseSpawns] = React.useState(defaultEditorConfig.eraseSpawns);
   const [copyPositionFormat, setCopyPositionFormat] = React.useState(defaultGeneralConfig.copyPositionFormat);
   const [infiniteMouse, setInfiniteMouse] = React.useState(defaultGeneralConfig.infiniteMouse);
 
@@ -49,7 +51,11 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
   }, []);
 
   const reloadEditor = React.useCallback(() => {
-    void loadEditorConfig().then((e) => setAutoCreateSpawn(e.autoCreateSpawn));
+    void loadEditorConfig().then((e) => {
+      setAutoCreateSpawn(e.autoCreateSpawn);
+      setEraseMonsters(e.eraseMonsters);
+      setEraseSpawns(e.eraseSpawns);
+    });
   }, []);
 
   React.useEffect(reloadGeneral, [reloadGeneral]);
@@ -105,6 +111,8 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       spawnSize,
       spawnTime,
       autoCreateSpawn,
+      eraseMonsters,
+      eraseSpawns,
       copyPositionFormat,
       infiniteMouse,
       zoneVisibility,
@@ -142,6 +150,8 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       spawnSize,
       spawnTime,
       autoCreateSpawn,
+      eraseMonsters,
+      eraseSpawns,
       copyPositionFormat,
       infiniteMouse,
       zoneVisibility,

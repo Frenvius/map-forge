@@ -144,6 +144,8 @@ export interface MapCanvasContextInputs {
   spawnTime: number;
   spawnRadius: number;
   autoCreateSpawn: boolean;
+  eraseMonsters: boolean;
+  eraseSpawns: boolean;
   copyPositionFormat: string;
   activeTool: ToolId;
   eraserMode: EraserMode;

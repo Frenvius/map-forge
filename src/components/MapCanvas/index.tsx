@@ -83,6 +83,8 @@ const MapCanvas = (props: MapCanvasProps) => {
     spawnTime: settings.spawnTime,
     spawnRadius: settings.spawnSize,
     autoCreateSpawn: settings.autoCreateSpawn,
+    eraseMonsters: settings.eraseMonsters,
+    eraseSpawns: settings.eraseSpawns,
     copyPositionFormat: settings.copyPositionFormat,
     activeTool: tool.activeTool,
     eraserMode: tool.eraserMode,

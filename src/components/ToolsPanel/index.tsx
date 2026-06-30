@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, ComponentType } from 'react';
-import { Brush, Check, Eraser, Layers2, PenTool, Crosshair, MousePointer2, GripHorizontal } from 'lucide-react';
+import { Brush, Check, Eraser, Layers2, PenTool, Crosshair, MousePointer2, GripHorizontal, Skull } from 'lucide-react';
 import {
   IconHome,
   IconFlag3,
@@ -42,7 +42,8 @@ const ICONS: Record<ToolId, ComponentType<{ className?: string }>> = {
 
 const ERASER_MODE_ICONS: Record<EraserMode, ComponentType<{ className?: string }>> = {
   items: Eraser,
-  ground: Layers2
+  ground: Layers2,
+  creatures: Skull
 };
 
 interface EraserToolProps {

@@ -20,6 +20,8 @@ export interface EditorSettingsValue {
   spawnSize: number;
   spawnTime: number;
   autoCreateSpawn: boolean;
+  eraseMonsters: boolean;
+  eraseSpawns: boolean;
   copyPositionFormat: string;
   infiniteMouse: boolean;
   zoneVisibility: ZoneVisibility;

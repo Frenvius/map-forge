@@ -8,7 +8,7 @@ import { selectionFloorBoxes } from '~/usecase/floors';
 import { buildItemPreview } from '~/usecase/itemPreview';
 import { planGeneration } from '~/lib/generator/generate';
 import { formatPosition } from '~/usecase/positionFormat';
-import { MapSpawns, emptyMapSpawns } from '~/domain/creature';
+import { MapSpawns, emptyMapSpawns, buildMapSpawns } from '~/domain/creature';
 import { MountainOptions, ResolvedMountain } from '~/domain/mountain';
 import { GenPlan, ResolvedBiome, GenerateOptions } from '~/domain/biome';
 import { waypointAt, MapWaypoints, emptyMapWaypoints } from '~/domain/waypoint';
@@ -238,6 +238,37 @@ export function useMapInteraction(deps: InteractionDeps) {
   function finishCreatureStroke() {
     const before = creatureStroke.current;
     creatureStroke.current = null;
+    scene.lastPaintKey.current = null;
+    if (!before) return;
+    const after = inputs.current.spawns ?? emptyMapSpawns();
+    if (before !== after) {
+      undoTimeline.current.push({ kind: 'spawn', before, after });
+      redoTimeline.current = [];
+    }
+  }
+
+  const markerEraseStroke = React.useRef<MapSpawns | null>(null);
+
+  function applyMarkerEraseAt(pos: Position) {
+    const key = `${pos.x},${pos.y},${pos.z}`;
+    if (key === scene.lastPaintKey.current) return;
+    scene.lastPaintKey.current = key;
+    const base = inputs.current.spawns ?? emptyMapSpawns();
+    let next = base;
+    if (inputs.current.eraseMonsters) next = removeCreatureAt(next, pos);
+    if (inputs.current.eraseSpawns) next = removeSpawnAt(next, pos);
+    if (next !== base) inputs.current.onEditSpawns(next);
+  }
+
+  function beginMarkerEraseStroke(e: React.MouseEvent) {
+    markerEraseStroke.current = inputs.current.spawns ?? emptyMapSpawns();
+    scene.lastPaintKey.current = null;
+    applyMarkerEraseAt(tileAt(e));
+  }
+
+  function finishMarkerEraseStroke() {
+    const before = markerEraseStroke.current;
+    markerEraseStroke.current = null;
     scene.lastPaintKey.current = null;
     if (!before) return;
     const after = inputs.current.spawns ?? emptyMapSpawns();
@@ -721,6 +752,16 @@ export function useMapInteraction(deps: InteractionDeps) {
     const y0 = Math.min(bs.startTile.y, bs.curTile.y);
     const x1 = Math.max(bs.startTile.x, bs.curTile.x);
     const y1 = Math.max(bs.startTile.y, bs.curTile.y);
+    if (inputs.current.eraserMode === 'creatures') {
+      const base = inputs.current.spawns ?? emptyMapSpawns();
+      const inBox = (p: { x: number; y: number; z: number }) => p.z === z && p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1;
+      const placements = inputs.current.eraseMonsters ? base.placements.filter((p) => !inBox(p)) : base.placements;
+      const areas = inputs.current.eraseSpawns ? base.areas.filter((a) => !inBox(a)) : base.areas;
+      if (placements.length !== base.placements.length || areas.length !== base.areas.length) {
+        editSpawns(buildMapSpawns(areas, placements));
+      }
+      return;
+    }
     eraseArea(inputs.current.map.id, z, x0, y0, x1, y1, inputs.current.automagic, inputs.current.eraserMode === 'ground')
       .then((touched) => refetchKeysNow(touched, z))
       .catch((err) => console.error('Failed to erase box', err));
@@ -1487,6 +1528,10 @@ export function useMapInteraction(deps: InteractionDeps) {
       return;
     }
     if (tool === 'eraser') {
+      if (inputs.current.eraserMode === 'creatures') {
+        beginMarkerEraseStroke(e);
+        return;
+      }
       scene.erasing.current = true;
       scene.lastPaintKey.current = null;
       recordItemEdit();
@@ -1523,7 +1568,9 @@ export function useMapInteraction(deps: InteractionDeps) {
       scene.mouseScreen.current = { x: e.clientX - r.left, y: e.clientY - r.top };
     }
     if (inputs.current.activeTool === 'pen') penMove(e);
-    if (creatureStroke.current) {
+    if (markerEraseStroke.current) {
+      applyMarkerEraseAt(tileAt(e));
+    } else if (creatureStroke.current) {
       applyCreatureAt(tileAt(e));
     } else if (scene.painting.current) {
       paintAt(tileAt(e));
@@ -1574,7 +1621,7 @@ export function useMapInteraction(deps: InteractionDeps) {
         if (bs.additive) eraseBox(bs);
         else paintBox(bs);
       } else if (tool === 'eraser') {
-        recordItemEdit();
+        if (inputs.current.eraserMode !== 'creatures') recordItemEdit();
         eraseBox(bs);
       } else if (isZoneTool(tool)) {
         recordItemEdit();
@@ -1601,6 +1648,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     }
     finishMove();
     finishCreatureStroke();
+    finishMarkerEraseStroke();
     camera.endPan();
     scene.painting.current = false;
     scene.erasing.current = false;
@@ -1622,6 +1670,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     clearBoxPreview();
     finishMove();
     finishCreatureStroke();
+    finishMarkerEraseStroke();
     scene.painting.current = false;
     scene.erasing.current = false;
     scene.eraseBrushId.current = null;
