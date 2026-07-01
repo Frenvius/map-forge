@@ -156,6 +156,17 @@ const MapCanvas = (props: MapCanvasProps) => {
   }, []);
 
   React.useEffect(() => {
+    const ref = props.highlightRef;
+    if (!ref) return;
+    ref.current = (x, y, z) => {
+      scene.gotoHighlight.current = { x, y, z, start: performance.now() };
+    };
+    return () => {
+      ref.current = null;
+    };
+  }, []);
+
+  React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.altKey) return;
       const t = e.target as HTMLElement | null;
@@ -260,25 +271,26 @@ const MapCanvas = (props: MapCanvasProps) => {
   const paintable =
     (activeTool === 'brush' && activeBrush != null && activeBrush.serverId != null) ||
     (activeTool === 'house' && tool.activeHouseId != null);
-  const canvasCursor = interaction.spaceHeld || camera.panning
-    ? camera.panning
-      ? 'grabbing'
-      : 'grab'
-    : props.placingWaypoint
-    ? WAYPOINT_CURSOR
-    : activeTool === 'pen'
-      ? interaction.penCursor
-      : paintable
-        ? DRAW_CURSOR
-        : activeTool === 'eraser' ||
-            activeTool === 'spawn' ||
-            isZoneTool(activeTool) ||
-            isHouseTool(activeTool) ||
-            interaction.boxing
-          ? 'crosshair'
-          : camera.panning || interaction.moving
-            ? 'grabbing'
-            : 'default';
+  const canvasCursor =
+    interaction.spaceHeld || camera.panning
+      ? camera.panning
+        ? 'grabbing'
+        : 'grab'
+      : props.placingWaypoint
+        ? WAYPOINT_CURSOR
+        : activeTool === 'pen'
+          ? interaction.penCursor
+          : paintable
+            ? DRAW_CURSOR
+            : activeTool === 'eraser' ||
+                activeTool === 'spawn' ||
+                isZoneTool(activeTool) ||
+                isHouseTool(activeTool) ||
+                interaction.boxing
+              ? 'crosshair'
+              : camera.panning || interaction.moving
+                ? 'grabbing'
+                : 'default';
 
   return (
     <div className="relative h-full w-full overflow-hidden">

@@ -122,6 +122,7 @@ export interface MapCanvasProps {
   onViewChange?: (cx: number, cy: number) => void;
   viewRef?: React.MutableRefObject<MapView | null>;
   centerRef?: React.MutableRefObject<((x: number, y: number) => void) | null>;
+  highlightRef?: React.MutableRefObject<((x: number, y: number, z: number) => void) | null>;
 }
 
 export interface MapCanvasContextInputs {

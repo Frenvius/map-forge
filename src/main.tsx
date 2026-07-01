@@ -3,16 +3,6 @@ import { createRoot } from 'react-dom/client';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
-import { Button } from '~/components/commons/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription
-} from '~/components/commons/ui/dialog';
-
 import { House } from '~/domain/house';
 import { cornerOf } from '~/usecase/dock';
 import Toolbar from '~/components/Toolbar';
@@ -36,6 +26,7 @@ import ScriptEditor from '~/components/ScriptEditor';
 import MapProperties from '~/components/MapProperties';
 import MapStatistics from '~/components/MapStatistics';
 import AssetsMissing from '~/components/AssetsMissing';
+import { Button } from '~/components/commons/ui/button';
 import { useSetting } from '~/usecase/hooks/useSetting';
 import { serializeSpawnXml } from '~/usecase/spawnEdits';
 import { formatPosition } from '~/usecase/positionFormat';
@@ -63,6 +54,14 @@ import { useAppShortcuts } from '~/usecase/hooks/Workspace/useAppShortcuts';
 import { getTowns, getMapProperties, setMapProperties } from '~/adapter/map';
 import { AssetsProvider, useAssetsBundle } from '~/usecase/context/AssetsContext';
 import { useEditorSettings, EditorSettingsProvider } from '~/usecase/context/EditorSettingsContext';
+import {
+  Dialog,
+  DialogTitle,
+  DialogHeader,
+  DialogFooter,
+  DialogContent,
+  DialogDescription
+} from '~/components/commons/ui/dialog';
 
 import './styles/index.css';
 
@@ -123,6 +122,7 @@ const App = () => {
   const statusApiRef = React.useRef<StatusBarApi | null>(null);
   const minimapApiRef = React.useRef<MinimapApi | null>(null);
   const mapCenterRef = React.useRef<((x: number, y: number) => void) | null>(null);
+  const mapHighlightRef = React.useRef<((x: number, y: number, z: number) => void) | null>(null);
   const spawnsRef = React.useRef<MapSpawns | null>(null);
   const spawnsDirty = React.useRef(false);
   const waypointsRef = React.useRef<MapWaypoints | null>(null);
@@ -392,6 +392,7 @@ const App = () => {
   const gotoPosition = (x: number, y: number, z: number) => {
     setFloorZ(z);
     mapCenterRef.current?.(x, y);
+    mapHighlightRef.current?.(x, y, z);
   };
 
   useAppShortcuts({
@@ -528,13 +529,13 @@ const App = () => {
     <MapTabs
       tabs={tabs}
       onNew={handleNew}
+      activeId={activeId}
+      onSelect={setActiveId}
+      disabled={busy || !assets}
       onClose={(id) => {
         dirtyTabs.current.delete(id);
         closeTab(id);
       }}
-      activeId={activeId}
-      onSelect={setActiveId}
-      disabled={busy || !assets}
     />
   );
 
@@ -550,13 +551,13 @@ const App = () => {
         minimapOpen={minimapOpen}
         onClearRecent={clearRecent}
         onEditTowns={openEditTowns}
+        onRequestExit={requestExit}
         idMarkersOpen={idMarkersOpen}
         onNewPalette={dock.newPalette}
         onToggleMinimap={toggleMinimap}
         propertiesOpen={propertiesOpen}
         onSave={() => void handleSave()}
         onAbout={() => setAboutOpen(true)}
-        onRequestExit={requestExit}
         onMapProperties={openMapProperties}
         onMapStatistics={openMapStatistics}
         onToggleIdMarkers={toggleIdMarkers}
@@ -635,6 +636,7 @@ const App = () => {
             centerRef={mapCenterRef}
             onFloorChange={setFloorZ}
             initialCenter={active.center}
+            highlightRef={mapHighlightRef}
             onEditSpawns={handleEditSpawns}
             onEditHouses={handleEditHouses}
             onHousesDirty={markHousesDirty}

@@ -132,6 +132,18 @@ export async function getTowns(mapId: number): Promise<Town[]> {
   return invoke<Town[]>('get_towns', { mapId });
 }
 
+export interface IdMarker {
+  x: number;
+  y: number;
+  z: number;
+  actionId: number;
+  uniqueId: number;
+}
+
+export async function listIdMarkers(mapId: number): Promise<IdMarker[]> {
+  return invoke<IdMarker[]>('list_id_markers', { mapId });
+}
+
 export async function setTowns(mapId: number, towns: Town[]): Promise<void> {
   await invoke('set_towns', { mapId, towns });
 }

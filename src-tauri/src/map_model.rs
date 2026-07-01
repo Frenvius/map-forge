@@ -1281,6 +1281,48 @@ pub fn get_tile_items(
 	Ok(TilePropertiesPayload { flags: tile_flags, house_id: tile_house, door_id: tile_door, items })
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IdMarker {
+	pub x: u16,
+	pub y: u16,
+	pub z: u8,
+	pub action_id: u16,
+	pub unique_id: u16,
+}
+
+#[tauri::command]
+pub fn list_id_markers(
+	map_id: u32,
+	otb_state: tauri::State<OtbState>,
+	map_state: tauri::State<MapState>,
+) -> Result<Vec<IdMarker>, String> {
+	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let empty = OtbItems::default();
+	let otb = otb_guard.as_ref().unwrap_or(&empty);
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+
+	for z in m.available_floors.clone() {
+		m.ensure_floor(z, otb)?;
+	}
+
+	let mut markers: Vec<IdMarker> = m
+		.item_attrs
+		.iter()
+		.filter(|(_, a)| a.action_id > 0 || a.unique_id > 0)
+		.map(|(&key, a)| IdMarker {
+			z: (key >> 40) as u8,
+			x: ((key >> 24) & 0xFFFF) as u16,
+			y: ((key >> 8) & 0xFFFF) as u16,
+			action_id: a.action_id,
+			unique_id: a.unique_id,
+		})
+		.collect();
+	markers.sort_unstable_by_key(|m| (m.z, m.y, m.x, m.action_id, m.unique_id));
+	Ok(markers)
+}
+
 #[tauri::command]
 pub fn undo_edit(map_id: u32, map_state: tauri::State<MapState>) -> Result<Vec<(u8, u32)>, String> {
 	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;

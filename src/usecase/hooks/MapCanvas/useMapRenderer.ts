@@ -63,6 +63,7 @@ export interface RendererDeps {
 }
 
 const TOOLTIP_MIN_ZOOM = 0.5;
+const GOTO_HIGHLIGHT_MS = 1600;
 
 export function useMapRenderer(deps: RendererDeps) {
   const { canvasRef, overlayRef, gl, camera, inputs, atlas, tiles, tooltips, meshes, selection, scene, stats } = deps;
@@ -73,6 +74,7 @@ export function useMapRenderer(deps: RendererDeps) {
   const doodadGhost = React.useRef<PreviewTile[] | null>(null);
   const doodadGhostKey = React.useRef<string | null>(null);
   const doodadGhostSeq = React.useRef(0);
+  const prevHlKey = React.useRef<string | null>(null);
 
   function updateDoodadGhost(hover: Position | null, floorZ: number) {
     const brush = inputs.current.activeBrush;
@@ -338,7 +340,9 @@ export function useMapRenderer(deps: RendererDeps) {
             }
           }
         }
-        const zoneBits = (ct.flags[i] ? visibleZoneBits(ct.flags[i], zoneVisibility) : 0) | houseBit | exitBit | blockBit;
+        const hl = scene.gotoHighlight.current;
+        const hlBit = hl && hl.z === z && hl.x === tx && hl.y === ty ? 4096 : 0;
+        const zoneBits = (ct.flags[i] ? visibleZoneBits(ct.flags[i], zoneVisibility) : 0) | houseBit | exitBit | blockBit | hlBit;
         let drawElevation = 0;
         for (let ii = ct.itemOffset[i]; ii < end; ii++) {
           const thing = items.get(ct.clientIds[ii]);
@@ -748,6 +752,23 @@ export function useMapRenderer(deps: RendererDeps) {
     const viewRef = inputs.current.viewRef;
     if (viewRef) viewRef.current = { camX, camY, zoom, vw, vh };
     renderer.beginFrame(bufW, bufH, camX, camY, scale, 1);
+
+    const gh = scene.gotoHighlight.current;
+    if (gh && performance.now() - gh.start > GOTO_HIGHLIGHT_MS) scene.gotoHighlight.current = null;
+    const hlNow = scene.gotoHighlight.current;
+    const hlKey = hlNow ? `${hlNow.z},${hlNow.x},${hlNow.y}` : null;
+    if (hlKey !== prevHlKey.current) {
+      for (const k of [prevHlKey.current, hlKey]) {
+        if (!k) continue;
+        const [hz, hx, hy] = k.split(',').map(Number);
+        meshes.forget(`${hz},${Math.floor(hx / CHUNK)},${Math.floor(hy / CHUNK)}`);
+      }
+      prevHlKey.current = hlKey;
+    }
+    if (hlNow && hlNow.z === floorZ) {
+      const t = (performance.now() - hlNow.start) / GOTO_HIGHLIGHT_MS;
+      renderer.setHighlight(0.35 + 0.45 * Math.abs(Math.cos(t * Math.PI * 3)) * (1 - t));
+    }
 
     const { minX, minY, maxX, maxY } = inputs.current.map.bounds;
     const minCx = Math.floor(minX / CHUNK);

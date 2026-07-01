@@ -1,6 +1,6 @@
 export type DockZone = 'left' | 'right';
 
-export type PanelKind = 'palette' | 'tools' | 'minimap' | 'properties';
+export type PanelKind = 'palette' | 'tools' | 'minimap' | 'properties' | 'idmarkers';
 
 export type PanelId = string;
 
@@ -96,6 +96,16 @@ export const PANELS: Record<PanelKind, PanelMeta> = {
   properties: {
     id: 'properties',
     title: 'Item Properties',
+    variant: 'panel',
+    resizable: true,
+    stackable: true,
+    minWidth: MIN_PANEL_WIDTH,
+    minHeight: 200,
+    cornerDockable: false
+  },
+  idmarkers: {
+    id: 'idmarkers',
+    title: 'Action / Unique IDs',
     variant: 'panel',
     resizable: true,
     stackable: true,

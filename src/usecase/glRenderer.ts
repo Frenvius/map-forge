@@ -53,6 +53,8 @@ in float vSpawn;
 in float vZone;
 uniform sampler2D uAtlas;
 uniform float uScale;
+uniform vec3 uHlColor;
+uniform float uHlMix;
 out vec4 frag;
 const float T = ${tile.toFixed(1)};
 const float A = ${ATLAS_DIM.toFixed(1)};
@@ -92,6 +94,7 @@ void main() {
 	if ((zf & 8) != 0) { col.b *= 0.5; }
 	if ((zf & 4) != 0) { col.g *= 0.5; }
 	if ((zf & 2048) != 0) { col.r = min(col.r * 1.4 + 0.18, 1.0); col.g *= 0.55; col.b *= 0.55; }
+	if ((zf & 4096) != 0) { col = mix(col, uHlColor, uHlMix); }
 	frag = vec4(mix(col, vec3(0.0), vTint * 0.45), c.a);
 }`;
 }
@@ -181,6 +184,8 @@ export class GLRenderer {
   private uSnap: WebGLUniformLocation;
   private uViewport: WebGLUniformLocation;
   private uFloorOffset: WebGLUniformLocation;
+  private uHlColor: WebGLUniformLocation;
+  private uHlMix: WebGLUniformLocation;
   private dimProgram: WebGLProgram;
   private dimVao: WebGLVertexArrayObject;
   private uDimColor: WebGLUniformLocation;
@@ -216,6 +221,8 @@ export class GLRenderer {
     this.program = this.link(buildVertSrc(tileSize), buildFragSrc(tileSize));
     this.uCam = gl.getUniformLocation(this.program, 'uCam')!;
     this.uScale = gl.getUniformLocation(this.program, 'uScale')!;
+    this.uHlColor = gl.getUniformLocation(this.program, 'uHlColor')!;
+    this.uHlMix = gl.getUniformLocation(this.program, 'uHlMix')!;
     this.uSnap = gl.getUniformLocation(this.program, 'uSnap')!;
     this.uViewport = gl.getUniformLocation(this.program, 'uViewport')!;
     this.uFloorOffset = gl.getUniformLocation(this.program, 'uFloorOffset')!;
@@ -378,6 +385,12 @@ export class GLRenderer {
     gl.uniform1f(this.uSnap, snap);
     gl.uniform2f(this.uViewport, bufW, bufH);
     gl.uniform2f(this.uFloorOffset, 0, 0);
+    gl.uniform3f(this.uHlColor, 1.0, 0.82, 0.25);
+    gl.uniform1f(this.uHlMix, 0);
+  }
+
+  setHighlight(mix: number) {
+    this.gl.uniform1f(this.uHlMix, mix);
   }
 
   setFloorOffset(x: number, y: number) {

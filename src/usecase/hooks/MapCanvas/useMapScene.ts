@@ -46,6 +46,7 @@ export interface MapScene {
   markerDrag: React.MutableRefObject<MarkerDrag | null>;
   markerDest: React.MutableRefObject<Position | null>;
   spawnResize: React.MutableRefObject<{ center: Position; radius: number } | null>;
+  gotoHighlight: React.MutableRefObject<{ x: number; y: number; z: number; start: number } | null>;
 }
 
 export function useMapScene(): MapScene {
@@ -73,6 +74,7 @@ export function useMapScene(): MapScene {
     pasteGhost: React.useRef<ClipboardGhostTile[] | null>(null),
     markerDrag: React.useRef<MarkerDrag | null>(null),
     markerDest: React.useRef<Position | null>(null),
-    spawnResize: React.useRef<{ center: Position; radius: number } | null>(null)
+    spawnResize: React.useRef<{ center: Position; radius: number } | null>(null),
+    gotoHighlight: React.useRef<{ x: number; y: number; z: number; start: number } | null>(null)
   };
 }
