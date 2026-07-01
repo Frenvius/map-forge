@@ -1,12 +1,11 @@
 import React from 'react';
-import { getCurrentWindow } from '@tauri-apps/api/window';
-import { Save, FilePlus, FolderOpen, RefreshCw } from 'lucide-react';
+import { Save, FilePlus, RefreshCw, FolderOpen } from 'lucide-react';
 
 import { openDataDir } from '~/adapter/assets';
 import { openTilesetEditor } from '~/adapter/windows';
 import { TOOLTIP_TYPE_GROUPS } from '~/domain/tooltips';
-import { PaletteCategoryId, PALETTE_CATEGORIES } from '~/domain/palette';
 import { useAssetsBundle } from '~/usecase/context/AssetsContext';
+import { PaletteCategoryId, PALETTE_CATEGORIES } from '~/domain/palette';
 import { useEditorSettings } from '~/usecase/context/EditorSettingsContext';
 import {
   Menubar,
@@ -41,11 +40,14 @@ interface AppMenuProps {
   onMapStatistics: () => void;
   onOpenScripts: () => void;
   onOpenPreferences: () => void;
+  idMarkersOpen: boolean;
+  onToggleIdMarkers: () => void;
   onToggleProperties: () => void;
   onOpenRecent: (path: string) => void;
   onSelectPaletteCategory: (category: PaletteCategoryId) => void;
   onCheckUpdates: () => void;
   onAbout: () => void;
+  onRequestExit: () => void;
 }
 
 const basename = (path: string) => path.split(/[\\/]/).pop() ?? path;
@@ -72,10 +74,13 @@ const AppMenu = ({
   propertiesOpen,
   onOpenScripts,
   onOpenPreferences,
+  idMarkersOpen,
+  onToggleIdMarkers,
   onToggleProperties,
   onSelectPaletteCategory,
   onCheckUpdates,
-  onAbout
+  onAbout,
+  onRequestExit
 }: AppMenuProps) => {
   const {
     zoneVisibility,
@@ -151,7 +156,7 @@ const AppMenu = ({
             <MenubarShortcut>Ctrl+W</MenubarShortcut>
           </MenubarItem>
           <MenubarSeparator />
-          <MenubarItem onSelect={() => void getCurrentWindow().destroy()}>Exit</MenubarItem>
+          <MenubarItem onSelect={onRequestExit}>Exit</MenubarItem>
         </MenubarContent>
       </MenubarMenu>
 
@@ -296,6 +301,14 @@ const AppMenu = ({
           </MenubarCheckboxItem>
           <MenubarCheckboxItem checked={propertiesOpen} onCheckedChange={onToggleProperties} onSelect={(e) => e.preventDefault()}>
             Item Properties
+          </MenubarCheckboxItem>
+          <MenubarCheckboxItem
+            disabled={!hasActive}
+            checked={idMarkersOpen}
+            onCheckedChange={onToggleIdMarkers}
+            onSelect={(e) => e.preventDefault()}
+          >
+            Action / Unique IDs
           </MenubarCheckboxItem>
           <MenubarSeparator />
           <MenubarItem onSelect={() => void openTilesetEditor()}>Tileset Editor...</MenubarItem>

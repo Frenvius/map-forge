@@ -3,6 +3,16 @@ import { createRoot } from 'react-dom/client';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
+import { Button } from '~/components/commons/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription
+} from '~/components/commons/ui/dialog';
+
 import { House } from '~/domain/house';
 import { cornerOf } from '~/usecase/dock';
 import Toolbar from '~/components/Toolbar';
@@ -12,6 +22,7 @@ import { houseSizes } from '~/adapter/map';
 import { Town, MapView } from '~/domain/map';
 import MapTowns from '~/components/MapTowns';
 import { MapSpawns } from '~/domain/creature';
+import IdMarkers from '~/components/IdMarkers';
 import MapCanvas from '~/components/MapCanvas';
 import Workspace from '~/components/Workspace';
 import { openDataDir } from '~/adapter/assets';
@@ -91,12 +102,14 @@ const App = () => {
 
   const [minimapOpen, setMinimapOpen] = useSetting('minimapOpen', false);
   const [propertiesOpen, setPropertiesOpen] = useSetting('propertiesOpen', false);
+  const [idMarkersOpen, setIdMarkersOpen] = useSetting('idMarkersOpen', false);
   const [selectedItem, setSelectedItem] = React.useState<SelectedItem | null>(null);
   const [placingWaypoint, setPlacingWaypoint] = React.useState<string | null>(null);
   const [townsOpen, setTownsOpen] = React.useState(false);
   const [mapPropsOpen, setMapPropsOpen] = React.useState(false);
   const [statsOpen, setStatsOpen] = React.useState(false);
   const [aboutOpen, setAboutOpen] = React.useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = React.useState(false);
   const [scriptsOpen, setScriptsOpen] = React.useState(false);
   const [preferencesOpen, setPreferencesOpen] = React.useState(false);
   const [prefsTab, setPrefsTab] = React.useState<'general' | 'editor' | 'client'>('general');
@@ -117,6 +130,11 @@ const App = () => {
   const waypointEditRef = React.useRef<((next: MapWaypoints) => void) | null>(null);
   const housesRef = React.useRef<MapHouses | null>(null);
   const housesDirty = React.useRef(false);
+  const activeIdRef = React.useRef<string | null>(null);
+  const dirtyTabs = React.useRef<Set<string>>(new Set());
+  const markActiveDirty = React.useCallback(() => {
+    if (activeIdRef.current) dirtyTabs.current.add(activeIdRef.current);
+  }, []);
 
   const handleHover = React.useCallback((info: HoverInfo | null) => statusApiRef.current?.setHover(info), []);
   const handleSelect = React.useCallback((item: SelectedItem | null) => {
@@ -178,6 +196,7 @@ const App = () => {
       await persistSpawns(mapId, path);
       await persistWaypoints(path);
       await persistHouses(mapId, path);
+      if (activeIdRef.current) dirtyTabs.current.delete(activeIdRef.current);
     },
     [persistSpawns, persistWaypoints, persistHouses]
   );
@@ -204,6 +223,8 @@ const App = () => {
     setView
   } = useMapTabs(assets, { setStatus, setError, onAfterSave: persistSidecars, version, switchVersion });
 
+  activeIdRef.current = activeId;
+
   const {
     creatureDb,
     creatureTilesets,
@@ -227,8 +248,9 @@ const App = () => {
     (next: MapSpawns) => {
       setSpawns(next);
       spawnsDirty.current = true;
+      markActiveDirty();
     },
-    [setSpawns]
+    [setSpawns, markActiveDirty]
   );
 
   const markWaypointsMigrated = React.useCallback(() => {
@@ -245,8 +267,9 @@ const App = () => {
     (next: MapWaypoints) => {
       setWaypoints(next);
       waypointsDirty.current = true;
+      markActiveDirty();
     },
-    [setWaypoints]
+    [setWaypoints, markActiveDirty]
   );
 
   const { houses, setHouses } = useMapHouses(active ? { id: active.id, path: active.path, mapId: active.map.id } : null);
@@ -276,18 +299,21 @@ const App = () => {
     (next: MapHouses) => {
       setHouses(next);
       housesDirty.current = true;
+      markActiveDirty();
     },
-    [setHouses]
+    [setHouses, markActiveDirty]
   );
 
   const markHousesDirty = React.useCallback(() => {
     housesDirty.current = true;
-  }, []);
+    markActiveDirty();
+  }, [markActiveDirty]);
 
   const isContentReady = (id: PanelId) => {
     const kind = baseKind(id);
     if (kind === 'minimap') return minimapOpen && !!assets && !!active && minimapReady;
     if (kind === 'properties') return propertiesOpen && !!assets && !!active;
+    if (kind === 'idmarkers') return idMarkersOpen && !!assets && !!active;
     return kind === 'tools' || !!(assets && palette);
   };
 
@@ -315,6 +341,18 @@ const App = () => {
     ensurePropertiesPlaced();
     setPropertiesOpen(true);
   }, [ensurePropertiesPlaced]);
+
+  const ensureIdMarkersPlaced = React.useCallback(() => {
+    const placed = [...dock.layout.left.flat(), ...dock.layout.right.flat(), ...Object.keys(dock.layout.float)];
+    if (!placed.includes('idmarkers')) dock.floatPanel('idmarkers');
+  }, [dock]);
+
+  const toggleIdMarkers = React.useCallback(() => {
+    setIdMarkersOpen((prev) => {
+      if (!prev) ensureIdMarkersPlaced();
+      return !prev;
+    });
+  }, [ensureIdMarkersPlaced, setIdMarkersOpen]);
 
   const editWaypoints = (next: MapWaypoints) => (waypointEditRef.current ?? handleEditWaypoints)(next);
 
@@ -381,9 +419,21 @@ const App = () => {
 
   savingRef.current = !!saving;
 
+  const requestExit = React.useCallback(() => {
+    if (savingRef.current) return;
+    if (dirtyTabs.current.size > 0) setCloseConfirmOpen(true);
+    else void getCurrentWindow().destroy();
+  }, []);
+
   React.useEffect(() => {
     const unlisten = getCurrentWindow().onCloseRequested((event) => {
-      if (savingRef.current) event.preventDefault();
+      if (savingRef.current) {
+        event.preventDefault();
+        return;
+      }
+      if (dirtyTabs.current.size === 0) return;
+      event.preventDefault();
+      setCloseConfirmOpen(true);
     });
     return () => {
       void unlisten.then((fn) => fn());
@@ -450,6 +500,11 @@ const App = () => {
         />
       );
     }
+    if (kind === 'idmarkers' && assets && active && idMarkersOpen) {
+      return (
+        <IdMarkers dragHandle={handle} mapId={active.map.id} onGoto={gotoPosition} onClose={() => setIdMarkersOpen(false)} />
+      );
+    }
     if (kind === 'minimap' && assets && active && minimapReady) {
       return (
         <Minimap
@@ -473,7 +528,10 @@ const App = () => {
     <MapTabs
       tabs={tabs}
       onNew={handleNew}
-      onClose={closeTab}
+      onClose={(id) => {
+        dirtyTabs.current.delete(id);
+        closeTab(id);
+      }}
       activeId={activeId}
       onSelect={setActiveId}
       disabled={busy || !assets}
@@ -487,18 +545,21 @@ const App = () => {
         onNew={handleNew}
         onOpen={handleOpen}
         hasActive={!!active}
+        onStatus={handleStatus}
         loading={busy || !assets}
         minimapOpen={minimapOpen}
         onClearRecent={clearRecent}
         onEditTowns={openEditTowns}
+        idMarkersOpen={idMarkersOpen}
         onNewPalette={dock.newPalette}
         onToggleMinimap={toggleMinimap}
         propertiesOpen={propertiesOpen}
         onSave={() => void handleSave()}
-        onStatus={handleStatus}
         onAbout={() => setAboutOpen(true)}
+        onRequestExit={requestExit}
         onMapProperties={openMapProperties}
         onMapStatistics={openMapStatistics}
+        onToggleIdMarkers={toggleIdMarkers}
         onSaveAs={() => void handleSaveAs()}
         onToggleProperties={toggleProperties}
         onOpenScripts={() => setScriptsOpen(true)}
@@ -521,6 +582,23 @@ const App = () => {
       />
 
       <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
+
+      <Dialog open={closeConfirmOpen} onOpenChange={setCloseConfirmOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Unsaved changes</DialogTitle>
+            <DialogDescription>You have unsaved changes. Close without saving?</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setCloseConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void getCurrentWindow().destroy()}>
+              Close without saving
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ScriptEditor open={scriptsOpen} onOpenChange={setScriptsOpen} />
 
@@ -565,7 +643,10 @@ const App = () => {
             onItemProperties={openProperties}
             onEditWaypoints={handleEditWaypoints}
             onPlaceWaypoint={() => setPlacingWaypoint(null)}
-            onEdit={(z) => minimapApiRef.current?.markDirty(z)}
+            onEdit={(z) => {
+              minimapApiRef.current?.markDirty(z);
+              markActiveDirty();
+            }}
           />
         ) : assetsMissing ? (
           <AssetsMissing

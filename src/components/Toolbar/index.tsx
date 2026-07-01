@@ -25,11 +25,14 @@ interface ToolbarProps {
   onMapStatistics: () => void;
   onOpenScripts: () => void;
   onOpenPreferences: () => void;
+  idMarkersOpen: boolean;
+  onToggleIdMarkers: () => void;
   onToggleProperties: () => void;
   onOpenRecent: (path: string) => void;
   onSelectPaletteCategory: (category: PaletteCategoryId) => void;
   onAbout: () => void;
   onStatus: (message: string) => void;
+  onRequestExit: () => void;
 }
 
 const Toolbar = ({
@@ -52,10 +55,13 @@ const Toolbar = ({
   onMapStatistics,
   onOpenScripts,
   onOpenPreferences,
+  idMarkersOpen,
+  onToggleIdMarkers,
   onToggleProperties,
   onSelectPaletteCategory,
   onAbout,
-  onStatus
+  onStatus,
+  onRequestExit
 }: ToolbarProps) => {
   const win = getCurrentWindow();
   const updater = useUpdater();
@@ -102,6 +108,7 @@ const Toolbar = ({
         onSave={onSave}
         loading={loading}
         onAbout={onAbout}
+        onRequestExit={onRequestExit}
         onSaveAs={onSaveAs}
         hasActive={hasActive}
         onCloseMap={onCloseMap}
@@ -111,11 +118,13 @@ const Toolbar = ({
         onNewPalette={onNewPalette}
         onClearRecent={onClearRecent}
         onOpenScripts={onOpenScripts}
+        idMarkersOpen={idMarkersOpen}
         propertiesOpen={propertiesOpen}
         onToggleMinimap={onToggleMinimap}
         onMapProperties={onMapProperties}
         onMapStatistics={onMapStatistics}
         onOpenPreferences={onOpenPreferences}
+        onToggleIdMarkers={onToggleIdMarkers}
         onToggleProperties={onToggleProperties}
         onCheckUpdates={() => void handleCheckUpdates()}
         onSelectPaletteCategory={onSelectPaletteCategory}
@@ -142,7 +151,7 @@ const Toolbar = ({
         </button>
         <button
           onMouseDown={stop}
-          onClick={() => void (loading ? win.close() : win.destroy())}
+          onClick={onRequestExit}
           className="flex h-8 w-9 items-center justify-center text-muted-foreground hover:bg-[#c42b1c] hover:text-white"
         >
           <X className="h-4 w-4" />
