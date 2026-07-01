@@ -37,6 +37,9 @@
 		"active": true,
 		"createUpdaterArtifacts": true,
 		"targets": ["nsis"],
+		"resources": {
+			"../data/": "data/"
+		},
 		"windows": {
 			"nsis": {
 				"installerIcon": "icons/icon.ico",

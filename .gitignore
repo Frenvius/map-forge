@@ -39,7 +39,3 @@ Thumbs.db
 .env
 .env.*
 !.env.example
-
-# Bundled client assets - large binaries / copyrighted client data.
-# Track via Git LFS or fetch out-of-band; do not bloat git history.
-/data/

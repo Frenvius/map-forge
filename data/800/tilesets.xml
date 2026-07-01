@@ -1,0 +1,691 @@
+<materials>
+	<tileset name="Cave">
+		<terrain>
+			<brush name="void"/>
+			<brush name="lava"/>
+			<brush name="walkable lava"/>
+			<brush name="clear water"/>
+			<brush name="earth (soft)"/>
+			<brush name="earth (hard)"/>
+			<brush name="dirt"/>
+			<brush name="light dirt"/>
+			<brush name="cave"/>
+			<brush name="cave hole"/>
+			<brush name="cave ropespot"/>
+			<brush name="cave small hole"/>
+			<brush name="cave pickhole"/>
+					<brush name="fiery wall" after="rock wall"/>
+			<brush name="metal wall" after="rock wall"/>
+			<brush name="bone wall" after="rock wall"/>
+		</terrain>
+	</tileset>
+
+	<tileset name="Nature">
+		<terrain>
+			<brush name="sea"/>
+			<brush name="walkable sea"/>
+			<brush name="swamp"/>
+			<brush name="dark swamp"/>
+			<brush name="tar pit"/>
+			<brush name="mountain"/>
+			<brush name="mountain ground"/>
+			<brush name="mountain top ground"/>
+			<brush name="rocky ground"/>
+			<brush name="white gravel"/>
+			<brush name="jungle grass"/>
+			<brush name="grass"/>
+			<brush name="grass closed stone pile"/>
+			<brush name="grass pitfall"/>
+			<brush name="grass pitfall (always open)"/>
+			<brush name="jungle dirt"/>
+			<brush name="dirt"/>
+			<brush name="light dirt"/>
+			<brush name="snow"/>
+			<brush name="ice"/>
+			<brush name="dry earth"/>
+			<brush name="sand"/>
+			<brush name="sand closed stone pile"/>
+			<brush name="ramp"/>
+			<brush name="bamboo ramp"/>
+			<brush name="debris"/>
+			<brush name="debris_1"/>
+			<brush name="ice debris"/>
+			<brush name="twines"/>
+			<brush name="tendril wall"/>
+			<brush name="tendrils"/>
+			<brush name="mossy wall_2"/>
+					<brush name="Shallow water"/>
+		</terrain>
+			<doodad>
+			<brush name="cactus" after="roses"/>
+			<brush name="spiky cactus" after="roses"/>
+			<brush name="thick tree with roots and vines" after="tree crown"/>
+			<brush name="thick tree with vines" after="tree crown"/>
+			<brush name="thick tree with roots" after="tree crown"/>
+			<brush name="thick tree" after="tree crown"/>
+			<brush name="skinny branches" after="branches"/>
+			<brush name="jungle trees" after="bamboo plant"/>
+			<brush name="jungle bushes" after="bamboo plant"/>
+			<brush name="jungle umbrellas" after="bamboo plant"/>
+			<brush name="jungle giant flowers" after="bamboo plant"/>
+			<brush name="pearl flowers" after="bamboo plant"/>
+			<brush name="jungle flowers" after="bamboo plant"/>
+			<brush name="giant ball mushrooms" after="moldy mushrooms"/>
+			<item id="4006" afteritem="4008"/>
+		</doodad>
+	</tileset>
+
+	<tileset name="Roofs">
+		<terrain>
+			<brush name="flat roof"/>
+			<item id="924"/>
+			<brush name="brown bamboo roof"/>
+			<brush name="brick roof, left"/>
+			<brush name="brick roof, vertical"/>
+			<brush name="brick roof, right"/>
+			<brush name="brick roof, up"/>
+			<brush name="brick roof, horizontal"/>
+			<brush name="brick roof, down"/>
+			<brush name="wooden roof, up"/>
+			<brush name="wooden roof, horizontal"/>
+			<brush name="wooden roof, down"/>
+			<brush name="wooden roof, left"/>
+			<brush name="wooden roof, vertical"/>
+			<brush name="wooden roof, right"/>
+			<brush name="marquee rw ver 1"/>
+			<brush name="marquee yb ver 1"/>
+			<brush name="marquee g ver 1"/>
+			<brush name="marquee b ver 1"/>
+			<item id="5313"/>
+			<brush name="marquee rw ver 2"/>
+			<brush name="marquee yb ver 2"/>
+			<brush name="marquee g ver 2"/>
+			<brush name="marquee b ver 2"/>
+			<item id="6994"/>
+			<brush name="marquee rw hor 1"/>
+			<brush name="marquee yb hor 1"/>
+			<brush name="marquee g hor 1"/>
+			<brush name="marquee b hor 1"/>
+			<item id="6889"/>
+			<brush name="marquee rw hor 2"/>
+			<brush name="marquee yb hor 2"/>
+			<brush name="marquee g hor 2"/>
+			<brush name="marquee b hor 2"/>
+			<item id="6173"/>
+
+					<brush name="red striped marquee horizontal"/>
+			<brush name="red striped marquee vertical"/>
+			<brush name="yellow striped marquee horizontal"/>
+			<brush name="yellow striped marquee vertical"/>
+			<brush name="green marquee horizontal"/>
+			<brush name="green marquee vertical"/>
+			<brush name="blue marquee horizontal"/>
+			<brush name="blue marquee vertical"/>
+		</terrain>
+	</tileset>
+
+	<tileset name="Sea">
+		<collections_and_terrain>
+			<!-- land -->
+			<brush name="sea"/>
+			<brush name="walkable sea"/>
+			<brush name="drawbridge"/>
+			<brush name="drawbridge plank (1x3)"/>
+			<brush name="drawbridge plank (2x3)"/>
+
+			<!-- underwater -->
+			<brush name="ventilation grille (normal)"/>
+			<brush name="ventilation grille (underwater pickhole)"/>
+			<item id="5460"/>
+			<brush name="wooden floor (underwater)"/>
+			<brush name="dark wooden floor (underwater)"/>
+			<brush name="ocean floor"/>
+			<brush name="bubbles"/>
+			<brush name="reef stones"/>
+			<brush name="coral reef"/>
+			<item id="5421"/>
+			<brush name="sea organisms"/>
+			<brush name="sea shells"/>
+			<item id="5554"/>
+
+			<!-- ship walls -->
+			<brush name="ship cabin wall"/>
+			<brush name="damaged ship cabin wall"/>
+			<brush name="ship railing"/>
+			<brush name="damaged ship railling"/>
+			<brush name="damaged ship hull (rotatable)"/>
+
+			<!-- damaged ship parts -->
+			<brush name="rudder of the boat"/>
+			<brush name="steering wheel"/>
+			<brush name="broken steering wheel"/>
+			<brush name="damaged mast"/>
+			<brush name="damaged mast2"/>
+			<brush name="ship ruins"/>
+			<brush name="ship anchor"/>
+			<item id="5444"/>
+
+			<!-- complete ships -->
+			<brush name="fishing boat"/>
+			<brush name="big transport ship"/>
+			<brush name="big ship (alt)"/>
+		</collections_and_terrain>
+	</tileset>
+
+	<tileset name="Snow">
+		<collections_and_terrain>
+			<brush name="sea"/>
+			<brush name="walkable sea"/>
+			<brush name="earth (soft)"/>
+			<brush name="earth (hard)"/>
+			<brush name="cave (snow)"/>
+			<brush name="snow"/>
+			<brush name="ice"/>
+			<brush name="ramp"/>
+			<brush name="mountain"/>
+			<brush name="mountain ground"/>
+			<brush name="mountain top ground"/>
+			<brush name="rocky ground"/>
+			<brush name="dirt"/>
+			<brush name="ice closed stone pile"/>
+			<brush name="hole in the ice"/>
+			<brush name="ice debris"/>
+			<item id="486"/>
+		</collections_and_terrain>
+			<doodad>
+			<brush name="stone throne"/>
+			<brush name="stone table"/>
+			<brush name="frozen throne"/>
+			<brush name="frozen chest"/>
+			<brush name="frozen clock"/>
+			<brush name="frozen trough"/>
+			<brush name="frozen drawer"/>
+		</doodad>
+			<terrain>
+			<brush name="Fur Wall"/>
+		</terrain>
+	</tileset>
+
+	<tileset name="Stairs">
+		<terrain>
+			<!-- sewer grate -->
+			<item id="430"/>
+
+			<!-- universal -->
+			<brush name="trapdoor ladder down"/>
+			<brush name="wooden ladder hole"/>
+			<brush name="trapdoor down"/>
+			<brush name="stairs down"/>
+
+			<!-- ladder -->
+			<item id="1386"/>
+
+			<!-- wooden floor -->
+			<brush name="wooden ladder trapdoor"/>
+			<brush name="wooden ladder hole 2"/>
+			<brush name="wooden trapdoor"/>
+			<brush name="stairs down 2"/>
+
+			<!-- ladder -->
+			<item id="3678"/>
+
+			<!-- bamboo trapdoors -->
+			<item id="3135"/>
+			<item id="3136"/>
+			<item id="3137"/>
+			<item id="3138"/>
+
+			<!-- stairs -->
+			<brush name="white stone stairs up"/>
+
+			<!-- tile trapdoors -->
+			<brush name="white stone trapdoor"/>
+			<brush name="white stone stairs"/>
+			<brush name="gray stone trapdoor"/>
+			<brush name="gray stone stairs"/>
+
+			<!-- teleport -->
+			<item id="1387"/>
+
+			<!-- stairs cont -->
+			<brush name="black stone trapdoor"/>
+			<brush name="black stone stairs"/>
+
+			<!-- stairs -->
+			<brush name="banuta stairs"/>
+			<brush name="stone stairway (ground)"/>
+
+			<!-- teleport -->
+			<item id="1397"/>
+
+			<!-- mountain ramp down -->
+			<item id="476"/>
+			<item id="479"/>
+			<item id="475"/>
+			<item id="480"/>
+
+			<!-- sandstone -->
+			<brush name="pyramid ramp"/>
+			<brush name="pyramid corner"/>
+			<brush name="sandstone ropespot"/>
+			<brush name="open sandstone trapdoor"/>
+			<brush name="sandstone trapdoor"/>
+
+			<!-- bamboo -->
+			<brush name="bamboo ramp"/>
+
+			<!-- 7.8+ -->
+			<brush name="wooden stairs"/>
+		</terrain>
+	</tileset>
+
+	<tileset name="Town">
+		<terrain>
+			<item id="965"/>
+			<item id="966"/>
+			<brush name="white marble floor"/>
+			<brush name="black marble floor"/>
+			<item id="457"/>
+			<brush name="stone floor"/>
+			<brush name="gray stone tiles"/>
+			<brush name="dark tiled sandstone"/>
+			<brush name="tiled sandstone floor"/>
+			<brush name="elven wooden floor"/>
+			<brush name="light tiled stone floor"/>
+			<brush name="dark tiled stone floor"/>
+			<brush name="drab tiled stone floor"/>
+			<brush name="wooden floor"/>
+			<brush name="carlin wooden floor"/>
+			<brush name="orange tiled floor"/>
+			<brush name="magic tile"/>
+			<item id="280"/>
+			<brush name="dirt"/>
+			<item id="4832"/>
+			<item id="806"/>
+			<item id="4833"/>
+			<item id="804"/>
+			<brush name="white gravel"/>
+			<brush name="lawn"/>
+			<brush name="cobblestone"/>
+			<brush name="sandstone"/>
+			<brush name="dark sandstone"/>
+			<brush name="grassy cobblestone"/>
+			<brush name="drawbridge"/>
+			<brush name="dark wooden floor"/>
+			<brush name="banuta tiled floor"/>
+			<brush name="banuta floor"/>
+			<brush name="banuta pavement square"/>
+			<brush name="banuta pavement round"/>
+			<brush name="banuta decorated tiles"/>
+			<brush name="banuta lizard carvings"/>
+			<brush name="snake ornament samples"/>
+			<brush name="large lizard carvings"/>
+			<item id="416"/>
+			<item id="426"/>
+			<item id="446"/>
+			<item id="3216"/>
+					<brush name="paravent wall" after="rock wall"/>
+			<brush name="fiery wall" after="rock wall"/>
+			<brush name="jungle stone wall" after="rock wall"/>
+			<brush name="jungle stone wall ornamented" after="rock wall"/>
+			<brush name="metal wall" after="rock wall"/>
+			<brush name="bone wall" after="rock wall"/>
+			<brush name="bamboo wall" after="rock wall"/>
+			<brush name="thin bamboo wall" after="rock wall"/>
+			<brush name="grass wall" after="rock wall"/>
+			<brush name="marble railing" after="dark fence"/>
+			<brush name="ornamented marble railing" after="dark fence"/>
+			<brush name="pillared marble railing" after="dark fence"/>
+			<brush name="stone railing" after="dark fence"/>
+			<brush name="ornamented sandstone railing" after="dark fence"/>
+			<brush name="sandstone railing" after="dark fence"/>
+			<brush name="jungle stone railing" after="dark fence"/>
+		</terrain>
+	</tileset>
+	<tileset name="Water creatures">
+		<creatures>
+			<creature name="Azure Frog"/>
+			<creature name="Coral Frog"/>
+			<creature name="Crimson Frog"/>
+			<creature name="Green Frog"/>
+			<creature name="Orchid Frog"/>
+			<creature name="Toad"/>
+			<creature name="Quara Constrictor"/>
+			<creature name="Quara Hydromancer"/>
+			<creature name="Quara Mantassin"/>
+			<creature name="Quara Pincher"/>
+			<creature name="Quara Predator"/>
+			<creature name="Quara Constrictor Scout"/>
+			<creature name="Quara Hydromancer Scout"/>
+			<creature name="Quara Mantassin Scout"/>
+			<creature name="Quara Pincher Scout"/>
+			<creature name="Quara Predator Scout"/>
+		</creatures>
+	</tileset>
+	<tileset name="Animals">
+		<creatures>
+			<creature name="Sibang"/>
+			<creature name="Kongra"/>
+			<creature name="Merlkin"/>
+			<creature name="Lizard Sentinel"/>
+			<creature name="Lizard Templar"/>
+			<creature name="Lizard Snakecharmer"/>
+			<creature name="Chakoya Toolshaper"/>
+			<creature name="Chakoya Tribewarden"/>
+			<creature name="Chakoya Windcaller"/>
+			<creature name="Chicken"/>
+			<creature name="Rabbit"/>
+			<creature name="Black Sheep"/>
+			<creature name="Dog"/>
+			<creature name="Sheep"/>
+			<creature name="Deer"/>
+			<creature name="Flamingo"/>
+			<creature name="Parrot"/>
+			<creature name="Pig"/>
+			<creature name="Seagull"/>
+			<creature name="Skunk"/>
+			<creature name="Rat"/>
+			<creature name="Badger"/>
+			<creature name="Bat"/>
+			<creature name="Cave Rat"/>
+			<creature name="Wolf"/>
+			<creature name="Winter Wolf"/>
+			<creature name="Hyaena"/>
+			<creature name="Bear"/>
+			<creature name="Panda"/>
+			<creature name="Polar Bear"/>
+			<creature name="Crab"/>
+			<creature name="Lion"/>
+			<creature name="Rotworm"/>
+			<creature name="Tiger"/>
+			<creature name="Crocodile"/>
+			<creature name="War Wolf"/>
+			<creature name="Carrion Worm"/>
+			<creature name="Tortoise"/>
+			<creature name="Terror Bird"/>
+			<creature name="Thornback Tortoise"/>
+			<creature name="Blood Crab"/>
+			<creature name="Elephant"/>
+			<creature name="Mammoth"/>
+		</creatures>
+	</tileset>
+	<tileset name="Arena Bosses">
+		<creatures>
+			<creature name="Frostfur"/>
+			<creature name="Bloodpaw"/>
+			<creature name="Bovinus"/>
+			<creature name="Achad"/>
+			<creature name="Colerian the Barbarian"/>
+			<creature name="The Hairy One"/>
+			<creature name="Axeitus Headbanger"/>
+			<creature name="Rocky"/>
+			<creature name="Cursed Gladiator"/>
+			<creature name="Orcus the Cruel"/>
+			<creature name="Avalanche"/>
+			<creature name="Kreebosh the Exile"/>
+			<creature name="The Dark Dancer"/>
+			<creature name="The Hag"/>
+			<creature name="Slim"/>
+			<creature name="Grimgor Guteater"/>
+			<creature name="Drasilla"/>
+			<creature name="Spirit of Earth"/>
+			<creature name="Spirit of Water"/>
+			<creature name="Spirit of Fire"/>
+			<creature name="Webster"/>
+			<creature name="Darakan the Executioner"/>
+			<creature name="Norgle Glacierbeard"/>
+			<creature name="The Pit Lord"/>
+			<creature name="Svoren The Mad"/>
+			<creature name="The Masked Marauder"/>
+			<creature name="Gnorre Chyllson"/>
+			<creature name="Fallen Mooh'Tah Master Ghar"/>
+			<creature name="Deathbringer"/>
+			<creature name="The Obliverator"/>
+		</creatures>
+	</tileset>
+	<tileset name="Bugs">
+		<creatures>
+			<creature name="Crystal Spider"/>
+			<creature name="Giant Spider"/>
+			<creature name="Poison Spider"/>
+			<creature name="Spider"/>
+			<creature name="Scorpion"/>
+			<creature name="Tarantula"/>
+			<creature name="The Old Widow"/>
+			<creature name="Webster"/>
+			<creature name="Ancient Scarab"/>
+			<creature name="Bug"/>
+			<creature name="Butterfly"/>
+			<creature name="Centipede"/>
+			<creature name="Larva"/>
+			<creature name="Scarab"/>
+			<creature name="Wasp"/>
+			<creature name="Blood Crab"/>
+			<creature name="Crab"/>
+		</creatures>
+	</tileset>
+	<tileset name="Bosses">
+		<creatures>
+			<creature name="Apprentice Sheng"/>
+			<creature name="Morgaroth"/>
+			<creature name="Ghazbaran"/>
+			<creature name="Grorlam"/>
+			<creature name="Tiquandas Revenge"/>
+			<creature name="Thul"/>
+			<creature name="The Horned Fox"/>
+			<creature name="Munster"/>
+			<creature name="The Old Widow"/>
+			<creature name="General Murius"/>
+			<creature name="Bones"/>
+			<creature name="Dharalion"/>
+			<creature name="Fernfang"/>
+			<creature name="Demodras"/>
+			<creature name="Yakchal"/>
+			<creature name="Brutus Bloodbeard"/>
+			<creature name="Deadeye Devious"/>
+			<creature name="Lethal Lissy"/>
+			<creature name="The Evil Eye"/>
+			<creature name="Mr. Punish"/>
+			<creature name="Countess Sorrow"/>
+			<creature name="Necropharus"/>
+			<creature name="Infernatil"/>
+			<creature name="Apocalypse"/>
+			<creature name="Bazir"/>
+			<creature name="Dracola"/>
+			<creature name="Freegoiz"/>
+			<creature name="The Handmaiden"/>
+			<creature name="The Imperor"/>
+			<creature name="The Plasmother"/>
+			<creature name="Verminor"/>
+			<creature name="Ferumbras"/>
+			<creature name="Orshabaal"/>
+		</creatures>
+	</tileset>
+	<tileset name="Large and Nasty">
+		<creatures>
+			<creature name="Cyclops"/>
+			<creature name="Frost Giant"/>
+			<creature name="Frost Giantess"/>
+			<creature name="Behemoth"/>
+			<creature name="Fire Devil"/>
+			<creature name="Diabolic Imp"/>
+			<creature name="Destroyer"/>
+			<creature name="Nightmare"/>
+			<creature name="Plaguesmith"/>
+			<creature name="Dark Torturer"/>
+			<creature name="Hand of Cursed Fate"/>
+			<creature name="Demon"/>
+			<creature name="Juggernaut"/>
+			<creature name="Morgaroth"/>
+			<creature name="Mr. Punish"/>
+			<creature name="The Handmaiden"/>
+			<creature name="The Imperor"/>
+		</creatures>
+	</tileset>
+	<tileset name="Humans">
+		<creatures>
+			<creature name="Dwarf"/>
+			<creature name="Dwarf Soldier"/>
+			<creature name="Dwarf Guard"/>
+			<creature name="Dwarf Geomancer"/>
+			<creature name="Smuggler"/>
+			<creature name="Amazon"/>
+			<creature name="Wild Warrior"/>
+			<creature name="Bandit"/>
+			<creature name="Valkyrie"/>
+			<creature name="Stalker"/>
+			<creature name="Novice of the Cult"/>
+			<creature name="Assassin"/>
+			<creature name="Witch"/>
+			<creature name="Pirate Marauder"/>
+			<creature name="Dark Monk"/>
+			<creature name="Hunter"/>
+			<creature name="Pirate Cutthroat"/>
+			<creature name="Monk"/>
+			<creature name="Pirate Buccaneer"/>
+			<creature name="Acolyte of the Cult"/>
+			<creature name="Pirate Corsair"/>
+			<creature name="Adept of the Cult"/>
+			<creature name="Priestess"/>
+			<creature name="Enlightened of the Cult"/>
+			<creature name="Necromancer"/>
+			<creature name="Hero"/>
+			<creature name="Black Knight"/>
+			<creature name="Warlock"/>
+		</creatures>
+	</tileset>
+	<tileset name="Lesser humans">
+		<creatures>
+			<creature name="Dwarf"/>
+			<creature name="Dwarf Soldier"/>
+			<creature name="Dwarf Guard"/>
+			<creature name="Dwarf Geomancer"/>
+			<creature name="Elf"/>
+			<creature name="Elf Scout"/>
+			<creature name="Elf Arcanist"/>
+			<creature name="Dharalion"/>
+			<creature name="Minotaur"/>
+			<creature name="Minotaur Archer"/>
+			<creature name="Minotaur Mage"/>
+			<creature name="Minotaur Guard"/>
+			<creature name="Goblin"/>
+			<creature name="Dworc Venomsniper"/>
+			<creature name="Dworc Fleshhunter"/>
+			<creature name="Dworc Voodoomaster"/>
+			<creature name="Orc"/>
+			<creature name="Orc Spearman"/>
+			<creature name="Orc Warrior"/>
+			<creature name="Orc Rider"/>
+			<creature name="Orc Shaman"/>
+			<creature name="Orc Berserker"/>
+			<creature name="Orc Leader"/>
+			<creature name="Orc Warlord"/>
+			<creature name="Island Troll"/>
+			<creature name="Troll"/>
+			<creature name="Frost Troll"/>
+			<creature name="Swamp Troll"/>
+		</creatures>
+	</tileset>
+	<tileset name="Magical Creatures">
+		<creatures>
+			<creature name="Deathslicer"/>
+			<creature name="Mimic"/>
+			<creature name="Magicthrower"/>
+			<creature name="Plaguethrower"/>
+			<creature name="Shredderthrower"/>
+			<creature name="The Halloween Hare"/>
+			<creature name="Gazer"/>
+			<creature name="Beholder"/>
+			<creature name="Blue Djinn"/>
+			<creature name="Green Djinn"/>
+			<creature name="Fire Elemental"/>
+			<creature name="Elder Beholder"/>
+			<creature name="Efreet"/>
+			<creature name="Marid"/>
+			<creature name="Water Elemental"/>
+			<creature name="Dragon"/>
+			<creature name="Wyvern"/>
+			<creature name="Massive Water Elemental"/>
+			<creature name="Serpent Spawn"/>
+			<creature name="Dragon Lord"/>
+			<creature name="Hydra"/>
+		</creatures>
+	</tileset>
+	<tileset name="Pharaohs">
+		<creatures>
+			<creature name="Dipthrah"/>
+			<creature name="Omruc"/>
+			<creature name="Thalas"/>
+			<creature name="Vashresamun"/>
+			<creature name="Morguthis"/>
+			<creature name="Mahrdis"/>
+			<creature name="Ashmunrah"/>
+			<creature name="Rahemos"/>
+		</creatures>
+	</tileset>
+	<tileset name="Undead">
+		<creatures>
+			<creature name="Banshee"/>
+			<creature name="Bonebeast"/>
+			<creature name="Demon Skeleton"/>
+			<creature name="Destroyer"/>
+			<creature name="Ghoul"/>
+			<creature name="Lich"/>
+			<creature name="Lost Soul"/>
+			<creature name="Mummy"/>
+			<creature name="Necromancer"/>
+			<creature name="Pirate Ghost"/>
+			<creature name="Pirate Skeleton"/>
+			<creature name="Skeleton"/>
+			<creature name="Spectre"/>
+			<creature name="Undead Dragon"/>
+			<creature name="Vampire"/>
+		</creatures>
+	</tileset>
+	<tileset name="Exterior">
+		<doodad>
+			<brush name="rudder of the boat" after="normal fountain - off"/>
+		</doodad>
+	</tileset>
+	<tileset name="Underwater">
+		<doodad>
+			<brush name="Shallow water"/>
+			<brush name="earth"/>
+			<brush name="water wooden flooring"/>
+			<brush name="coral reef"/>
+			<brush name="fishbone"/>
+			<brush name="bubbles"/>
+			<brush name="sea details"/>
+			<brush name="sea rocks"/>
+			<item id="5421"/>
+			<item id="5460"/>
+			<brush name="small rocks"/>
+			<brush name="rough brown rubble"/>
+			<brush name="mud cave rocks"/>
+			<brush name="stone cave rocks"/>
+			<brush name="steering wheel"/>
+			<brush name="damaged ship"/>
+			<brush name="ship railling"/>
+			<brush name="damaged mast"/>
+			<brush name="damaged mast2"/>
+			<brush name="ship ruins"/>
+		</doodad>
+	</tileset>
+	<tileset name="Interior">
+		<doodad>
+			<brush name="Weapon Rack"/>
+			<brush name="Armor Rack"/>
+			<brush name="Lance"/>
+			<brush name="sword"/>
+			<brush name="Armor"/>
+			<brush name="Empty Armor Rack"/>
+		</doodad>
+	</tileset>
+	<tileset name="Hangables">
+		<doodad>
+			<brush name="shield"/>
+			<brush name="red shield"/>
+			<brush name="blue shield"/>
+		</doodad>
+	</tileset>
+</materials>
