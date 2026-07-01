@@ -159,7 +159,7 @@ const TileSwatch = () => {
 
   useEffect(() => {
     loadBrushOptions(dataDir)
-      .then((list) => setOptions(list.filter((o) => o.kind === 'ground')))
+      .then(setOptions)
       .catch((err) => console.error('Failed to load tile options', err));
   }, [dataDir]);
 

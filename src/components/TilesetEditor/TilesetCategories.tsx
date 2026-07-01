@@ -6,6 +6,7 @@ import { cn } from '~/usecase/classNames';
 import { Checkbox } from '~/components/commons/ui/checkbox';
 import BrushThumbnail from '~/components/PalettePanel/BrushThumbnail';
 import { FlagIndex, THING_FLAGS, FLAG_LABELS } from '~/adapter/thingFlags';
+import VirtualSelect, { VirtualSelectRow } from '~/components/commons/ui/VirtualSelect';
 import { ItemEntry, TilesetDef, TilesetCategory, TILESET_ITEM_KINDS } from '~/adapter/materials';
 import { Select, SelectItem, SelectValue, SelectContent, SelectTrigger } from '~/components/commons/ui/select';
 
@@ -171,7 +172,8 @@ const BrushCategory = ({
   brushNames,
   layouts,
   version,
-  onChange
+  onChange,
+  onVisible
 }: {
   category: TilesetCategory;
   brushLookid: Map<string, number>;
@@ -179,51 +181,64 @@ const BrushCategory = ({
   layouts: SpriteLayouts;
   version: number;
   onChange: (brushes: string[]) => void;
-}) => (
-  <div className="flex flex-wrap items-center gap-1.5">
-    {category.brushes.map((b) => {
-      const id = brushLookid.get(b) ?? 0;
-      return (
-        <span
-          key={b}
-          className="flex items-center gap-1.5 rounded-full border border-border/60 bg-secondary/60 py-0.5 pl-1 pr-1.5 text-xs"
-        >
-          <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border border-border/50 bg-background">
-            {id > 0 && <BrushThumbnail size={24} version={version} cache={ITEM_SPRITE_CACHE} layout={layouts.get(id) ?? null} />}
-          </span>
-          {b}
-          <button
-            className="text-muted-foreground hover:text-[#f0795b]"
-            onClick={() => onChange(category.brushes.filter((x) => x !== b))}
+  onVisible: (names: string[]) => void;
+}) => {
+  const rows = React.useMemo<VirtualSelectRow[]>(
+    () => brushNames.filter((n) => !category.brushes.includes(n)).map((n) => ({ key: n, label: n })),
+    [brushNames, category.brushes]
+  );
+  const thumb = (name: string) => {
+    const id = brushLookid.get(name) ?? 0;
+    return id > 0 ? (
+      <BrushThumbnail size={28} version={version} cache={ITEM_SPRITE_CACHE} layout={layouts.get(id) ?? null} />
+    ) : null;
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {category.brushes.map((b) => {
+        const id = brushLookid.get(b) ?? 0;
+        return (
+          <span
+            key={b}
+            className="flex items-center gap-1.5 rounded-full border border-border/60 bg-secondary/60 py-0.5 pl-1 pr-1.5 text-xs"
           >
-            <X className="h-3 w-3" />
-          </button>
-        </span>
-      );
-    })}
-    <Select value="" onValueChange={(v) => category.brushes.includes(v) || onChange([...category.brushes, v])}>
-      <SelectTrigger className="h-7 w-44 text-xs">
-        <SelectValue placeholder="+ add brush" />
-      </SelectTrigger>
-      <SelectContent>
-        {brushNames
-          .filter((n) => !category.brushes.includes(n))
-          .map((n) => (
-            <SelectItem key={n} value={n}>
-              {n}
-            </SelectItem>
-          ))}
-      </SelectContent>
-    </Select>
-  </div>
-);
+            <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border border-border/50 bg-background">
+              {id > 0 && (
+                <BrushThumbnail size={24} version={version} cache={ITEM_SPRITE_CACHE} layout={layouts.get(id) ?? null} />
+              )}
+            </span>
+            {b}
+            <button
+              className="text-muted-foreground hover:text-[#f0795b]"
+              onClick={() => onChange(category.brushes.filter((x) => x !== b))}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        );
+      })}
+      <VirtualSelect
+        value=""
+        rows={rows}
+        className="w-44"
+        renderThumb={thumb}
+        placeholder="+ add brush"
+        onVisibleKeys={onVisible}
+        onChange={(v) => category.brushes.includes(v) || onChange([...category.brushes, v])}
+      />
+    </div>
+  );
+};
 
 const TilesetCategories = ({ def, brushLookid, brushNames, flagIndex, onChange }: TilesetEditorProps) => {
+  const [visIds, setVisIds] = React.useState<number[]>([]);
   const spriteIds = [
     ...def.categories.flatMap((c) => c.items.map((e) => e.fromId)),
-    ...def.categories.flatMap((c) => c.brushes.map((b) => brushLookid.get(b) ?? 0))
+    ...def.categories.flatMap((c) => c.brushes.map((b) => brushLookid.get(b) ?? 0)),
+    ...visIds
   ];
   const { layouts, version } = useItemSprites(spriteIds);
+  const onVisible = (names: string[]) => setVisIds(names.map((n) => brushLookid.get(n) ?? 0).filter(Boolean));
 
   const setCategory = (i: number, patch: Partial<TilesetCategory>) =>
     onChange({ ...def, categories: def.categories.map((c, k) => (k === i ? { ...c, ...patch } : c)) });
@@ -278,6 +293,7 @@ const TilesetCategories = ({ def, brushLookid, brushNames, flagIndex, onChange }
               category={cat}
               layouts={layouts}
               version={version}
+              onVisible={onVisible}
               brushNames={brushNames}
               brushLookid={brushLookid}
               onChange={(brushes) => setCategory(i, { brushes })}

@@ -5,6 +5,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { cn } from '~/usecase/classNames';
 import BrushThumbnail from '~/components/PalettePanel/BrushThumbnail';
 import { BorderDef, BorderRef, GroundBrush, groundLookid } from '~/adapter/materials';
+import VirtualSelect, { VirtualSelectRow } from '~/components/commons/ui/VirtualSelect';
 import { Select, SelectItem, SelectValue, SelectContent, SelectTrigger } from '~/components/commons/ui/select';
 
 import { useItemSprites, ITEM_SPRITE_CACHE } from './sprites';
@@ -18,20 +19,61 @@ interface GroundEditorProps {
 
 const TO_DEFAULT = ' default';
 const TO_NONE = 'none';
-const OPTIONAL_NONE = ' none';
 
 const borderRep = (b: BorderDef) => b.items.n ?? b.items.s ?? b.items.e ?? b.items.w ?? Object.values(b.items).find(Boolean) ?? 0;
 
 const GroundEditor = ({ brush, borders, grounds, onChange }: GroundEditorProps) => {
   const lookid = groundLookid(brush);
-  const spriteIds = [...brush.items.map((i) => i.id), ...(lookid ? [lookid] : []), ...borders.map(borderRep)];
-  const optionalDef = borders.find((d) => d.id === brush.optionalId) ?? null;
-  const optionalRep = optionalDef ? borderRep(optionalDef) : 0;
+  const [visIds, setVisIds] = React.useState<number[]>([]);
+
+  const lookidByName = React.useMemo(() => new Map(grounds.map((g) => [g.name, groundLookid(g)])), [grounds]);
+  const spriteIds = [
+    ...brush.items.map((i) => i.id),
+    ...(lookid ? [lookid] : []),
+    ...borders.map(borderRep),
+    ...brush.friends.map((f) => lookidByName.get(f) ?? 0),
+    ...brush.borders.map((b) => (b.to ? (lookidByName.get(b.to) ?? 0) : 0)),
+    ...visIds
+  ];
   const { layouts, version } = useItemSprites(spriteIds);
   const { setNodeRef, isOver } = useDroppable({ id: 'ground-items' });
 
   const total = brush.items.reduce((s, i) => s + Math.max(0, i.chance), 0);
   const otherNames = grounds.map((g) => g.name).filter((n) => n !== brush.name);
+
+  const groundThumb = (key: string) => {
+    const id = lookidByName.get(key) ?? 0;
+    return id > 0 ? (
+      <BrushThumbnail size={28} version={version} cache={ITEM_SPRITE_CACHE} layout={layouts.get(id) ?? null} />
+    ) : null;
+  };
+  const onVisibleNames = (names: string[]) => setVisIds(names.map((n) => lookidByName.get(n) ?? 0).filter(Boolean));
+
+  const repById = React.useMemo(() => new Map(borders.map((d) => [d.id, borderRep(d)])), [borders]);
+  const borderRows = React.useMemo<VirtualSelectRow[]>(
+    () => borders.map((d) => ({ key: String(d.id), label: d.name ?? `Border ${d.id}` })),
+    [borders]
+  );
+  const toRows = React.useMemo<VirtualSelectRow[]>(
+    () => [
+      { key: TO_DEFAULT, label: 'to: default' },
+      { key: TO_NONE, label: 'to: none' },
+      ...otherNames.map((n) => ({ key: n, label: `to: ${n}` }))
+    ],
+    [otherNames]
+  );
+  const friendRows = React.useMemo<VirtualSelectRow[]>(
+    () => otherNames.filter((n) => !brush.friends.includes(n)).map((n) => ({ key: n, label: n })),
+    [otherNames, brush.friends]
+  );
+  const borderThumb = (key: string) => (
+    <BrushThumbnail
+      size={28}
+      version={version}
+      cache={ITEM_SPRITE_CACHE}
+      layout={layouts.get(repById.get(Number(key)) ?? 0) ?? null}
+    />
+  );
 
   const setItemChance = (idx: number, chance: number) =>
     onChange({ ...brush, items: brush.items.map((it, i) => (i === idx ? { ...it, chance } : it)) });
@@ -143,15 +185,8 @@ const GroundEditor = ({ brush, borders, grounds, onChange }: GroundEditorProps) 
         ) : (
           <div className="flex flex-col gap-1.5">
             {brush.borders.map((b, i) => {
-              const def = borders.find((d) => d.id === b.id);
-              const rep = def ? borderRep(def) : 0;
               return (
                 <div key={i} className="flex items-center gap-2 rounded-md border border-border/60 bg-background p-1.5">
-                  <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded border border-border/50 bg-background">
-                    {rep > 0 && (
-                      <BrushThumbnail size={36} version={version} cache={ITEM_SPRITE_CACHE} layout={layouts.get(rep) ?? null} />
-                    )}
-                  </span>
                   <Select value={b.align} onValueChange={(v) => setBorder(i, { align: v })}>
                     <SelectTrigger className="h-7 w-24 text-xs">
                       <SelectValue />
@@ -161,32 +196,22 @@ const GroundEditor = ({ brush, borders, grounds, onChange }: GroundEditorProps) 
                       <SelectItem value="inner">inner</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Select value={b.id != null ? String(b.id) : ''} onValueChange={(v) => setBorder(i, { id: Number(v) })}>
-                    <SelectTrigger className="h-7 flex-1 text-xs">
-                      <SelectValue placeholder="border" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {borders.map((d) => (
-                        <SelectItem key={d.id} value={String(d.id)}>
-                          {d.name ?? `Border ${d.id}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={toValue(b.to)} onValueChange={(v) => setBorder(i, { to: toModel(v) })}>
-                    <SelectTrigger className="h-7 w-28 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={TO_DEFAULT}>to: default</SelectItem>
-                      <SelectItem value={TO_NONE}>to: none</SelectItem>
-                      {otherNames.map((n) => (
-                        <SelectItem key={n} value={n}>
-                          to: {n}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <VirtualSelect
+                    rows={borderRows}
+                    className="flex-1"
+                    placeholder="border"
+                    renderThumb={borderThumb}
+                    value={b.id != null ? String(b.id) : ''}
+                    onChange={(v) => setBorder(i, { id: Number(v) })}
+                  />
+                  <VirtualSelect
+                    rows={toRows}
+                    className="w-28"
+                    value={toValue(b.to)}
+                    renderThumb={groundThumb}
+                    onVisibleKeys={onVisibleNames}
+                    onChange={(v) => setBorder(i, { to: toModel(v) })}
+                  />
                   <button
                     title="Remove"
                     onClick={() => removeBorder(i)}
@@ -207,27 +232,15 @@ const GroundEditor = ({ brush, borders, grounds, onChange }: GroundEditorProps) 
           <span className="text-[10px] text-muted-foreground">gravel / mountain overlay</span>
         </div>
         <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background p-1.5">
-          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded border border-border/50 bg-background">
-            {optionalRep > 0 && (
-              <BrushThumbnail size={36} version={version} cache={ITEM_SPRITE_CACHE} layout={layouts.get(optionalRep) ?? null} />
-            )}
-          </span>
-          <Select
-            value={brush.optionalId != null ? String(brush.optionalId) : OPTIONAL_NONE}
-            onValueChange={(v) => onChange({ ...brush, optionalId: v === OPTIONAL_NONE ? null : Number(v) })}
-          >
-            <SelectTrigger className="h-7 flex-1 text-xs">
-              <SelectValue placeholder="none" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={OPTIONAL_NONE}>none</SelectItem>
-              {borders.map((d) => (
-                <SelectItem key={d.id} value={String(d.id)}>
-                  {d.name ?? `Border ${d.id}`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <VirtualSelect
+            allowNone
+            rows={borderRows}
+            className="flex-1"
+            placeholder="none"
+            renderThumb={borderThumb}
+            value={brush.optionalId != null ? String(brush.optionalId) : ''}
+            onChange={(v) => onChange({ ...brush, optionalId: v === '' ? null : Number(v) })}
+          />
           <label className="flex flex-shrink-0 cursor-pointer items-center gap-1.5 pr-1 text-xs text-foreground">
             <input
               type="checkbox"
@@ -254,20 +267,15 @@ const GroundEditor = ({ brush, borders, grounds, onChange }: GroundEditorProps) 
               </button>
             </span>
           ))}
-          <Select value="" onValueChange={addFriend}>
-            <SelectTrigger className="h-7 w-36 text-xs">
-              <SelectValue placeholder="+ add friend" />
-            </SelectTrigger>
-            <SelectContent>
-              {otherNames
-                .filter((n) => !brush.friends.includes(n))
-                .map((n) => (
-                  <SelectItem key={n} value={n}>
-                    {n}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+          <VirtualSelect
+            value=""
+            className="w-36"
+            rows={friendRows}
+            onChange={addFriend}
+            renderThumb={groundThumb}
+            placeholder="+ add friend"
+            onVisibleKeys={onVisibleNames}
+          />
         </div>
       </section>
     </div>
