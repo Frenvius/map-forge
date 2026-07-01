@@ -543,6 +543,18 @@ impl DatReader {
         self.frame_groups = version >= 1057;
     }
 
+    pub fn apply_overrides(&mut self, extended: Option<bool>, frame_durations: Option<bool>, frame_groups: Option<bool>) {
+        if let Some(v) = extended {
+            self.extended = v;
+        }
+        if let Some(v) = frame_durations {
+            self.frame_durations = v;
+        }
+        if let Some(v) = frame_groups {
+            self.frame_groups = v;
+        }
+    }
+
     pub fn read_dat(&mut self) -> Result<DatThings, String> {
         // Read signature
         let signature = self.read_u32_le().map_err(|e| format!("Failed to read signature: {}", e))?;

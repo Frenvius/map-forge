@@ -1,13 +1,14 @@
-use crate::formats::{MetadataProvider, MetadataResult, ItemDatabaseProvider};
+use crate::formats::{DatOverrides, MetadataProvider, MetadataResult, ItemDatabaseProvider};
 use super::dat_reader::{encode_dat_to_binary, DatReader};
 use super::otb::{parse_otb, OtbItems};
 
 pub struct TibiaMetadataProvider;
 
 impl MetadataProvider for TibiaMetadataProvider {
-    fn read_metadata(&mut self, path: &str, version: u32) -> Result<MetadataResult, String> {
+    fn read_metadata(&mut self, path: &str, version: u32, overrides: DatOverrides) -> Result<MetadataResult, String> {
         let mut reader = DatReader::open(path)?;
         reader.set_version(version);
+        reader.apply_overrides(overrides.extended, overrides.frame_durations, overrides.frame_groups);
         let (signature, items, outfits, effects, missiles) =
             reader.read_dat().map_err(|e| format!("DAT parse error (version {}): {}", version, e))?;
 

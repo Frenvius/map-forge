@@ -26,8 +26,16 @@ pub struct MetadataResult {
     pub placement: Vec<(u16, bool, u8, bool)>,
 }
 
+#[derive(Debug, Clone, Copy, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatOverrides {
+    pub extended: Option<bool>,
+    pub frame_durations: Option<bool>,
+    pub frame_groups: Option<bool>,
+}
+
 pub trait MetadataProvider: Send + Sync {
-    fn read_metadata(&mut self, path: &str, version: u32) -> Result<MetadataResult, String>;
+    fn read_metadata(&mut self, path: &str, version: u32, overrides: DatOverrides) -> Result<MetadataResult, String>;
 }
 
 pub trait ItemDatabaseProvider: Send + Sync {

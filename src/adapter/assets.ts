@@ -64,6 +64,8 @@ export async function mapClientIds(serverIds: number[]): Promise<number[]> {
 interface OtfiFlags {
   extended: boolean;
   transparency: boolean;
+  frameDurations: boolean;
+  frameGroups: boolean;
   metadataFile: string;
   spritesFile: string;
 }
@@ -79,6 +81,8 @@ function parseOtfi(content: string): Partial<OtfiFlags> {
   return {
     extended: out['extended'] === 'true',
     transparency: out['transparency'] === 'true',
+    frameDurations: out['frame-durations'] === 'true',
+    frameGroups: out['frame-groups'] === 'true',
     metadataFile: out['metadata-file'] || undefined,
     spritesFile: out['sprites-file'] || undefined
   };
@@ -159,7 +163,12 @@ export async function loadAssets(dataDir: string, clientDir: string, version = D
   const [spawnMarkerClientId, waypointMarkerClientId] =
     otbItemCount > 0 ? await mapClientIds([SPAWN_MARKER_SERVER_ID, WAYPOINT_MARKER_SERVER_ID]) : [0, 0];
 
-  const datResponse = await invoke<Uint8Array | ArrayBuffer>('parse_dat_file_bin', { path: datPath, version });
+  const datFlags = {
+    extended,
+    frameDurations: otfi.frameDurations ?? null,
+    frameGroups: otfi.frameGroups ?? null
+  };
+  const datResponse = await invoke<Uint8Array | ArrayBuffer>('parse_dat_file_bin', { path: datPath, version, datFlags });
   const datBuf = datResponse instanceof Uint8Array ? datResponse : new Uint8Array(datResponse);
   const dat = decodeDatResponse(datBuf);
 

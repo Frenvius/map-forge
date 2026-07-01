@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use tauri::ipc::Response;
 
 use crate::materials::Materials;
-use crate::formats::{FormatManagerState, SpriteHeader};
+use crate::formats::{DatOverrides, FormatManagerState, SpriteHeader};
 use crate::{MaterialsState, OtbState, PlaceFlags, PlacementState};
 
 #[derive(Serialize, Deserialize)]
@@ -210,9 +210,9 @@ pub fn read_sprites_rgba_lz4(path: String, ids: Vec<u32>, transparent: bool, fm:
 }
 
 #[tauri::command]
-pub fn parse_dat_file_bin(path: String, version: u32, fm: tauri::State<FormatManagerState>, placement_state: tauri::State<PlacementState>) -> Result<Response, String> {
+pub fn parse_dat_file_bin(path: String, version: u32, dat_flags: Option<DatOverrides>, fm: tauri::State<FormatManagerState>, placement_state: tauri::State<PlacementState>) -> Result<Response, String> {
 	let mut mgr = fm.lock().map_err(|e| format!("Lock error: {}", e))?;
-	let result = mgr.metadata().read_metadata(&path, version)?;
+	let result = mgr.metadata().read_metadata(&path, version, dat_flags.unwrap_or_default())?;
 
 	let mut placement: HashMap<u16, PlaceFlags> = HashMap::with_capacity(result.placement.len());
 	for (id, ground, top_order, blocking) in &result.placement {
