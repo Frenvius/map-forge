@@ -6,6 +6,7 @@ import { stepZoom } from '~/usecase/zoom';
 import { MapMeta, Position } from '~/domain/map';
 import { Camera } from '~/components/MapCanvas/types';
 import { TILE } from '~/components/MapCanvas/constants';
+import { MAP_MIN_LAYER, MAP_MAX_LAYER } from '~/usecase/floors';
 
 const EDGE = 2;
 const LAND_TOL = 80;
@@ -38,6 +39,7 @@ export function useMapCamera(
   zoom: number,
   onZoomChange: (zoom: number) => void,
   initialCenter: { x: number; y: number },
+  floorInput: React.RefObject<{ floorZ: number; onFloorChange: (z: number) => void }>,
   onViewChange?: (cx: number, cy: number) => void,
   infiniteMouse = true
 ): MapCamera {
@@ -99,6 +101,16 @@ export function useMapCamera(
     if (!canvas) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+
+      if (e.ctrlKey || e.metaKey) {
+        const fi = floorInput.current;
+        if (!fi) return;
+        const next = e.deltaY < 0 ? fi.floorZ - 1 : fi.floorZ + 1;
+        const clamped = Math.min(MAP_MAX_LAYER, Math.max(MAP_MIN_LAYER, next));
+        if (clamped !== fi.floorZ) fi.onFloorChange(clamped);
+        return;
+      }
+
       const z = zoomRef.current;
       const newZoom = stepZoom(z, -e.deltaY);
       if (newZoom === z) return;

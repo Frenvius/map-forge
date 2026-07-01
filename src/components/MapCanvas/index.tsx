@@ -108,6 +108,7 @@ const MapCanvas = (props: MapCanvasProps) => {
     zoom,
     onZoomChange,
     props.initialCenter,
+    inputs,
     props.onViewChange,
     settings.infiniteMouse
   );
