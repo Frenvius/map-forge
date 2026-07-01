@@ -42,6 +42,7 @@ pub(crate) fn edge_index(edge: &str) -> Option<usize> {
 #[derive(Clone, Default)]
 pub struct AutoBorder {
 	pub tiles: [u16; 13],
+	pub optional: bool,
 }
 
 pub(crate) fn diagonal_components(direction: u8) -> Option<(u8, u8)> {

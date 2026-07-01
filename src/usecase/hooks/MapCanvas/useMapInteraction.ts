@@ -54,6 +54,7 @@ import {
   packChunkKey,
   moveSelection,
   copySelection,
+  borderizeBrush,
   fetchMapChunks,
   pasteSelection,
   deleteSelection
@@ -682,6 +683,8 @@ export function useMapInteraction(deps: InteractionDeps) {
 
   const zonePainting = React.useRef(false);
   const zoneMode = React.useRef<{ flag: number; set: boolean } | null>(null);
+  const borderizing = React.useRef(false);
+  const borderizeRemove = React.useRef(false);
 
   function paintZoneAt(pos: Position) {
     const mode = zoneMode.current;
@@ -846,6 +849,30 @@ export function useMapInteraction(deps: InteractionDeps) {
         notifyEdit(pos.z);
       })
       .catch((err) => console.error('Failed to erase brush', err));
+  }
+
+  function borderizeAt(pos: Position, remove: boolean) {
+    const key = `${pos.x},${pos.y},${pos.z}`;
+    if (key === scene.lastPaintKey.current) return;
+    scene.lastPaintKey.current = key;
+    borderizeBrush(inputs.current.map.id, pos.z, [pos.x], [pos.y], remove)
+      .then((touched) => {
+        if (touched.length === 0) tiles.queueRefetch(pos.x, pos.y, pos.z);
+        for (const k of touched) tiles.queueRefetch((k >>> 16) * CHUNK, (k & 0xffff) * CHUNK, pos.z);
+        notifyEdit(pos.z);
+      })
+      .catch((err) => console.error('Failed to borderize', err));
+  }
+
+  function borderizeBox(bs: BoxSelection, remove: boolean) {
+    const z = bs.startTile.z;
+    const { xs, ys } = boxTiles(bs);
+    borderizeBrush(inputs.current.map.id, z, xs, ys, remove)
+      .then((touched) => {
+        refetchKeysNow(touched, z);
+        emit(`${remove ? 'Cleared borders on' : 'Borderized'} ${plural(xs.length, 'tile')}`);
+      })
+      .catch((err) => console.error('Failed to borderize box', err));
   }
 
   async function refetchChunkNow(x: number, y: number, z: number) {
@@ -1554,7 +1581,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     const brush = inputs.current.activeBrush;
     const canBrush = tool === 'brush' && brush != null && brush.serverId != null;
     const zoneTool = isZoneTool(tool);
-    if (e.shiftKey && (tool === 'select' || tool === 'eraser' || zoneTool || canBrush || tool === 'house')) {
+    if (e.shiftKey && (tool === 'select' || tool === 'eraser' || tool === 'borderize' || zoneTool || canBrush || tool === 'house')) {
       const pos = tileAt(e);
       selection.box.current = { startTile: pos, curTile: pos, additive: e.ctrlKey };
       setBoxing(true);
@@ -1625,6 +1652,14 @@ export function useMapInteraction(deps: InteractionDeps) {
       eraseAt(tileAt(e));
       return;
     }
+    if (tool === 'borderize') {
+      borderizing.current = true;
+      borderizeRemove.current = e.ctrlKey;
+      scene.lastPaintKey.current = null;
+      recordItemEdit();
+      borderizeAt(tileAt(e), e.ctrlKey);
+      return;
+    }
 
     const pos = tileAt(e);
     const beforeSel = selection.snapshot();
@@ -1668,6 +1703,8 @@ export function useMapInteraction(deps: InteractionDeps) {
     } else if (scene.erasing.current) {
       if (scene.eraseBrushId.current != null) eraseBrushAt(tileAt(e), scene.eraseBrushId.current);
       else eraseAt(tileAt(e));
+    } else if (borderizing.current) {
+      borderizeAt(tileAt(e), borderizeRemove.current);
     } else if (camera.panMove(e)) {
       // panned
     } else if (selection.box.current) {
@@ -1710,6 +1747,9 @@ export function useMapInteraction(deps: InteractionDeps) {
       } else if (tool === 'eraser') {
         if (inputs.current.eraserMode !== 'creatures') recordItemEdit();
         eraseBox(bs);
+      } else if (tool === 'borderize') {
+        recordItemEdit();
+        borderizeBox(bs, bs.additive);
       } else if (isZoneTool(tool)) {
         recordItemEdit();
         paintZoneBox(bs, !bs.additive);
@@ -1742,6 +1782,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     scene.eraseBrushId.current = null;
     zonePainting.current = false;
     housePainting.current = false;
+    borderizing.current = false;
     scene.lastPaintKey.current = null;
   }
 
@@ -1763,6 +1804,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     scene.eraseBrushId.current = null;
     zonePainting.current = false;
     housePainting.current = false;
+    borderizing.current = false;
     scene.lastPaintKey.current = null;
     scene.lastHoverKey.current = null;
     scene.hoveredTile.current = null;

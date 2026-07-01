@@ -134,6 +134,7 @@ fn borderize(
 	z: u8,
 	tiles: &HashSet<(u16, u16)>,
 	optional: bool,
+	force_optional: bool,
 ) -> HashSet<u32> {
 	let mut affected: HashSet<(u16, u16)> = HashSet::new();
 	for &(x, y) in tiles {
@@ -158,7 +159,9 @@ fn borderize(
 				neigh[i] = ground_brush_at(m, mats, place, z, nx as u16, ny as u16);
 			}
 		}
-		computed.push(((x, y), mats.calculate_borders(own, &neigh, optional)));
+		let own_optional = (force_optional && tiles.contains(&(x, y)))
+			|| (optional && stack_at(m, z, x, y).iter().any(|&(_, s)| mats.is_optional_border_item(s)));
+		computed.push(((x, y), mats.calculate_borders(own, &neigh, own_optional)));
 	}
 
 	let mut touched: HashSet<u32> = HashSet::new();
@@ -332,7 +335,7 @@ where
 
 fn auto_all(m: &mut MapModel, mats: &Materials, place: &HashMap<u16, PlaceFlags>, otb: &OtbItems, z: u8, tiles: &HashSet<(u16, u16)>) -> HashSet<u32> {
 	let mut touched: HashSet<u32> = HashSet::new();
-	touched.extend(borderize(m, mats, place, otb, z, tiles, true));
+	touched.extend(borderize(m, mats, place, otb, z, tiles, true, false));
 	touched.extend(wallize(m, mats, otb, z, tiles));
 	touched.extend(realign8(m, mats, otb, z, tiles, Materials::table_brush_for, Materials::table_id_for));
 	touched.extend(realign8(m, mats, otb, z, tiles, Materials::carpet_brush_for, Materials::carpet_id_for));
@@ -353,7 +356,7 @@ fn auto_after_change(
 ) -> HashSet<u32> {
 	let mut touched: HashSet<u32> = HashSet::new();
 	if force_ground || is_ground_item(place, Some(mats), client, server) {
-		touched.extend(borderize(m, mats, place, otb, z, tiles, true));
+		touched.extend(borderize(m, mats, place, otb, z, tiles, true, false));
 	}
 	if mats.wall_brush_for(server).is_some() {
 		touched.extend(wallize(m, mats, otb, z, tiles));
@@ -1008,6 +1011,59 @@ pub fn erase_brush(
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
+pub fn borderize_brush(
+	map_id: u32,
+	z: u8,
+	xs: Vec<u16>,
+	ys: Vec<u16>,
+	remove: bool,
+	otb_state: tauri::State<OtbState>,
+	map_state: tauri::State<MapState>,
+	materials_state: tauri::State<MaterialsState>,
+	placement_state: tauri::State<PlacementState>,
+) -> Result<Vec<u32>, String> {
+	if xs.len() != ys.len() {
+		return Err("xs and ys length mismatch".into());
+	}
+
+	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let empty = OtbItems::default();
+	let otb = otb_guard.as_ref().unwrap_or(&empty);
+	let materials_guard = materials_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let mats = materials_guard.as_ref();
+	let place = placement_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+	let tiles_vec: Vec<(u16, u16)> = xs.iter().zip(ys.iter()).map(|(&a, &b)| (a, b)).collect();
+	m.ensure_tiles(z, &tiles_vec, otb)?;
+	m.record_begin();
+
+	let mut touched: HashSet<u32> = tiles_vec.iter().map(|&(x, y)| chunk_key_of(x, y)).collect();
+	if let Some(mats) = mats {
+		if remove {
+			for &(x, y) in &tiles_vec {
+				let stack = tile_stack_mut(m, z, x, y);
+				let before = stack.len();
+				stack.retain(|&(_, s)| !mats.is_border_item(s));
+				if stack.len() != before {
+					touched.insert(chunk_key_of(x, y));
+				}
+			}
+		} else {
+			let tiles: HashSet<(u16, u16)> = tiles_vec.into_iter().collect();
+			touched.extend(borderize(m, mats, &place, otb, z, &tiles, true, true));
+			touched.extend(wallize(m, mats, otb, z, &tiles));
+			touched.extend(realign8(m, mats, otb, z, &tiles, Materials::table_brush_for, Materials::table_id_for));
+			touched.extend(realign8(m, mats, otb, z, &tiles, Materials::carpet_brush_for, Materials::carpet_id_for));
+		}
+	}
+	m.record_commit(ACTION_PAINT);
+	Ok(touched.into_iter().collect())
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn erase_area(
 	map_id: u32,
 	z: u8,
@@ -1450,7 +1506,7 @@ pub fn generate_apply(
 				}
 			}
 			for (&z, tiles) in &affected {
-				touched.extend(borderize(m, mats, &place, otb, z, tiles, true).into_iter().map(|k| (z, k)));
+				touched.extend(borderize(m, mats, &place, otb, z, tiles, true, false).into_iter().map(|k| (z, k)));
 				if need_wall {
 					touched.extend(wallize(m, mats, otb, z, tiles).into_iter().map(|k| (z, k)));
 				}
@@ -1520,6 +1576,34 @@ mod tests {
 
 	fn load_materials() -> Materials {
 		Materials::load(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../data/860")).unwrap()
+	}
+
+	#[test]
+	fn border_brush_forces_mountain_gravel() {
+		let otb = parse_otb(&fs::read(format!("{}/items.otb", DATA)).unwrap()).unwrap();
+		let mats = load_materials();
+		let grass_c = otb.client_id(4526).unwrap_or(0);
+		let mtn_c = otb.client_id(919).unwrap_or(0);
+		let mut place = HashMap::new();
+		place.insert(grass_c, PlaceFlags { ground: true, top_order: 0, blocking: false });
+		place.insert(mtn_c, PlaceFlags { ground: true, top_order: 0, blocking: false });
+		let mut m = build_map_model(100, 100, &[], &[], &[], &[], &[], &[], &[], &[], &[], &[], &[], Vec::new(), 0);
+		for dx in 0..3u16 {
+			for dy in 0..3u16 {
+				run_paint(&mut m, Some(&mats), &place, &otb, 7, &[50 + dx], &[50 + dy], 4526, grass_c, true, false, "", false, false);
+			}
+		}
+		for dx in 0..3u16 {
+			run_paint(&mut m, Some(&mats), &place, &otb, 7, &[50 + dx], &[50], 919, mtn_c, true, false, "", false, false);
+		}
+		let tiles: HashSet<(u16, u16)> = [(51u16, 51u16)].into_iter().collect();
+		borderize(&mut m, &mats, &place, &otb, 7, &tiles, true, false);
+		let gated = stack_at(&m, 7, 51, 51).iter().any(|&(_, s)| (4468..=4479).contains(&s));
+		assert!(!gated, "without force, no gravel on a fresh grass tile");
+
+		borderize(&mut m, &mats, &place, &otb, 7, &tiles, true, true);
+		let forced = stack_at(&m, 7, 51, 51).iter().any(|&(_, s)| (4468..=4479).contains(&s));
+		assert!(forced, "border brush forces the mountain gravel (border 29)");
 	}
 
 	#[test]
@@ -1596,7 +1680,7 @@ mod tests {
 		let mut m = build_map_model(100, 100, &[50], &[50], &[7], &[0], &[1], &[grass_client], &[4526], &[1], &[], &[], &[], Vec::new(), 0);
 
 		let tiles: HashSet<(u16, u16)> = [(50u16, 50u16)].into_iter().collect();
-		borderize(&mut m, &mats, &place, &otb, 7, &tiles, false);
+		borderize(&mut m, &mats, &place, &otb, 7, &tiles, false, false);
 
 		let stack = stack_at(&m, 7, 50, 50);
 		assert_eq!(stack.first(), Some(&(grass_client, 4526)), "ground stays at slot 0");
@@ -1615,12 +1699,12 @@ mod tests {
 		let mut m = build_map_model(100, 100, &[50, 51], &[50, 50], &[7, 7], &[0, 1], &[1, 1], &[grass, grass], &[4526, 4526], &[1, 1], &[], &[], &[], Vec::new(), 0);
 
 		let both: HashSet<(u16, u16)> = [(50, 50), (51, 50)].into_iter().collect();
-		borderize(&mut m, &mats, &place, &otb, 7, &both, false);
+		borderize(&mut m, &mats, &place, &otb, 7, &both, false, false);
 		let border_count = |m: &MapModel, x, y| stack_at(m, 7, x, y).iter().filter(|&&(_, s)| mats.is_border_item(s)).count();
 		let before = border_count(&m, 50, 50);
 
 		tile_stack_mut(&mut m, 7, 51, 50).clear();
-		borderize(&mut m, &mats, &place, &otb, 7, &[(50, 50)].into_iter().collect(), false);
+		borderize(&mut m, &mats, &place, &otb, 7, &[(50, 50)].into_iter().collect(), false, false);
 		let after = border_count(&m, 50, 50);
 
 		assert!(after > before, "exposing an empty east neighbour adds borders ({before} -> {after})");
@@ -1638,7 +1722,7 @@ mod tests {
 
 		m.record_begin();
 		insert_ordered(tile_stack_mut(&mut m, 7, 50, 50), &place, Some(&mats), grass, 4526);
-		borderize(&mut m, &mats, &place, &otb, 7, &[(50, 50)].into_iter().collect(), false);
+		borderize(&mut m, &mats, &place, &otb, 7, &[(50, 50)].into_iter().collect(), false, false);
 		m.record_commit(ACTION_PAINT);
 
 		let painted = stack_at(&m, 7, 50, 50);

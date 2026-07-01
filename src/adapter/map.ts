@@ -217,6 +217,16 @@ export async function eraseBrush(
   return invoke<number[]>('erase_brush', { mapId, z, x, y, serverId, automagic });
 }
 
+export async function borderizeBrush(
+  mapId: number,
+  z: number,
+  xs: number[],
+  ys: number[],
+  remove: boolean
+): Promise<number[]> {
+  return invoke<number[]>('borderize_brush', { mapId, z, xs, ys, remove });
+}
+
 export async function eraseArea(
   mapId: number,
   z: number,

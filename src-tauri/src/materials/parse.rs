@@ -125,6 +125,7 @@ pub(crate) fn parse_borders(xml: &str, out: &mut HashMap<u32, AutoBorder>) -> Re
 			continue;
 		};
 		let mut border = AutoBorder::default();
+		border.optional = node.attribute("type") == Some("optional");
 		for item in node.children().filter(|n| n.has_tag_name("borderitem")) {
 			let edge = item.attribute("edge").and_then(edge_index);
 			let server_id = item.attribute("item").and_then(|v| v.parse::<u16>().ok());

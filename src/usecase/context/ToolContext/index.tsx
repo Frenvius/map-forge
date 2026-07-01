@@ -67,6 +67,18 @@ export const ToolProvider = ({ children }: ToolProviderProps) => {
     if (tool !== 'house' && tool !== 'house_exit') setActiveHouse(null);
   }, []);
 
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.key.toLowerCase() !== 'n') return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      e.preventDefault();
+      setActiveTool('borderize');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [setActiveTool]);
+
   const selectBrush = React.useCallback((brush: ActiveBrush | null) => {
     setActiveBrush(brush);
     setActiveToolState(brush ? 'brush' : 'select');

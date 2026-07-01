@@ -48,6 +48,7 @@ pub struct Materials {
 	pub server_to_ground: HashMap<u16, u32>,
 	pub name_to_id: HashMap<String, u32>,
 	pub border_item_ids: HashSet<u16>,
+	pub optional_border_item_ids: HashSet<u16>,
 	pub border_types: [u32; 256],
 	pub walls: Vec<WallBrush>,
 	pub server_to_wall: HashMap<u16, u32>,
@@ -73,6 +74,17 @@ impl Materials {
 
 		let mut borders = HashMap::new();
 		parse::parse_borders(&read("borders.xml")?, &mut borders)?;
+
+		let mut optional_border_item_ids: HashSet<u16> = HashSet::new();
+		for b in borders.values() {
+			if b.optional {
+				for &sid in &b.tiles {
+					if sid != 0 {
+						optional_border_item_ids.insert(sid);
+					}
+				}
+			}
+		}
 
 		let raw_grounds = parse::parse_grounds(&read("grounds.xml")?)?;
 
@@ -292,6 +304,7 @@ impl Materials {
 			server_to_ground,
 			name_to_id,
 			border_item_ids,
+			optional_border_item_ids,
 			border_types: build_border_types(),
 			walls,
 			server_to_wall,
@@ -312,6 +325,10 @@ impl Materials {
 
 	pub fn is_border_item(&self, server_id: u16) -> bool {
 		self.border_item_ids.contains(&server_id)
+	}
+
+	pub fn is_optional_border_item(&self, server_id: u16) -> bool {
+		self.optional_border_item_ids.contains(&server_id)
 	}
 
 	pub fn is_door(&self, server_id: u16) -> bool {

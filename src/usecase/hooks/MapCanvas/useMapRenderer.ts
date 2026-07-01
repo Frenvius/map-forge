@@ -530,8 +530,10 @@ export function useMapRenderer(deps: RendererDeps) {
     const showEraser = tool === 'eraser' || (tool === 'brush' && brush != null && brush.serverId != null && ctrlErase);
     const showZone = isZoneTool(tool);
     const showHouse = tool === 'house' && inputs.current.activeHouseId != null;
+    const showBorderize = tool === 'borderize';
+    const borderizeRemove = showBorderize && ctrlErase;
 
-    if (selection.box.current || !tile || (!showBrush && !showEraser && !showZone && !showHouse)) {
+    if (selection.box.current || !tile || (!showBrush && !showEraser && !showZone && !showHouse && !showBorderize)) {
       ghost.style.display = 'none';
       outline.style.display = 'none';
       return;
@@ -543,13 +545,18 @@ export function useMapRenderer(deps: RendererDeps) {
       return;
     }
 
-    if (showEraser || showZone || showHouse) {
+    if (showEraser || showZone || showHouse || showBorderize) {
       const s = TILE * zoom;
       ghost.style.display = 'none';
       outline.style.display = 'block';
       outline.style.width = `${s}px`;
       outline.style.height = `${s}px`;
       outline.style.transform = `translate(${(tile.x * TILE - camX) * zoom}px, ${(tile.y * TILE - camY) * zoom}px)`;
+      if (showBorderize) {
+        outline.style.borderColor = borderizeRemove ? 'rgb(248, 113, 113)' : 'rgb(52, 211, 153)';
+        outline.style.backgroundColor = borderizeRemove ? 'rgba(239, 68, 68, 0.18)' : 'rgba(16, 185, 129, 0.18)';
+        return;
+      }
       outline.style.borderColor = showEraser ? 'rgb(248, 113, 113)' : showHouse ? 'rgb(96, 165, 250)' : 'rgb(125, 211, 252)';
       outline.style.backgroundColor = showEraser
         ? 'rgba(239, 68, 68, 0.18)'
@@ -682,6 +689,14 @@ export function useMapRenderer(deps: RendererDeps) {
       ghost.style.opacity = '1';
       ghost.style.backgroundImage = 'none';
       ghost.style.backgroundColor = 'rgba(239, 68, 68, 0.28)';
+    } else if (tool === 'borderize') {
+      ghost.style.display = 'block';
+      ghost.style.transform = transform;
+      ghost.style.width = `${w}px`;
+      ghost.style.height = `${h}px`;
+      ghost.style.opacity = '1';
+      ghost.style.backgroundImage = 'none';
+      ghost.style.backgroundColor = bs.additive ? 'rgba(239, 68, 68, 0.28)' : 'rgba(16, 185, 129, 0.26)';
     } else {
       ghost.style.display = 'none';
     }

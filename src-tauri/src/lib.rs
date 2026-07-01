@@ -33,7 +33,7 @@ use creatures::{
 	CreatureWatcherState,
 };
 use map_edit::{
-	copy_selection, delete_item, delete_selection, erase_area, erase_brush, generate_apply, house_sizes, move_item, move_selection,
+	borderize_brush, copy_selection, delete_item, delete_selection, erase_area, erase_brush, generate_apply, house_sizes, move_item, move_selection,
 	paint_tiles, paint_zone, paste_selection,
 	preview_paint, set_house, CopyBuffer,
 };
@@ -168,6 +168,7 @@ pub fn run() {
 			delete_item,
 			erase_area,
 			erase_brush,
+			borderize_brush,
 			delete_selection,
 			copy_selection,
 			paste_selection,

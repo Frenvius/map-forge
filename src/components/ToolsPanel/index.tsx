@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, ComponentType } from 'react';
-import { Brush, Check, Skull, Eraser, Layers2, PenTool, Repeat2, Crosshair, MousePointer2, GripHorizontal } from 'lucide-react';
+import { Brush, Check, Frame, Skull, Eraser, Layers2, PenTool, Repeat2, Crosshair, MousePointer2, GripHorizontal } from 'lucide-react';
 import {
   IconHome,
   IconSpider,
@@ -30,6 +30,7 @@ const ICONS: Record<ToolId, ComponentType<{ className?: string }>> = {
   brush: Brush,
   pen: PenTool,
   eraser: Eraser,
+  borderize: Frame,
   spawn: Crosshair,
   zone_pz: IconShieldHalf,
   zone_nopvp: IconSwordOff,
