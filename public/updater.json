@@ -1,7 +1,7 @@
 {
-  "version": "0.0.0",
-  "notes": "",
-  "pub_date": "2026-06-30T00:00:00Z",
-  "url": "https://github.com/Frenvius/map-forge/releases/download/v0.0.0/map-forge_0.0.0_x64-setup.exe",
-  "signature": ""
+  "version": "0.1.0",
+  "notes": "First public release of Map Forge.",
+  "pub_date": "2026-06-30T23:30:01Z",
+  "url": "https://github.com/Frenvius/map-forge/releases/download/v0.1.0/map-forge_0.1.0_x64-setup.exe",
+  "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSb2lra2lObWMvV29HbURrNEdlTm82YzN6empXZDBQcU5EYzV2c0dNc3Z0QnB1YmxkNEhFQVU5ZFFjMXRLTjRqV09yYnZ2TDJDRXFaOEVVd1N0eWV2dHJKOGJYZnJReHdBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyODYyMTk4CWZpbGU6TWFwIEZvcmdlXzAuMS4wX3g2NC1zZXR1cC5leGUKZVA0bTZ0ajN3bkJLNURDM1ptN1c3VVMwcWZWVHZEN0l3OElMYWNCSkpaUzcrLzgxVkNFMlJReGJtQUdGaW9Icml2d1dDWXV2NS9JeG1XTTBDZ3RnQ2c9PQo="
 }
