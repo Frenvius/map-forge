@@ -48,12 +48,15 @@ const GeneralTab = ({ config, dataDir, onResetLayout, onPickDataDir, onResetData
         </div>
         <Select value={config.copyPositionFormat} onValueChange={(v) => onChange({ ...config, copyPositionFormat: v })}>
           <SelectTrigger className="h-7 w-44">
-            <SelectValue />
+            <SelectValue>{COPY_POSITION_FORMATS.find((f) => f.id === config.copyPositionFormat)?.label}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             {COPY_POSITION_FORMATS.map((f) => (
               <SelectItem key={f.id} value={f.id}>
-                {f.label}
+                <span className="flex flex-col">
+                  {f.label}
+                  <span className="text-[10px] text-muted-foreground">{f.render(SAMPLE_POSITION)}</span>
+                </span>
               </SelectItem>
             ))}
           </SelectContent>

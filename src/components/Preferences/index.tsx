@@ -157,27 +157,28 @@ const Preferences = ({ open: dialogOpen, initialTab = 'general', onSaved, onRese
   return (
     <>
       <Dialog open={dialogOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="h-[560px] max-h-[85vh] max-w-2xl">
           <DialogHeader>
             <DialogTitle>Preferences</DialogTitle>
           </DialogHeader>
-          <div className="flex items-center gap-1 border-b border-border px-3">
-            {tabs.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={cn(
-                  '-mb-px border-b-2 px-2 py-2 text-xs font-medium transition-colors',
-                  activeTab === t.id
-                    ? 'border-primary text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="flex min-h-0 flex-1">
+            <nav className="flex w-40 shrink-0 flex-col gap-0.5 border-r border-border p-2">
+              {tabs.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={cn(
+                    'rounded px-3 py-1.5 text-left text-xs font-medium transition-colors',
+                    activeTab === t.id
+                      ? 'bg-accent text-foreground'
+                      : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </nav>
+            <div className="min-w-0 flex-1 overflow-y-auto p-4">
             {activeTab === 'general' && (
               <GeneralTab
                 config={general}
@@ -205,6 +206,7 @@ const Preferences = ({ open: dialogOpen, initialTab = 'general', onSaved, onRese
                 {assetStatus && <span className="text-xs text-muted-foreground">{assetStatus}</span>}
               </div>
             )}
+            </div>
           </div>
           <DialogFooter>
             <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
