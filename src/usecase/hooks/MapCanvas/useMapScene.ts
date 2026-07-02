@@ -7,6 +7,14 @@ import { HuntArea } from '~/usecase/context/ToolContext/types';
 
 import { ClipboardGhostTile } from './meshBuilder';
 
+export interface ImportGhost {
+  width: number;
+  height: number;
+  minZ: number;
+  maxZ: number;
+  preview: HTMLCanvasElement | null;
+}
+
 export interface HuntSession {
   mask: Mask;
   minX: number;
@@ -58,6 +66,7 @@ export interface MapScene {
   moveDest: React.MutableRefObject<Position | null>;
   pendingMove: React.MutableRefObject<Float32Array | null>;
   pasteGhost: React.MutableRefObject<ClipboardGhostTile[] | null>;
+  importGhost: React.MutableRefObject<ImportGhost | null>;
   markerDrag: React.MutableRefObject<MarkerDrag | null>;
   markerDest: React.MutableRefObject<Position | null>;
   spawnResize: React.MutableRefObject<{ center: Position; radius: number } | null>;
@@ -96,6 +105,7 @@ export function useMapScene(): MapScene {
     moveDest: React.useRef<Position | null>(null),
     pendingMove: React.useRef<Float32Array | null>(null),
     pasteGhost: React.useRef<ClipboardGhostTile[] | null>(null),
+    importGhost: React.useRef<ImportGhost | null>(null),
     markerDrag: React.useRef<MarkerDrag | null>(null),
     markerDest: React.useRef<Position | null>(null),
     spawnResize: React.useRef<{ center: Position; radius: number } | null>(null),

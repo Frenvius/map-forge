@@ -16,6 +16,7 @@ mod creatures;
 mod lua_format;
 mod lua_host;
 mod map_edit;
+mod map_import;
 mod map_load;
 mod map_meta;
 mod map_model;
@@ -43,6 +44,7 @@ use lua_format::{
 	ThingDef, ThingsState,
 };
 use lua_host::{list_scripts, read_script, reload_scripts, scripts_dir, write_script, LuaHost, LuaState};
+use map_import::{import_cancel, import_commit, import_load, import_preview, new_import_state, ImportState};
 use map_load::open_otbm;
 use map_meta::{get_map_properties, get_towns, get_waypoints, map_statistics, set_map_properties, set_towns};
 use map_model::{
@@ -85,6 +87,7 @@ pub fn run() {
 	let item_sprites: ItemSpriteState = Arc::new(Mutex::new(HashMap::new()));
 	let scripted_things_state: ThingsState = Arc::new(Mutex::new(Vec::<ThingDef>::new()));
 	let client_id_state: ClientIdState = Arc::new(Mutex::new(HashMap::new()));
+	let import_state: ImportState = new_import_state();
 
 	let mut builder = tauri::Builder::default()
 		.plugin(tauri_plugin_dialog::init())
@@ -111,6 +114,7 @@ pub fn run() {
 		.manage(item_sprites)
 		.manage(scripted_things_state)
 		.manage(client_id_state)
+		.manage(import_state)
 		.invoke_handler(tauri::generate_handler![
 			reload_scripts,
 			list_scripts,
@@ -189,7 +193,11 @@ pub fn run() {
 			scan_creatures,
 			watch_creatures,
 			unwatch_creatures,
-			peek_otbm_version
+			peek_otbm_version,
+			import_load,
+			import_commit,
+			import_cancel,
+			import_preview
 		])
 		.setup(move |app| {
 			{

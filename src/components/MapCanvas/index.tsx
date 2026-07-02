@@ -196,6 +196,19 @@ const MapCanvas = (props: MapCanvasProps) => {
   }, []);
 
   React.useEffect(() => {
+    scene.importGhost.current = props.importGhost ?? null;
+  }, [props.importGhost]);
+
+  React.useEffect(() => {
+    const ref = props.refetchRef;
+    if (!ref) return;
+    ref.current = (tagged) => interaction.invalidateTagged(tagged);
+    return () => {
+      ref.current = null;
+    };
+  }, []);
+
+  React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.altKey) return;
       const t = e.target as HTMLElement | null;

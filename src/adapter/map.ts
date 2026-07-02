@@ -229,13 +229,7 @@ export async function eraseBrush(
   return invoke<number[]>('erase_brush', { mapId, z, x, y, serverId, automagic });
 }
 
-export async function borderizeBrush(
-  mapId: number,
-  z: number,
-  xs: number[],
-  ys: number[],
-  remove: boolean
-): Promise<number[]> {
+export async function borderizeBrush(mapId: number, z: number, xs: number[], ys: number[], remove: boolean): Promise<number[]> {
   return invoke<number[]>('borderize_brush', { mapId, z, xs, ys, remove });
 }
 
@@ -269,6 +263,75 @@ export async function copySelection(mapId: number, zs: number[], xs: number[], y
 
 export async function pasteSelection(mapId: number, x: number, y: number, z: number): Promise<[number, number][]> {
   return invoke<[number, number][]>('paste_selection', { mapId, x, y, z });
+}
+
+export interface ImportInfo {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  tileCount: number;
+  floors: number[];
+  townCount: number;
+  waypointCount: number;
+}
+
+export interface ImportCommitRequest {
+  mapId: number;
+  dx: number;
+  dy: number;
+  dz: number;
+  houseIdMap: Record<number, number>;
+  importTowns: boolean;
+  importWaypoints: boolean;
+  importHouses: boolean;
+}
+
+export interface ImportResult {
+  touched: [number, number][];
+  townIdMap: Record<number, number>;
+  tilesImported: number;
+  tilesDiscarded: number;
+  teleportsOffset: number;
+  townsMerged: number;
+  waypointsMerged: number;
+}
+
+export async function importLoad(path: string): Promise<ImportInfo> {
+  return invoke<ImportInfo>('import_load', { path });
+}
+
+export async function importCommit(req: ImportCommitRequest): Promise<ImportResult> {
+  return invoke<ImportResult>('import_commit', { req });
+}
+
+export async function importCancel(): Promise<void> {
+  await invoke('import_cancel');
+}
+
+export interface ImportPreview {
+  width: number;
+  height: number;
+  ground: Uint16Array;
+  top: Uint16Array;
+}
+
+export async function importPreview(z: number): Promise<ImportPreview> {
+  const response = await invoke<Uint8Array | ArrayBuffer>('import_preview', { z });
+  const u8 = toUint8(response);
+  const view = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  const width = view.getUint16(0, true);
+  const height = view.getUint16(2, true);
+  const cells = width * height;
+  const ground = new Uint16Array(cells);
+  const top = new Uint16Array(cells);
+  let o = 4;
+  for (let i = 0; i < cells; i++) {
+    ground[i] = view.getUint16(o, true);
+    top[i] = view.getUint16(o + 2, true);
+    o += 4;
+  }
+  return { width, height, ground, top };
 }
 
 export async function moveItem(

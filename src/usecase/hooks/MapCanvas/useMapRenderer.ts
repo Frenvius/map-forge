@@ -269,6 +269,31 @@ export function useMapRenderer(deps: RendererDeps) {
     ctx.clearRect(0, 0, vw, vh);
 
     const floorZ = inputs.current.floorZ;
+
+    const imp = scene.importGhost.current;
+    const hoverImp = scene.hoveredTile.current;
+    if (imp && hoverImp) {
+      const rx = (hoverImp.x * TILE - camX) * zoom;
+      const ry = (hoverImp.y * TILE - camY) * zoom;
+      const rw = imp.width * TILE * zoom;
+      const rh = imp.height * TILE * zoom;
+      ctx.save();
+      if (imp.preview) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.globalAlpha = 0.6;
+        ctx.drawImage(imp.preview, rx, ry, rw, rh);
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.10)';
+        ctx.fillRect(rx, ry, rw, rh);
+      }
+      ctx.setLineDash([8, 4]);
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(rx, ry, rw, rh);
+      ctx.restore();
+    }
+
     const drag = scene.huntAreaDrag.current;
     const area = drag
       ? {

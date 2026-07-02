@@ -127,6 +127,18 @@ pub(crate) fn ckey(z: u8, chunk: u32) -> u64 {
 	((z as u64) << 32) | chunk as u64
 }
 
+pub(crate) struct ImportOverlay<'a> {
+	pub dests: &'a [Option<(u16, u16, u8)>],
+	pub item_off: &'a [u32],
+	pub client_ids: &'a [u16],
+	pub server_ids: &'a [u16],
+	pub flags: &'a [u32],
+	pub house_ids: &'a [u32],
+	pub door_ids: &'a [u8],
+	pub house_id_map: &'a std::collections::HashMap<u32, u32>,
+	pub import_houses: bool,
+}
+
 #[derive(Default)]
 pub struct MapStore {
 	pub(crate) maps: HashMap<u32, MapModel>,
@@ -921,6 +933,77 @@ impl MapModel {
 	fn set_house_overlay(&mut self, z: u8, pos: u32, house: u32) {
 		let chunk_key = chunk_key_of((pos >> 16) as u16, (pos & 0xFFFF) as u16);
 		self.house_edits.entry(z).or_default().entry(chunk_key).or_default().insert(pos, house);
+	}
+
+	#[allow(clippy::too_many_arguments)]
+	pub(crate) fn import_overlay(&mut self, ops: &ImportOverlay, progress: &mut dyn FnMut(usize, usize)) -> (Vec<(u8, u32)>, u32) {
+		let n = ops.dests.len();
+		let mut batch = Batch::default();
+		let mut touched: HashSet<(u8, u32)> = HashSet::new();
+		let mut imported = 0u32;
+		for i in 0..n {
+			if i % 65536 == 0 {
+				progress(i, n);
+			}
+			let Some((nx, ny, nz)) = ops.dests[i] else { continue };
+			let src_house = ops.house_ids[i];
+			if !ops.import_houses && src_house != 0 {
+				continue;
+			}
+			let pos = (nx as u32) << 16 | ny as u32;
+			let chunk = chunk_key_of(nx, ny);
+
+			let s = ops.item_off[i] as usize;
+			let e = ops.item_off[i + 1] as usize;
+			let mut items: Vec<(u16, u16)> = Vec::with_capacity(e - s);
+			for j in s..e {
+				items.push((ops.client_ids[j], ops.server_ids[j]));
+			}
+
+			let before = stack_at(self, nz, nx, ny);
+			let after = items.clone();
+			self.edits.entry(nz).or_default().entry(chunk).or_default().insert(pos, items);
+			batch.items.push(TileChange { z: nz, pos, before, after });
+
+			let flags = ops.flags[i];
+			if flags != 0 {
+				let before_f = flags_at(self, nz, nx, ny);
+				if before_f != flags {
+					self.flag_edits.entry(nz).or_default().entry(chunk).or_default().insert(pos, flags);
+					batch.flags.push(FlagChange { z: nz, pos, before: before_f, after: flags });
+				}
+			}
+			let mapped_house = if src_house == 0 {
+				0
+			} else {
+				ops.house_id_map.get(&src_house).copied().unwrap_or(src_house)
+			};
+			if mapped_house != 0 {
+				let before_h = house_id_at(self, nz, nx, ny);
+				if before_h != mapped_house {
+					self.house_edits.entry(nz).or_default().entry(chunk).or_default().insert(pos, mapped_house);
+					batch.houses.push(HouseChange { z: nz, pos, before: before_h, after: mapped_house });
+				}
+			}
+			let door = ops.door_ids[i];
+			if door != 0 {
+				self.door_edits.entry(nz).or_default().entry(chunk).or_default().insert(pos, door);
+			}
+			touched.insert((nz, chunk));
+			imported += 1;
+		}
+		progress(n, n);
+
+		if !batch.items.is_empty() || !batch.flags.is_empty() || !batch.houses.is_empty() {
+			self.history.redo.clear();
+			self.history.undo.push(batch);
+			if self.history.undo.len() > UNDO_LIMIT {
+				self.history.undo.remove(0);
+			}
+			self.history.last_kind = ACTION_PAINT;
+			self.history.last_commit = Some(Instant::now());
+		}
+		(touched.into_iter().collect(), imported)
 	}
 
 	pub(crate) fn undo(&mut self) -> Vec<(u8, u32)> {

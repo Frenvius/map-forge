@@ -33,6 +33,7 @@ interface ToolbarProps {
   onAbout: () => void;
   onStatus: (message: string) => void;
   onRequestExit: () => void;
+  onImportMap: () => void;
 }
 
 const Toolbar = ({
@@ -61,7 +62,8 @@ const Toolbar = ({
   onSelectPaletteCategory,
   onAbout,
   onStatus,
-  onRequestExit
+  onRequestExit,
+  onImportMap
 }: ToolbarProps) => {
   const win = getCurrentWindow();
   const updater = useUpdater();
@@ -108,14 +110,15 @@ const Toolbar = ({
         onSave={onSave}
         loading={loading}
         onAbout={onAbout}
-        onRequestExit={onRequestExit}
         onSaveAs={onSaveAs}
         hasActive={hasActive}
         onCloseMap={onCloseMap}
         onEditTowns={onEditTowns}
         minimapOpen={minimapOpen}
+        onImportMap={onImportMap}
         onOpenRecent={onOpenRecent}
         onNewPalette={onNewPalette}
+        onRequestExit={onRequestExit}
         onClearRecent={onClearRecent}
         onOpenScripts={onOpenScripts}
         idMarkersOpen={idMarkersOpen}

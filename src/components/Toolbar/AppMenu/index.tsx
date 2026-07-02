@@ -1,5 +1,5 @@
 import React from 'react';
-import { Save, FilePlus, RefreshCw, FolderOpen } from 'lucide-react';
+import { Save, FilePlus, RefreshCw, FileInput, FolderOpen } from 'lucide-react';
 
 import { openDataDir } from '~/adapter/assets';
 import { openTilesetEditor } from '~/adapter/windows';
@@ -48,6 +48,7 @@ interface AppMenuProps {
   onCheckUpdates: () => void;
   onAbout: () => void;
   onRequestExit: () => void;
+  onImportMap: () => void;
 }
 
 const basename = (path: string) => path.split(/[\\/]/).pop() ?? path;
@@ -80,7 +81,8 @@ const AppMenu = ({
   onSelectPaletteCategory,
   onCheckUpdates,
   onAbout,
-  onRequestExit
+  onRequestExit,
+  onImportMap
 }: AppMenuProps) => {
   const {
     zoneVisibility,
@@ -149,6 +151,11 @@ const AppMenu = ({
           <MenubarItem onSelect={onSaveAs} disabled={!hasActive}>
             Save As...
             <MenubarShortcut>Ctrl+Shift+S</MenubarShortcut>
+          </MenubarItem>
+          <MenubarSeparator />
+          <MenubarItem onSelect={onImportMap} disabled={!hasActive || loading}>
+            <FileInput className="mr-2 h-3.5 w-3.5" />
+            Import Map...
           </MenubarItem>
           <MenubarSeparator />
           <MenubarItem disabled={!hasActive} onSelect={onCloseMap}>

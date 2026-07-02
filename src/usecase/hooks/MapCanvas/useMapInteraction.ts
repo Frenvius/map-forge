@@ -940,6 +940,22 @@ export function useMapInteraction(deps: InteractionDeps) {
     notifyEdit(z);
   }
 
+  function invalidateTagged(tagged: [number, number][]) {
+    const zs = new Set<number>();
+    for (const [z, key] of tagged) {
+      const cx = key >>> 16;
+      const cy = key & 0xffff;
+      const k = `${z},${cx},${cy}`;
+      tiles.data.current.delete(k);
+      tiles.requested.current.delete(k);
+      tiles.pending.current.delete(k);
+      tiles.lastUsed.current.delete(k);
+      meshes.forget(k);
+      zs.add(z);
+    }
+    for (const z of zs) notifyEdit(z);
+  }
+
   async function refetchTagged(tagged: [number, number][]) {
     const byZ = new Map<number, number[]>();
     for (const [z, key] of tagged) {
@@ -1785,6 +1801,12 @@ export function useMapInteraction(deps: InteractionDeps) {
       }
     }
 
+    if (scene.importGhost.current) {
+      const pos = tileAt(e);
+      inputs.current.onImportDrop?.(pos);
+      return;
+    }
+
     if (scene.pasteGhost.current) {
       const pos = tileAt(e);
       scene.pasteGhost.current = null;
@@ -2112,6 +2134,11 @@ export function useMapInteraction(deps: InteractionDeps) {
       penCancel();
       return;
     }
+    if (scene.importGhost.current) {
+      inputs.current.onImportCancel?.();
+      emit('Import cancelled');
+      return;
+    }
     if (scene.pasteGhost.current) {
       scene.pasteGhost.current = null;
       emit('Paste cancelled');
@@ -2415,6 +2442,8 @@ export function useMapInteraction(deps: InteractionDeps) {
       setGotoForm(tile);
       setMenu(null);
     },
-    closeGoto: () => setGotoForm(null)
+    closeGoto: () => setGotoForm(null),
+    refetchTagged,
+    invalidateTagged
   };
 }
