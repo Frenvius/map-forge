@@ -1,7 +1,7 @@
 {
-  "version": "0.1.0",
-  "notes": "First public release of Map Forge.",
-  "pub_date": "2026-06-30T23:30:01Z",
-  "url": "https://github.com/Frenvius/map-forge/releases/download/v0.1.0/map-forge_0.1.0_x64-setup.exe",
-  "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSb2lra2lObWMvV29HbURrNEdlTm82YzN6empXZDBQcU5EYzV2c0dNc3Z0QnB1YmxkNEhFQVU5ZFFjMXRLTjRqV09yYnZ2TDJDRXFaOEVVd1N0eWV2dHJKOGJYZnJReHdBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyODYyMTk4CWZpbGU6TWFwIEZvcmdlXzAuMS4wX3g2NC1zZXR1cC5leGUKZVA0bTZ0ajN3bkJLNURDM1ptN1c3VVMwcWZWVHZEN0l3OElMYWNCSkpaUzcrLzgxVkNFMlJReGJtQUdGaW9Icml2d1dDWXV2NS9JeG1XTTBDZ3RnQ2c9PQo="
+  "version": "0.1.1",
+  "notes": "### Added\n- Interactive map import with a sprite-LOD preview.\n- Cross-map clipboard with a replace-on-paste option.\n- Hunt generator with route editing and spawn scatter.\n- Action and unique ID panel with teleport targets and tile highlighting.\n- Borderize brush with mountain and gravel borders.\n- Doodad brushes with randomized assembly.\n- Virtualized, searchable tile and brush pickers with thumbnails.\n- Optional border editing in the tileset editor, preserving border attributes.\n- Ctrl+scroll to change floors on the map canvas.\n- Configurable default floor (sea level) in editor preferences.\n- Adjustable undo/redo history budget in preferences.\n- Custom data-folder preference with an option to copy existing data.\n- Confirmation prompt when closing with unsaved changes.\n- Loaded client version shown in the assets-ready status.\n- Redesigned preferences dialog with sidebar navigation and format examples.\n- Versioned client data now bundled with the installer.\n\n### Fixed\n- Map import expands the map bounds and drops content at the cursor.\n- Hangable item rotation.\n\n### Changed\n- DAT parsing now enforces OTFI extended and transparency flags.",
+  "pub_date": "2026-07-02T05:32:00Z",
+  "url": "https://github.com/Frenvius/map-forge/releases/download/v0.1.1/map-forge_0.1.1_x64-setup.exe",
+  "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSb2lra2lObWMvV2twdzc3dDZnOGpCMWtPb0YrenB0TUtNTGF3ZDYyRDFRRHFMRjJETHNYWS9rYWllZ2c1VFhkOHBRSW9RN3hHQXYyRVJXQkEvYXFzQ2dmckpnOXJKb2dRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyOTcwMzE3CWZpbGU6TWFwIEZvcmdlXzAuMS4xX3g2NC1zZXR1cC5leGUKVGxtT2tyZWJabWZkN1J0aXNycEdyajMwR0p2U3psSmRBSXBET2lhMmNNZ0t0WnJFYTE1Y3FWRDhLWXlobk9nVnpRV2RmblFzWGdUVUFoUXhLa1hvRFE9PQo="
 }
