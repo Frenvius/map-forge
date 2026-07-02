@@ -404,12 +404,30 @@ export async function previewPaint(
   return tiles;
 }
 
-export async function undoEdit(mapId: number): Promise<[number, number][]> {
-  return invoke<[number, number][]>('undo_edit', { mapId });
+export interface EditResult {
+  applied: boolean;
+  touched: [number, number][];
+  sidecar: string;
 }
 
-export async function redoEdit(mapId: number): Promise<[number, number][]> {
-  return invoke<[number, number][]>('redo_edit', { mapId });
+export async function undoEdit(mapId: number): Promise<EditResult> {
+  return invoke<EditResult>('undo_edit', { mapId });
+}
+
+export async function redoEdit(mapId: number): Promise<EditResult> {
+  return invoke<EditResult>('redo_edit', { mapId });
+}
+
+export async function attachUndoSidecar(mapId: number, before: string, after: string): Promise<void> {
+  await invoke('attach_undo_sidecar', { mapId, before, after });
+}
+
+export async function pushUndoSidecar(mapId: number, before: string, after: string): Promise<void> {
+  await invoke('push_undo_sidecar', { mapId, before, after });
+}
+
+export async function setHistoryLimits(mapId: number, maxSteps: number, maxBytes: number): Promise<void> {
+  await invoke('set_history_limits', { mapId, maxSteps, maxBytes });
 }
 
 export async function fetchMapChunks(mapId: number, z: number, keys: number[]): Promise<Map<string, ChunkTiles>> {

@@ -38,7 +38,8 @@ pub(crate) const ACTION_DELETE: u8 = 4;
 pub(crate) const ACTION_FLAG: u8 = 5;
 pub(crate) const ACTION_HOUSE: u8 = 6;
 
-const UNDO_LIMIT: usize = 200;
+const DEFAULT_UNDO_STEPS: usize = 200;
+const DEFAULT_UNDO_BYTES: usize = 256 * 1024 * 1024;
 const MERGE_WINDOW: Duration = Duration::from_millis(500);
 
 struct TileChange {
@@ -62,22 +63,83 @@ struct HouseChange {
 	after: u32,
 }
 
+struct DoorChange {
+	z: u8,
+	pos: u32,
+	before: u8,
+	after: u8,
+}
+
 #[derive(Default)]
 struct Batch {
 	items: Vec<TileChange>,
 	flags: Vec<FlagChange>,
 	houses: Vec<HouseChange>,
+	doors: Vec<DoorChange>,
+	sidecar_before: String,
+	sidecar_after: String,
 }
 
-#[derive(Default)]
+impl Batch {
+	fn is_empty(&self) -> bool {
+		self.items.is_empty()
+			&& self.flags.is_empty()
+			&& self.houses.is_empty()
+			&& self.doors.is_empty()
+			&& self.sidecar_before.is_empty()
+			&& self.sidecar_after.is_empty()
+	}
+
+	fn memsize(&self) -> usize {
+		let items: usize = self.items.iter().map(|c| 24 + (c.before.len() + c.after.len()) * 4).sum();
+		items
+			+ self.flags.len() * 16
+			+ self.houses.len() * 16
+			+ self.doors.len() * 8
+			+ self.sidecar_before.len()
+			+ self.sidecar_after.len()
+			+ 64
+	}
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditResult {
+	pub applied: bool,
+	pub touched: Vec<(u8, u32)>,
+	pub sidecar: String,
+}
+
 struct History {
 	recording: Option<HashMap<(u8, u32), Vec<(u16, u16)>>>,
 	flag_recording: Option<HashMap<(u8, u32), u32>>,
 	house_recording: Option<HashMap<(u8, u32), u32>>,
+	door_recording: Option<HashMap<(u8, u32), u8>>,
 	undo: Vec<Batch>,
 	redo: Vec<Batch>,
 	last_kind: u8,
 	last_commit: Option<Instant>,
+	max_steps: usize,
+	max_bytes: usize,
+	used_bytes: usize,
+}
+
+impl Default for History {
+	fn default() -> Self {
+		History {
+			recording: None,
+			flag_recording: None,
+			house_recording: None,
+			door_recording: None,
+			undo: Vec::new(),
+			redo: Vec::new(),
+			last_kind: 0,
+			last_commit: None,
+			max_steps: DEFAULT_UNDO_STEPS,
+			max_bytes: DEFAULT_UNDO_BYTES,
+			used_bytes: 0,
+		}
+	}
 }
 
 pub struct MapModel {
@@ -823,6 +885,9 @@ impl MapModel {
 		if self.history.house_recording.is_none() {
 			self.history.house_recording = Some(HashMap::new());
 		}
+		if self.history.door_recording.is_none() {
+			self.history.door_recording = Some(HashMap::new());
+		}
 	}
 
 	pub(crate) fn set_tile_flags(&mut self, z: u8, x: u16, y: u16, new_flags: u32) {
@@ -848,6 +913,10 @@ impl MapModel {
 	pub(crate) fn set_tile_door_id(&mut self, z: u8, x: u16, y: u16, door_id: u8) {
 		let chunk_key = chunk_key_of(x, y);
 		let pos = (x as u32) << 16 | y as u32;
+		if self.history.door_recording.as_ref().is_some_and(|r| !r.contains_key(&(z, pos))) {
+			let before = door_id_at(self, z, x, y);
+			self.history.door_recording.as_mut().unwrap().insert((z, pos), before);
+		}
 		self.door_edits.entry(z).or_default().entry(chunk_key).or_default().insert(pos, door_id);
 	}
 
@@ -855,6 +924,7 @@ impl MapModel {
 		let item_before = self.history.recording.take();
 		let flag_before = self.history.flag_recording.take();
 		let house_before = self.history.house_recording.take();
+		let door_before = self.history.door_recording.take();
 		let mut items: Vec<TileChange> = item_before
 			.into_iter()
 			.flatten()
@@ -879,17 +949,27 @@ impl MapModel {
 				(before != after).then_some(HouseChange { z, pos, before, after })
 			})
 			.collect();
-		if items.is_empty() && flags.is_empty() && houses.is_empty() {
+		let mut doors: Vec<DoorChange> = door_before
+			.into_iter()
+			.flatten()
+			.filter_map(|((z, pos), before)| {
+				let after = door_id_at(self, z, (pos >> 16) as u16, (pos & 0xFFFF) as u16);
+				(before != after).then_some(DoorChange { z, pos, before, after })
+			})
+			.collect();
+		if items.is_empty() && flags.is_empty() && houses.is_empty() && doors.is_empty() {
 			return;
 		}
 
 		let mergeable = matches!(kind, ACTION_PAINT | ACTION_ERASE | ACTION_FLAG | ACTION_HOUSE)
 			&& self.history.last_kind == kind
 			&& self.history.redo.is_empty()
+			&& self.history.undo.last().is_some_and(|b| b.sidecar_before.is_empty() && b.sidecar_after.is_empty())
 			&& self.history.last_commit.is_some_and(|t| t.elapsed() < MERGE_WINDOW);
 
 		if mergeable {
 			if let Some(group) = self.history.undo.last_mut() {
+				let old = group.memsize();
 				for ch in items.drain(..) {
 					match group.items.iter_mut().find(|c| c.z == ch.z && c.pos == ch.pos) {
 						Some(existing) => existing.after = ch.after,
@@ -908,16 +988,76 @@ impl MapModel {
 						None => group.houses.push(ch),
 					}
 				}
+				for ch in doors.drain(..) {
+					match group.doors.iter_mut().find(|c| c.z == ch.z && c.pos == ch.pos) {
+						Some(existing) => existing.after = ch.after,
+						None => group.doors.push(ch),
+					}
+				}
+				let new = group.memsize();
+				self.history.used_bytes = self.history.used_bytes + new - old;
 			}
+			self.history.last_commit = Some(Instant::now());
 		} else {
-			self.history.redo.clear();
-			self.history.undo.push(Batch { items, flags, houses });
-			if self.history.undo.len() > UNDO_LIMIT {
-				self.history.undo.remove(0);
-			}
+			self.push_batch(Batch {
+				items,
+				flags,
+				houses,
+				doors,
+				..Default::default()
+			});
 		}
 		self.history.last_kind = kind;
+	}
+
+	fn clear_redo(&mut self) {
+		let freed: usize = self.history.redo.iter().map(|b| b.memsize()).sum();
+		self.history.used_bytes = self.history.used_bytes.saturating_sub(freed);
+		self.history.redo.clear();
+	}
+
+	fn evict(&mut self) {
+		while self.history.undo.len() > 1
+			&& (self.history.undo.len() > self.history.max_steps || self.history.used_bytes > self.history.max_bytes)
+		{
+			let dropped = self.history.undo.remove(0);
+			self.history.used_bytes = self.history.used_bytes.saturating_sub(dropped.memsize());
+		}
+	}
+
+	fn push_batch(&mut self, batch: Batch) {
+		self.clear_redo();
+		self.history.used_bytes += batch.memsize();
+		self.history.undo.push(batch);
+		self.evict();
 		self.history.last_commit = Some(Instant::now());
+	}
+
+	pub(crate) fn attach_sidecar(&mut self, before: String, after: String) {
+		let used = &mut self.history.used_bytes;
+		if let Some(batch) = self.history.undo.last_mut() {
+			*used = used.saturating_sub(batch.sidecar_before.len() + batch.sidecar_after.len());
+			batch.sidecar_before = before;
+			batch.sidecar_after = after;
+			*used += batch.sidecar_before.len() + batch.sidecar_after.len();
+		}
+		self.history.last_commit = None;
+		self.evict();
+	}
+
+	pub(crate) fn push_sidecar_batch(&mut self, before: String, after: String) {
+		self.push_batch(Batch {
+			sidecar_before: before,
+			sidecar_after: after,
+			..Default::default()
+		});
+		self.history.last_commit = None;
+	}
+
+	pub(crate) fn set_history_limits(&mut self, max_steps: usize, max_bytes: usize) {
+		self.history.max_steps = max_steps.max(1);
+		self.history.max_bytes = max_bytes;
+		self.evict();
 	}
 
 	fn set_overlay(&mut self, z: u8, pos: u32, stack: Vec<(u16, u16)>) {
@@ -933,6 +1073,11 @@ impl MapModel {
 	fn set_house_overlay(&mut self, z: u8, pos: u32, house: u32) {
 		let chunk_key = chunk_key_of((pos >> 16) as u16, (pos & 0xFFFF) as u16);
 		self.house_edits.entry(z).or_default().entry(chunk_key).or_default().insert(pos, house);
+	}
+
+	fn set_door_overlay(&mut self, z: u8, pos: u32, door: u8) {
+		let chunk_key = chunk_key_of((pos >> 16) as u16, (pos & 0xFFFF) as u16);
+		self.door_edits.entry(z).or_default().entry(chunk_key).or_default().insert(pos, door);
 	}
 
 	#[allow(clippy::too_many_arguments)]
@@ -994,36 +1139,33 @@ impl MapModel {
 		}
 		progress(n, n);
 
-		if !batch.items.is_empty() || !batch.flags.is_empty() || !batch.houses.is_empty() {
-			self.history.redo.clear();
-			self.history.undo.push(batch);
-			if self.history.undo.len() > UNDO_LIMIT {
-				self.history.undo.remove(0);
-			}
+		if !batch.is_empty() {
+			self.push_batch(batch);
 			self.history.last_kind = ACTION_PAINT;
-			self.history.last_commit = Some(Instant::now());
 		}
 		(touched.into_iter().collect(), imported)
 	}
 
-	pub(crate) fn undo(&mut self) -> Vec<(u8, u32)> {
+	pub(crate) fn undo(&mut self) -> EditResult {
 		let Some(batch) = self.history.undo.pop() else {
-			return Vec::new();
+			return EditResult { applied: false, touched: Vec::new(), sidecar: String::new() };
 		};
 		let touched = self.apply(&batch, true);
+		let sidecar = batch.sidecar_before.clone();
 		self.history.redo.push(batch);
 		self.history.last_commit = None;
-		touched
+		EditResult { applied: true, touched, sidecar }
 	}
 
-	pub(crate) fn redo(&mut self) -> Vec<(u8, u32)> {
+	pub(crate) fn redo(&mut self) -> EditResult {
 		let Some(batch) = self.history.redo.pop() else {
-			return Vec::new();
+			return EditResult { applied: false, touched: Vec::new(), sidecar: String::new() };
 		};
 		let touched = self.apply(&batch, false);
+		let sidecar = batch.sidecar_after.clone();
 		self.history.undo.push(batch);
 		self.history.last_commit = None;
-		touched
+		EditResult { applied: true, touched, sidecar }
 	}
 
 	fn apply(&mut self, batch: &Batch, to_before: bool) -> Vec<(u8, u32)> {
@@ -1043,6 +1185,12 @@ impl MapModel {
 		for ch in &batch.houses {
 			let house = if to_before { ch.before } else { ch.after };
 			self.set_house_overlay(ch.z, ch.pos, house);
+			let chunk_key = chunk_key_of((ch.pos >> 16) as u16, (ch.pos & 0xFFFF) as u16);
+			touched.insert((ch.z, chunk_key));
+		}
+		for ch in &batch.doors {
+			let door = if to_before { ch.before } else { ch.after };
+			self.set_door_overlay(ch.z, ch.pos, door);
 			let chunk_key = chunk_key_of((ch.pos >> 16) as u16, (ch.pos & 0xFFFF) as u16);
 			touched.insert((ch.z, chunk_key));
 		}
@@ -1407,22 +1555,67 @@ pub fn list_id_markers(
 }
 
 #[tauri::command]
-pub fn undo_edit(map_id: u32, map_state: tauri::State<MapState>) -> Result<Vec<(u8, u32)>, String> {
+pub fn undo_edit(map_id: u32, map_state: tauri::State<MapState>) -> Result<EditResult, String> {
 	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
 	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
 	Ok(m.undo())
 }
 
 #[tauri::command]
-pub fn redo_edit(map_id: u32, map_state: tauri::State<MapState>) -> Result<Vec<(u8, u32)>, String> {
+pub fn redo_edit(map_id: u32, map_state: tauri::State<MapState>) -> Result<EditResult, String> {
 	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
 	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
 	Ok(m.redo())
 }
 
+#[tauri::command]
+pub fn attach_undo_sidecar(map_id: u32, before: String, after: String, map_state: tauri::State<MapState>) -> Result<(), String> {
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+	m.attach_sidecar(before, after);
+	Ok(())
+}
+
+#[tauri::command]
+pub fn push_undo_sidecar(map_id: u32, before: String, after: String, map_state: tauri::State<MapState>) -> Result<(), String> {
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+	m.push_sidecar_batch(before, after);
+	Ok(())
+}
+
+#[tauri::command]
+pub fn set_history_limits(map_id: u32, max_steps: u32, max_bytes: f64, map_state: tauri::State<MapState>) -> Result<(), String> {
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+	m.set_history_limits(max_steps as usize, max_bytes as usize);
+	Ok(())
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn history_evicts_oldest_and_round_trips_sidecar() {
+		let mut m = empty_model(100, 100);
+		m.push_sidecar_batch("a0".into(), "a1".into());
+		m.push_sidecar_batch("b0".into(), "b1".into());
+		m.push_sidecar_batch("c0".into(), "c1".into());
+
+		m.set_history_limits(2, 1 << 30);
+
+		let r1 = m.undo();
+		assert!(r1.applied);
+		assert_eq!(r1.sidecar, "c0");
+		let r2 = m.undo();
+		assert_eq!(r2.sidecar, "b0");
+		let r3 = m.undo();
+		assert!(!r3.applied, "oldest batch was evicted by the 2-step cap");
+
+		let redo = m.redo();
+		assert_eq!(redo.sidecar, "b1", "redo replays the after payload");
+	}
 
 	fn u16_at(b: &[u8], o: usize) -> u16 {
 		u16::from_le_bytes([b[o], b[o + 1]])

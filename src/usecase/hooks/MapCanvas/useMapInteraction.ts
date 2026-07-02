@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { Position } from '~/domain/map';
+import { MapHouses } from '~/domain/house';
 import { isZoneTool } from '~/domain/tools';
 import { ZONE_TOOL_FLAG } from '~/domain/zones';
 import { loadSprites } from '~/adapter/sprites';
@@ -51,6 +52,7 @@ import {
   setHouse,
   eraseArea,
   paintZone,
+  EditResult,
   eraseBrush,
   deleteItem,
   paintTiles,
@@ -61,7 +63,9 @@ import {
   borderizeBrush,
   fetchMapChunks,
   pasteSelection,
-  deleteSelection
+  pushUndoSidecar,
+  deleteSelection,
+  attachUndoSidecar
 } from '~/adapter/map';
 
 import { MapScene } from './useMapScene';
@@ -70,21 +74,15 @@ import { SpriteAtlas } from './useSpriteAtlas';
 import { ChunkTilesCache } from './useChunkTiles';
 import { ChunkMeshCache } from './useChunkMeshes';
 import { ClipboardGhostTile, buildSelectionGhost } from './meshBuilder';
-import { Selection, BoxSelection, selectionSig, SelectionSnapshot } from './useSelection';
+import { Selection, BoxSelection, SelectionSnapshot } from './useSelection';
 
-type EditEntry =
-  | { kind: 'item' }
-  | { kind: 'pen'; anchors: PenAnchor[] }
-  | { kind: 'spawn'; before: MapSpawns; after: MapSpawns }
-  | { kind: 'waypoint'; before: MapWaypoints; after: MapWaypoints }
-  | {
-      kind: 'compound';
-      selBefore: SelectionSnapshot;
-      selAfter: SelectionSnapshot;
-      hasItem: boolean;
-      spawnBefore: MapSpawns | null;
-      spawnAfter: MapSpawns | null;
-    };
+interface Sidecar {
+  sel?: SelectionSnapshot;
+  spawns?: MapSpawns;
+  waypoints?: MapWaypoints;
+  houses?: MapHouses;
+  pen?: PenAnchor[];
+}
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -119,44 +117,55 @@ export function useMapInteraction(deps: InteractionDeps) {
   const modalOpen = React.useRef(false);
   modalOpen.current = spawnForm !== null || creatureForm !== null || waypointForm !== null;
 
-  const undoTimeline = React.useRef<EditEntry[]>([]);
-  const redoTimeline = React.useRef<EditEntry[]>([]);
-
-  function recordItemEdit() {
-    undoTimeline.current.push({ kind: 'item' });
-    redoTimeline.current = [];
-  }
-
   function pushCompound(
     selBefore: SelectionSnapshot,
     opts: { hasItem?: boolean; spawnBefore?: MapSpawns | null; spawnAfter?: MapSpawns | null }
   ) {
-    undoTimeline.current.push({
-      kind: 'compound',
-      selBefore,
-      selAfter: selection.snapshot(),
-      hasItem: !!opts.hasItem,
-      spawnBefore: opts.spawnBefore ?? null,
-      spawnAfter: opts.spawnAfter ?? null
-    });
-    redoTimeline.current = [];
-  }
-
-  function recordSelection(before: SelectionSnapshot) {
-    if (selectionSig(before) === selectionSig(selection.snapshot())) return;
-    pushCompound(before, {});
+    const before: Sidecar = { sel: selBefore };
+    const after: Sidecar = { sel: selection.snapshot() };
+    if (opts.spawnBefore) before.spawns = opts.spawnBefore;
+    if (opts.spawnAfter) after.spawns = opts.spawnAfter;
+    const b = JSON.stringify(before);
+    const a = JSON.stringify(after);
+    const mapId = inputs.current.map.id;
+    if (opts.hasItem) void attachUndoSidecar(mapId, b, a);
+    else void pushUndoSidecar(mapId, b, a);
   }
 
   function editSpawns(next: MapSpawns) {
-    undoTimeline.current.push({ kind: 'spawn', before: inputs.current.spawns ?? emptyMapSpawns(), after: next });
-    redoTimeline.current = [];
+    const before = inputs.current.spawns ?? emptyMapSpawns();
     inputs.current.onEditSpawns(next);
+    void pushUndoSidecar(inputs.current.map.id, JSON.stringify({ spawns: before }), JSON.stringify({ spawns: next }));
   }
 
   function editWaypoints(next: MapWaypoints) {
-    undoTimeline.current.push({ kind: 'waypoint', before: inputs.current.waypoints ?? emptyMapWaypoints(), after: next });
-    redoTimeline.current = [];
+    const before = inputs.current.waypoints ?? emptyMapWaypoints();
     inputs.current.onEditWaypoints(next);
+    void pushUndoSidecar(inputs.current.map.id, JSON.stringify({ waypoints: before }), JSON.stringify({ waypoints: next }));
+  }
+
+  function applySidecar(json: string): boolean {
+    if (!json) return false;
+    let sc: Sidecar;
+    try {
+      sc = JSON.parse(json) as Sidecar;
+    } catch {
+      return false;
+    }
+    if (sc.spawns) inputs.current.onEditSpawns(sc.spawns);
+    if (sc.waypoints) inputs.current.onEditWaypoints(sc.waypoints);
+    if (sc.houses) inputs.current.onEditHouses(sc.houses);
+    if (sc.sel) selection.restore(sc.sel);
+    if (sc.pen !== undefined) {
+      penDrag.current = null;
+      if (sc.pen.length > 0) {
+        penAnchors.current = clonePenAnchors(sc.pen);
+        if (inputs.current.activeTool !== 'pen') inputs.current.onToolChange('pen');
+        return true;
+      }
+      penAnchors.current = [];
+    }
+    return false;
   }
 
   const tileAt = (e: React.MouseEvent) => camera.tileUnderCursor(e, inputs.current.floorZ);
@@ -250,8 +259,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     if (!before) return;
     const after = inputs.current.spawns ?? emptyMapSpawns();
     if (before !== after) {
-      undoTimeline.current.push({ kind: 'spawn', before, after });
-      redoTimeline.current = [];
+      void pushUndoSidecar(inputs.current.map.id, JSON.stringify({ spawns: before }), JSON.stringify({ spawns: after }));
     }
   }
 
@@ -281,8 +289,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     if (!before) return;
     const after = inputs.current.spawns ?? emptyMapSpawns();
     if (before !== after) {
-      undoTimeline.current.push({ kind: 'spawn', before, after });
-      redoTimeline.current = [];
+      void pushUndoSidecar(inputs.current.map.id, JSON.stringify({ spawns: before }), JSON.stringify({ spawns: after }));
     }
   }
 
@@ -713,12 +720,15 @@ export function useMapInteraction(deps: InteractionDeps) {
     penDrag.current = null;
     setPenCursorIfChanged(PEN_CURSOR);
     const z = inputs.current.floorZ;
-    undoTimeline.current.push({ kind: 'pen', anchors: saved });
-    redoTimeline.current = [];
     paintTiles(inputs.current.map.id, z, xs, ys, brush.paintId, true, false, inputs.current.automagic)
       .then((touched) => {
         refetchKeysNow(touched, z);
         notifyEdit(z);
+        void attachUndoSidecar(
+          inputs.current.map.id,
+          JSON.stringify({ pen: saved } satisfies Sidecar),
+          JSON.stringify({ pen: [] } satisfies Sidecar)
+        );
         emit(`Pen painted ${plural(xs.length, 'tile')}`);
       })
       .catch((err) => console.error('Failed to paint pen path', err));
@@ -810,6 +820,7 @@ export function useMapInteraction(deps: InteractionDeps) {
       list: houses.list.map((h) => (h.id === houseId ? { ...h, entryX: pos.x, entryY: pos.y, entryZ: pos.z } : h))
     };
     inputs.current.onEditHouses(next);
+    void pushUndoSidecar(inputs.current.map.id, JSON.stringify({ houses }), JSON.stringify({ houses: next }));
     emit('House exit set');
   }
 
@@ -1163,7 +1174,6 @@ export function useMapInteraction(deps: InteractionDeps) {
     const tasks: Promise<void>[] = [];
     for (const [z, g] of byZ) {
       total += g.xs.length;
-      recordItemEdit();
       tasks.push(
         paintTiles(inputs.current.map.id, z, g.xs, g.ys, tile.paintId, true, false, inputs.current.automagic).then((touched) =>
           refetchKeysNow(touched, z)
@@ -1192,7 +1202,6 @@ export function useMapInteraction(deps: InteractionDeps) {
       report('Nothing to generate');
       return;
     }
-    recordItemEdit();
     report(`Painting ${plural(count, 'tile')}...`);
     try {
       const touched = await generateApply(inputs.current.map.id, plan.layers, inputs.current.automagic);
@@ -1516,7 +1525,6 @@ export function useMapInteraction(deps: InteractionDeps) {
       return;
     }
     const count = clipboardCount.current;
-    recordItemEdit();
     pasteSelection(inputs.current.map.id, pos.x, pos.y, pos.z)
       .then((touched) => refetchTagged(touched))
       .then(() => {
@@ -1625,136 +1633,39 @@ export function useMapInteraction(deps: InteractionDeps) {
   }
 
   async function undo() {
-    while (undoTimeline.current.length > 0) {
-      const e = undoTimeline.current.pop()!;
-      if (e.kind === 'spawn') {
-        redoTimeline.current.push(e);
-        inputs.current.onEditSpawns(e.before);
-        emit('Undo');
-        return;
-      }
-      if (e.kind === 'waypoint') {
-        redoTimeline.current.push(e);
-        inputs.current.onEditWaypoints(e.before);
-        emit('Undo');
-        return;
-      }
-      if (e.kind === 'compound') {
-        redoTimeline.current.push(e);
-        if (e.spawnBefore) inputs.current.onEditSpawns(e.spawnBefore);
-        selection.restore(e.selBefore);
-        if (e.hasItem) {
-          try {
-            applyHistory(await undoEdit(inputs.current.map.id));
-          } catch (err) {
-            console.error('Undo failed', err);
-            emit('Undo failed');
-            return;
-          }
-        }
-        emit('Undo');
-        return;
-      }
-      if (e.kind === 'pen') {
-        try {
-          const touched = await undoEdit(inputs.current.map.id);
-          if (touched.length > 0) {
-            redoTimeline.current.push(e);
-            applyHistory(touched);
-            penAnchors.current = clonePenAnchors(e.anchors);
-            penDrag.current = null;
-            if (inputs.current.activeTool !== 'pen') inputs.current.onToolChange('pen');
-            emit('Undo - pen path back to edit');
-            return;
-          }
-        } catch (err) {
-          console.error('Undo failed', err);
-          emit('Undo failed');
-          return;
-        }
-        continue;
-      }
-      try {
-        const touched = await undoEdit(inputs.current.map.id);
-        if (touched.length > 0) {
-          redoTimeline.current.push(e);
-          applyHistory(touched);
-          emit('Undo');
-          return;
-        }
-      } catch (err) {
-        console.error('Undo failed', err);
-        emit('Undo failed');
-        return;
-      }
+    let r: EditResult;
+    try {
+      r = await undoEdit(inputs.current.map.id);
+    } catch (err) {
+      console.error('Undo failed', err);
+      emit('Undo failed');
+      return;
     }
-    emit('Nothing to undo');
+    if (!r.applied) {
+      emit('Nothing to undo');
+      return;
+    }
+    const penRestored = applySidecar(r.sidecar);
+    if (r.touched.length > 0) applyHistory(r.touched);
+    emit(penRestored ? 'Undo - pen path back to edit' : 'Undo');
   }
 
   async function redo() {
-    while (redoTimeline.current.length > 0) {
-      const e = redoTimeline.current.pop()!;
-      if (e.kind === 'spawn') {
-        undoTimeline.current.push(e);
-        inputs.current.onEditSpawns(e.after);
-        emit('Redo');
-        return;
-      }
-      if (e.kind === 'waypoint') {
-        undoTimeline.current.push(e);
-        inputs.current.onEditWaypoints(e.after);
-        emit('Redo');
-        return;
-      }
-      if (e.kind === 'compound') {
-        undoTimeline.current.push(e);
-        if (e.spawnAfter) inputs.current.onEditSpawns(e.spawnAfter);
-        selection.restore(e.selAfter);
-        if (e.hasItem) {
-          try {
-            applyHistory(await redoEdit(inputs.current.map.id));
-          } catch (err) {
-            console.error('Redo failed', err);
-            emit('Redo failed');
-            return;
-          }
-        }
-        emit('Redo');
-        return;
-      }
-      if (e.kind === 'pen') {
-        try {
-          const touched = await redoEdit(inputs.current.map.id);
-          if (touched.length > 0) {
-            undoTimeline.current.push(e);
-            applyHistory(touched);
-            penAnchors.current = [];
-            penDrag.current = null;
-            emit('Redo');
-            return;
-          }
-        } catch (err) {
-          console.error('Redo failed', err);
-          emit('Redo failed');
-          return;
-        }
-        continue;
-      }
-      try {
-        const touched = await redoEdit(inputs.current.map.id);
-        if (touched.length > 0) {
-          undoTimeline.current.push(e);
-          applyHistory(touched);
-          emit('Redo');
-          return;
-        }
-      } catch (err) {
-        console.error('Redo failed', err);
-        emit('Redo failed');
-        return;
-      }
+    let r: EditResult;
+    try {
+      r = await redoEdit(inputs.current.map.id);
+    } catch (err) {
+      console.error('Redo failed', err);
+      emit('Redo failed');
+      return;
     }
-    emit('Nothing to redo');
+    if (!r.applied) {
+      emit('Nothing to redo');
+      return;
+    }
+    applySidecar(r.sidecar);
+    if (r.touched.length > 0) applyHistory(r.touched);
+    emit('Redo');
   }
 
   function onMouseDown(e: React.MouseEvent) {
@@ -1847,13 +1758,11 @@ export function useMapInteraction(deps: InteractionDeps) {
         scene.erasing.current = true;
         scene.eraseBrushId.current = brush!.serverId!;
         scene.lastPaintKey.current = null;
-        recordItemEdit();
         eraseBrushAt(tileAt(e), brush!.serverId!);
         return;
       }
       scene.painting.current = true;
       scene.lastPaintKey.current = null;
-      recordItemEdit();
       paintAt(tileAt(e));
       return;
     }
@@ -1861,7 +1770,6 @@ export function useMapInteraction(deps: InteractionDeps) {
       zonePainting.current = true;
       zoneMode.current = { flag: ZONE_TOOL_FLAG[tool], set: !e.ctrlKey };
       scene.lastPaintKey.current = null;
-      recordItemEdit();
       paintZoneAt(tileAt(e));
       return;
     }
@@ -1874,7 +1782,6 @@ export function useMapInteraction(deps: InteractionDeps) {
       housePainting.current = true;
       houseMode.current = { houseId, set: !e.ctrlKey };
       scene.lastPaintKey.current = null;
-      recordItemEdit();
       housePaintAt(tileAt(e));
       return;
     }
@@ -1902,7 +1809,6 @@ export function useMapInteraction(deps: InteractionDeps) {
       }
       scene.erasing.current = true;
       scene.lastPaintKey.current = null;
-      recordItemEdit();
       eraseAt(tileAt(e));
       return;
     }
@@ -1910,20 +1816,17 @@ export function useMapInteraction(deps: InteractionDeps) {
       borderizing.current = true;
       borderizeRemove.current = e.ctrlKey;
       scene.lastPaintKey.current = null;
-      recordItemEdit();
       borderizeAt(tileAt(e), e.ctrlKey);
       return;
     }
 
     const pos = tileAt(e);
-    const beforeSel = selection.snapshot();
     if (selectByPriority(pos)) {
       beginMarkerDrag(e, pos);
     } else {
       const onSel = selection.entries.current.has(`${pos.z},${pos.x},${pos.y}`);
       if (!onSel && !hoverAt(pos).hasTile) {
         selection.clear();
-        recordSelection(beforeSel);
         inputs.current.onSelect(null);
         return;
       }
@@ -1931,7 +1834,6 @@ export function useMapInteraction(deps: InteractionDeps) {
       scene.moveDest.current = pos;
       scene.moveDrag.current = { from: pos, startX: e.clientX, startY: e.clientY, active: false };
     }
-    recordSelection(beforeSel);
     inputs.current.onSelect(toSelected(hoverAt(pos)));
   }
 
@@ -2036,23 +1938,17 @@ export function useMapInteraction(deps: InteractionDeps) {
       clearBoxPreview();
       const tool = inputs.current.activeTool;
       if (tool === 'brush') {
-        recordItemEdit();
         if (bs.additive) eraseBox(bs);
         else paintBox(bs);
       } else if (tool === 'eraser') {
-        if (inputs.current.eraserMode !== 'creatures') recordItemEdit();
         eraseBox(bs);
       } else if (tool === 'borderize') {
-        recordItemEdit();
         borderizeBox(bs, bs.additive);
       } else if (isZoneTool(tool)) {
-        recordItemEdit();
         paintZoneBox(bs, !bs.additive);
       } else if (tool === 'house') {
-        recordItemEdit();
         housePaintBox(bs, !bs.additive);
       } else {
-        const beforeSel = selection.snapshot();
         const boxes = selectionFloorBoxes(
           bs.startTile.z,
           inputs.current.selectionMode,
@@ -2064,7 +1960,6 @@ export function useMapInteraction(deps: InteractionDeps) {
         );
         boxes.forEach((b, i) => selection.selectBox(b.z, b.ax, b.ay, b.bx, b.by, bs.additive || i > 0));
         for (const b of boxes) selectMarkersInBox(b.z, b.ax, b.ay, b.bx, b.by);
-        recordSelection(beforeSel);
         inputs.current.onSelect(toSelected(hoverAt(bs.curTile)));
       }
     }
@@ -2148,9 +2043,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     if (inputs.current.activeTool !== 'select') inputs.current.onToolChange('select');
     const tile = tileAt(e);
     const info = hoverAt(tile);
-    const beforeSel = selection.snapshot();
     if (!selectByPriority(tile)) selection.selectTile(tile, false);
-    recordSelection(beforeSel);
     inputs.current.onSelect(toSelected(info));
     inputs.current.onHover(info);
     const dest = inputs.current.map.teleports.get(`${tile.x},${tile.y},${tile.z}`) ?? null;

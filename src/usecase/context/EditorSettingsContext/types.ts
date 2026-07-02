@@ -23,6 +23,8 @@ export interface EditorSettingsValue {
   eraseMonsters: boolean;
   eraseSpawns: boolean;
   defaultFloor: number;
+  undoSteps: number;
+  undoMemoryMb: number;
   copyPositionFormat: string;
   infiniteMouse: boolean;
   zoneVisibility: ZoneVisibility;

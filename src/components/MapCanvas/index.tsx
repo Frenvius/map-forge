@@ -2,6 +2,7 @@ import React from 'react';
 import { IconDoorExit } from '@tabler/icons-react';
 
 import { stepZoom } from '~/usecase/zoom';
+import { setHistoryLimits } from '~/adapter/map';
 import { GLRenderer } from '~/usecase/glRenderer';
 import { useTool } from '~/usecase/context/ToolContext';
 import { isZoneTool, isHouseTool } from '~/domain/tools';
@@ -144,6 +145,10 @@ const MapCanvas = (props: MapCanvasProps) => {
   const interaction = useMapInteraction({ canvasRef, camera, inputs, atlas, tiles, meshes, selection, scene });
 
   if (props.waypointEditRef) props.waypointEditRef.current = interaction.editWaypoints;
+
+  React.useEffect(() => {
+    void setHistoryLimits(map.id, settings.undoSteps, settings.undoMemoryMb * 1024 * 1024);
+  }, [map.id, settings.undoSteps, settings.undoMemoryMb]);
 
   React.useEffect(() => {
     const signal = tool.generateSignal;

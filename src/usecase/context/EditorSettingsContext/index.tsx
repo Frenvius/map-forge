@@ -39,6 +39,8 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
   const [eraseMonsters, setEraseMonsters] = React.useState(defaultEditorConfig.eraseMonsters);
   const [eraseSpawns, setEraseSpawns] = React.useState(defaultEditorConfig.eraseSpawns);
   const [defaultFloor, setDefaultFloor] = React.useState(defaultEditorConfig.defaultFloor);
+  const [undoSteps, setUndoSteps] = React.useState(defaultEditorConfig.undoSteps);
+  const [undoMemoryMb, setUndoMemoryMb] = React.useState(defaultEditorConfig.undoMemoryMb);
   const [copyPositionFormat, setCopyPositionFormat] = React.useState(defaultGeneralConfig.copyPositionFormat);
   const [infiniteMouse, setInfiniteMouse] = React.useState(defaultGeneralConfig.infiniteMouse);
 
@@ -57,6 +59,8 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       setEraseMonsters(e.eraseMonsters);
       setEraseSpawns(e.eraseSpawns);
       setDefaultFloor(e.defaultFloor);
+      setUndoSteps(e.undoSteps);
+      setUndoMemoryMb(e.undoMemoryMb);
     });
   }, []);
 
@@ -116,6 +120,8 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       eraseMonsters,
       eraseSpawns,
       defaultFloor,
+      undoSteps,
+      undoMemoryMb,
       copyPositionFormat,
       infiniteMouse,
       zoneVisibility,
@@ -156,6 +162,8 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       eraseMonsters,
       eraseSpawns,
       defaultFloor,
+      undoSteps,
+      undoMemoryMb,
       copyPositionFormat,
       infiniteMouse,
       zoneVisibility,
