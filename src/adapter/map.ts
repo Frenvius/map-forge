@@ -261,8 +261,14 @@ export async function copySelection(mapId: number, zs: number[], xs: number[], y
   return invoke<number>('copy_selection', { mapId, zs, xs, ys, all });
 }
 
-export async function pasteSelection(mapId: number, x: number, y: number, z: number): Promise<[number, number][]> {
-  return invoke<[number, number][]>('paste_selection', { mapId, x, y, z });
+export async function pasteSelection(
+  mapId: number,
+  x: number,
+  y: number,
+  z: number,
+  merge: boolean
+): Promise<[number, number][]> {
+  return invoke<[number, number][]>('paste_selection', { mapId, x, y, z, merge });
 }
 
 export interface ImportInfo {

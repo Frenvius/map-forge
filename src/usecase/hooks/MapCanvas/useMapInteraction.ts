@@ -99,6 +99,9 @@ export interface InteractionDeps {
   scene: MapScene;
 }
 
+const sharedClipboardCount = { current: 0 };
+const sharedClipboardGhost = { current: null as ClipboardGhostTile[] | null };
+
 export function useMapInteraction(deps: InteractionDeps) {
   const { canvasRef, camera, inputs, atlas, tiles, meshes, selection, scene } = deps;
 
@@ -112,8 +115,8 @@ export function useMapInteraction(deps: InteractionDeps) {
   const [spawnForm, setSpawnForm] = React.useState<SpawnForm | null>(null);
   const [creatureForm, setCreatureForm] = React.useState<CreatureForm | null>(null);
   const [waypointForm, setWaypointForm] = React.useState<WaypointForm | null>(null);
-  const clipboardCount = React.useRef(0);
-  const clipboardGhostSource = React.useRef<ClipboardGhostTile[] | null>(null);
+  const clipboardCount = sharedClipboardCount;
+  const clipboardGhostSource = sharedClipboardGhost;
   const modalOpen = React.useRef(false);
   modalOpen.current = spawnForm !== null || creatureForm !== null || waypointForm !== null;
 
@@ -1525,7 +1528,7 @@ export function useMapInteraction(deps: InteractionDeps) {
       return;
     }
     const count = clipboardCount.current;
-    pasteSelection(inputs.current.map.id, pos.x, pos.y, pos.z)
+    pasteSelection(inputs.current.map.id, pos.x, pos.y, pos.z, inputs.current.mergePaste)
       .then((touched) => refetchTagged(touched))
       .then(() => {
         atlas.version.current++;

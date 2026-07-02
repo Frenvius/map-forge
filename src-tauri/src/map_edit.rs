@@ -1275,6 +1275,7 @@ pub fn paste_selection(
 	x: u16,
 	y: u16,
 	z: u8,
+	merge: bool,
 	otb_state: tauri::State<OtbState>,
 	map_state: tauri::State<MapState>,
 	materials_state: tauri::State<MaterialsState>,
@@ -1323,6 +1324,10 @@ pub fn paste_selection(
 		let Some((tz, tx, ty)) = target(tile) else {
 			continue;
 		};
+		let copied_has_ground = tile.items.iter().any(|&(c, s)| is_ground_item(&place, mats, c, s));
+		if !merge && copied_has_ground {
+			tile_stack_mut(m, tz, tx, ty).clear();
+		}
 		for &(client, server) in &tile.items {
 			insert_ordered(tile_stack_mut(m, tz, tx, ty), &place, mats, client, server);
 		}

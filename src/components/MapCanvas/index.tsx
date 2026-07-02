@@ -86,6 +86,7 @@ const MapCanvas = (props: MapCanvasProps) => {
     autoCreateSpawn: settings.autoCreateSpawn,
     eraseMonsters: settings.eraseMonsters,
     eraseSpawns: settings.eraseSpawns,
+    mergePaste: settings.mergePaste,
     copyPositionFormat: settings.copyPositionFormat,
     activeTool: tool.activeTool,
     eraserMode: tool.eraserMode,

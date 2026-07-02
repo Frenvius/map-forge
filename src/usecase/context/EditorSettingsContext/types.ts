@@ -25,6 +25,7 @@ export interface EditorSettingsValue {
   defaultFloor: number;
   undoSteps: number;
   undoMemoryMb: number;
+  mergePaste: boolean;
   copyPositionFormat: string;
   infiniteMouse: boolean;
   zoneVisibility: ZoneVisibility;

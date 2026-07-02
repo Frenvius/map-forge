@@ -41,6 +41,15 @@ const EditorTab = ({ config, onChange }: EditorTabProps) => {
       </div>
       <div className="flex items-center justify-between gap-4">
         <div className="flex flex-col">
+          <span className="text-xs font-medium">Merge paste</span>
+          <span className="text-[10px] text-muted-foreground">
+            Stack pasted tiles onto existing ones; off replaces the target tile when the copy has ground
+          </span>
+        </div>
+        <Checkbox checked={config.mergePaste} onCheckedChange={(v) => onChange({ ...config, mergePaste: v === true })} />
+      </div>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col">
           <span className="text-xs font-medium">Undo steps</span>
           <span className="text-[10px] text-muted-foreground">Maximum number of actions kept in the undo history</span>
         </div>

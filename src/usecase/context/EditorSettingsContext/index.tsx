@@ -41,6 +41,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
   const [defaultFloor, setDefaultFloor] = React.useState(defaultEditorConfig.defaultFloor);
   const [undoSteps, setUndoSteps] = React.useState(defaultEditorConfig.undoSteps);
   const [undoMemoryMb, setUndoMemoryMb] = React.useState(defaultEditorConfig.undoMemoryMb);
+  const [mergePaste, setMergePaste] = React.useState(defaultEditorConfig.mergePaste);
   const [copyPositionFormat, setCopyPositionFormat] = React.useState(defaultGeneralConfig.copyPositionFormat);
   const [infiniteMouse, setInfiniteMouse] = React.useState(defaultGeneralConfig.infiniteMouse);
 
@@ -61,6 +62,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       setDefaultFloor(e.defaultFloor);
       setUndoSteps(e.undoSteps);
       setUndoMemoryMb(e.undoMemoryMb);
+      setMergePaste(e.mergePaste);
     });
   }, []);
 
@@ -122,6 +124,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       defaultFloor,
       undoSteps,
       undoMemoryMb,
+      mergePaste,
       copyPositionFormat,
       infiniteMouse,
       zoneVisibility,
@@ -164,6 +167,7 @@ export const EditorSettingsProvider = ({ children }: EditorSettingsProviderProps
       defaultFloor,
       undoSteps,
       undoMemoryMb,
+      mergePaste,
       copyPositionFormat,
       infiniteMouse,
       zoneVisibility,

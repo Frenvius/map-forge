@@ -155,6 +155,7 @@ export interface MapCanvasContextInputs {
   autoCreateSpawn: boolean;
   eraseMonsters: boolean;
   eraseSpawns: boolean;
+  mergePaste: boolean;
   copyPositionFormat: string;
   activeTool: ToolId;
   eraserMode: EraserMode;

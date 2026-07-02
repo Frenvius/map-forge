@@ -84,6 +84,7 @@ export interface EditorConfig {
   defaultFloor: number;
   undoSteps: number;
   undoMemoryMb: number;
+  mergePaste: boolean;
 }
 
 export const defaultEditorConfig: EditorConfig = {
@@ -92,7 +93,8 @@ export const defaultEditorConfig: EditorConfig = {
   eraseSpawns: true,
   defaultFloor: 7,
   undoSteps: 200,
-  undoMemoryMb: 256
+  undoMemoryMb: 256,
+  mergePaste: false
 };
 
 export async function loadEditorConfig(): Promise<EditorConfig> {
