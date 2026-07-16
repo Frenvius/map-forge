@@ -62,7 +62,7 @@ const ScriptEditor = ({ open, onReloaded, onOpenChange }: ScriptEditorProps) => 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
-        <DialogHeader className="flex flex-row items-center justify-between gap-3 space-y-0 pr-8">
+        <DialogHeader className="h-12 flex-row items-center justify-between gap-3 py-0 pr-12">
           <DialogTitle>Lua Scripts</DialogTitle>
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>{enabled ? 'Enabled' : 'Disabled'}</span>
