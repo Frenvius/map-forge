@@ -32,6 +32,23 @@ const ScriptEditor = ({ open, onReloaded, onOpenChange }: ScriptEditorProps) => 
     });
   }, [open]);
 
+  const refresh = () => {
+    setStatus('');
+    void listScripts()
+      .then((list) => {
+        setNames(list);
+        const next = active && list.includes(active) ? active : (list[0] ?? null);
+        setActive(next);
+        if (!next || dirty) return null;
+        return readScript(next).then((text) => {
+          setContent(text);
+          setDirty(false);
+        });
+      })
+      .then(() => setStatus(dirty ? 'File list refreshed, unsaved changes kept' : 'Reloaded from disk'))
+      .catch((e) => setStatus(`error: ${e}`));
+  };
+
   React.useEffect(() => {
     if (!open || !active) return;
     void readScript(active).then((text) => {
@@ -93,16 +110,16 @@ const ScriptEditor = ({ open, onReloaded, onOpenChange }: ScriptEditorProps) => 
             className="flex-1 resize-none rounded-md border border-border bg-input px-3 py-2 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
         </div>
-        <DialogFooter>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="mr-auto"
-            onClick={() => void openScriptsDir().catch((e) => setStatus(`error: ${e}`))}
-          >
-            Open Folder
-          </Button>
-          <span className="px-2 text-xs text-muted-foreground">{status}</span>
+        <DialogFooter className="items-center">
+          <div className="mr-auto flex items-center gap-2">
+            <Button size="sm" variant="ghost" onClick={() => void openScriptsDir().catch((e) => setStatus(`error: ${e}`))}>
+              Open Folder
+            </Button>
+            <Button size="sm" variant="ghost" onClick={refresh}>
+              Reload Files
+            </Button>
+          </div>
+          <span className="self-center px-2 text-xs text-muted-foreground">{status}</span>
           <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
             Close
           </Button>
