@@ -41,7 +41,7 @@ import {
   defaultGeneralConfig
 } from '~/adapter/preferences';
 
-type TabId = 'general' | 'editor' | 'hunt' | 'client' | 'assets';
+export type TabId = 'general' | 'editor' | 'hunt' | 'client' | 'assets';
 
 interface PreferencesProps {
   open: boolean;

@@ -21,7 +21,7 @@ import { LoadedSprite } from '~/domain/sprite';
 import { loadSprites } from '~/adapter/sprites';
 import { loadSpawns } from '~/adapter/creatures';
 import ToolsPanel from '~/components/ToolsPanel';
-import Preferences from '~/components/Preferences';
+import Preferences, { TabId } from '~/components/Preferences';
 import AboutDialog from '~/components/AboutDialog';
 import { MIN_ZOOM, MAX_ZOOM } from '~/usecase/zoom';
 import PalettePanel from '~/components/PalettePanel';
@@ -190,6 +190,7 @@ const App = () => {
     error,
     dataDir,
     version,
+    assetLabel,
     clientConfigured,
     assetsMissing,
     retryAssets,
@@ -225,8 +226,8 @@ const App = () => {
   const [closeConfirmOpen, setCloseConfirmOpen] = React.useState(false);
   const [scriptsOpen, setScriptsOpen] = React.useState(false);
   const [preferencesOpen, setPreferencesOpen] = React.useState(false);
-  const [prefsTab, setPrefsTab] = React.useState<'general' | 'editor' | 'client'>('general');
-  const openPreferences = React.useCallback((tab: 'general' | 'editor' | 'client' = 'general') => {
+  const [prefsTab, setPrefsTab] = React.useState<TabId>('general');
+  const openPreferences = React.useCallback((tab: TabId = 'general') => {
     setPrefsTab(tab);
     setPreferencesOpen(true);
   }, []);
@@ -964,10 +965,10 @@ const App = () => {
           <AssetsMissing
             error={error}
             dataDir={dataDir}
-            version={version}
+            target={{ label: assetLabel ?? `version ${version}`, scripted: assetLabel !== null }}
             onRetry={retryAssets}
             clientConfigured={clientConfigured}
-            onOpenSettings={() => openPreferences('client')}
+            onOpenSettings={() => openPreferences(assetLabel ? 'assets' : 'client')}
             onOpenFolder={() => void openDataDir(dataDir.replace(/[\\/][^\\/]+$/, ''))}
           />
         ) : (

@@ -17,6 +17,7 @@ export interface AssetsState {
   error: string | null;
   dataDir: string;
   version: number;
+  assetLabel: string | null;
   clientConfigured: boolean;
   assetsMissing: boolean;
   retryAssets: () => void;
@@ -36,6 +37,7 @@ export const useAssets = (): AssetsState => {
   const [dataDir, setDataDir] = React.useState('');
   const [version, setVersion] = React.useState(0);
   const [clientConfigured, setClientConfigured] = React.useState(true);
+  const [assetLabel, setAssetLabel] = React.useState<string | null>(null);
   const [assetsMissing, setAssetsMissing] = React.useState(false);
   const [reloadKey, setReloadKey] = React.useState(0);
   const [minimapReady, setMinimapReady] = React.useState(false);
@@ -99,6 +101,7 @@ export const useAssets = (): AssetsState => {
       loadedVersionRef.current = v;
 
       const ui = await uiConfig().catch(() => null);
+      setAssetLabel(ui?.assets && !ui.clientVersions ? ui.assets.label || 'Assets' : null);
       if (ui?.assets && !ui.clientVersions) {
         const saved = await loadAssetPath(ui.assets.setting).catch(() => '');
         if (!saved) {
@@ -165,6 +168,7 @@ export const useAssets = (): AssetsState => {
     error,
     dataDir,
     version,
+    assetLabel,
     clientConfigured,
     assetsMissing,
     retryAssets,
