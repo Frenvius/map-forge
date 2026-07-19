@@ -4,13 +4,13 @@
 	"version": "0.1.1",
 	"type": "module",
 	"scripts": {
-		"dev": "vite",
-		"build": "tsc && vite build",
+		"dev": "tauri dev",
+		"build": "tauri build",
+		"dev:vite": "vite",
+		"build:vite": "tsc && vite build",
 		"lint": "eslint .",
 		"preview": "vite preview",
-		"tauri": "tauri",
-		"tauri:dev": "tauri dev",
-		"tauri:build": "tauri build"
+		"tauri": "tauri"
 	},
 	"dependencies": {
 		"@dnd-kit/core": "^6.3.1",

@@ -46,14 +46,14 @@ bun install
 ### Development
 
 ```bash
-bun run tauri:dev   # run the full desktop app (frontend + Rust backend)
-bun run dev         # run the Vite frontend only (browser, no Tauri APIs)
+bun run dev         # run the full desktop app (frontend + Rust backend)
+bun run dev:vite    # run the Vite frontend only (browser, no Tauri APIs)
 ```
 
 ### Production build
 
 ```bash
-bun run tauri:build
+bun run build
 ```
 
 The portable executable is written to `src-tauri/target/release/`, and the installer bundle to `src-tauri/target/release/bundle/`.
