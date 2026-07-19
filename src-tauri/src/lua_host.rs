@@ -76,9 +76,13 @@ mod tests {
 
 	#[test]
 	fn loads_scripts_with_luajit_and_ffi() {
-		let mut h = LuaHost::new(PathBuf::from("../data/scripts"));
+		let dir = std::env::temp_dir().join("map-forge-lua-host-test");
+		std::fs::create_dir_all(&dir).unwrap();
+		std::fs::write(dir.join("probe.lua"), "forge = forge or {}\nforge.probe = true\n").unwrap();
+
+		let mut h = LuaHost::new(dir);
 		let n = h.load_all().expect("load scripts");
-		assert!(n >= 1, "expected at least one script");
+		assert_eq!(n, 1, "expected the one script written into the temp dir");
 		let has_jit: bool = h.lua.load("return jit ~= nil").eval().unwrap();
 		assert!(has_jit, "luajit runtime expected");
 		let has_ffi: bool = h.lua.load("return (pcall(require, 'ffi'))").eval().unwrap();

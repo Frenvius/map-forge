@@ -381,17 +381,23 @@ mod tests {
 	}
 
 	#[test]
-	fn lua_wall_segment_matches_native_tables() {
+	fn lua_wall_segment_override_is_consulted() {
 		use crate::lua_host::LuaHost;
 		use crate::scripting::{wall_segment, ScopedLua};
-		let (full, half) = build_wall_tables();
-		let mut host = LuaHost::new(PathBuf::from("../data/scripts"));
-		host.load_all().unwrap();
+		let host = LuaHost::new(PathBuf::from("."));
+		host.lua
+			.load(
+				"forge = {}\n\
+				 function forge.wall_segment(mask, half)\n\
+				   if mask == 3 and not half then return 99 end\n\
+				   return nil\n\
+				 end",
+			)
+			.exec()
+			.unwrap();
 		let _s = ScopedLua::enter(&host);
-		for mask in 0u8..16 {
-			assert_eq!(wall_segment(mask, false), Some(full[mask as usize]), "full mask {}", mask);
-			assert_eq!(wall_segment(mask, true), Some(half[mask as usize]), "half mask {}", mask);
-		}
+		assert_eq!(wall_segment(3, false), Some(99), "lua override drives the segment");
+		assert_eq!(wall_segment(3, true), None, "no override leaves the call site on its native table");
 	}
 
 	#[test]

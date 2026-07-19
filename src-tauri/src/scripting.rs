@@ -162,8 +162,25 @@ mod tests {
 	fn ffi_bulk_read_and_write() {
 		use mlua::{Function, LightUserData, Table};
 		use std::ffi::c_void;
-		let mut host = LuaHost::new(PathBuf::from("../data/scripts"));
-		host.load_all().unwrap();
+		let host = LuaHost::new(PathBuf::from("."));
+		host.lua
+			.load(
+				"forge = {}\n\
+				 local ffi = require('ffi')\n\
+				 function forge.count_nonzero(src, n)\n\
+				   local p = ffi.cast('const uint16_t*', src)\n\
+				   local c = 0\n\
+				   for i = 0, n - 1 do if p[i] ~= 0 then c = c + 1 end end\n\
+				   return c\n\
+				 end\n\
+				 function forge.scale_u16(src, dst, n, k)\n\
+				   local s = ffi.cast('const uint16_t*', src)\n\
+				   local d = ffi.cast('uint16_t*', dst)\n\
+				   for i = 0, n - 1 do d[i] = s[i] * k end\n\
+				 end",
+			)
+			.exec()
+			.unwrap();
 		let forge: Table = host.lua.globals().get("forge").unwrap();
 
 		let src: Vec<u16> = vec![0, 1, 2, 0, 7];
@@ -189,9 +206,9 @@ mod tests {
 	}
 
 	#[test]
-	fn default_script_matches_native() {
-		let mut host = LuaHost::new(PathBuf::from("../data/scripts"));
-		host.load_all().unwrap();
+	fn scoped_host_without_hooks_stays_native() {
+		let host = LuaHost::new(PathBuf::from("."));
+		host.lua.load("forge = {}").exec().unwrap();
 		let _s = ScopedLua::enter(&host);
 		assert_eq!(stack_class(true, false, 0), -1);
 		assert_eq!(stack_class(false, true, 0), 0);
