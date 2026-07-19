@@ -43,7 +43,7 @@ use lua_format::{
 	app_config, lua_app_config, save_scripted_map, scripted_things, ui_config, ClientIdState, ItemDb, ItemDbState, ItemSpriteState,
 	ThingDef, ThingsState,
 };
-use lua_host::{list_scripts, read_script, reload_scripts, scripts_dir, write_script, LuaHost, LuaState};
+use lua_host::{list_scripts, open_scripts_dir, read_script, reload_scripts, scripts_dir, write_script, LuaHost, LuaState};
 use map_import::{import_cancel, import_commit, import_load, import_preview, new_import_state, ImportState};
 use map_load::open_otbm;
 use map_meta::{get_map_properties, get_towns, get_waypoints, map_statistics, set_map_properties, set_towns};
@@ -67,6 +67,19 @@ pub(crate) struct PlaceFlags {
 
 pub(crate) type PlacementState = Arc<Mutex<HashMap<u16, PlaceFlags>>>;
 pub(crate) type CopyBufferState = Arc<Mutex<Option<CopyBuffer>>>;
+
+fn configured_data_root(app: &tauri::AppHandle) -> Option<String> {
+	use tauri::Manager;
+	let path = app.path().app_config_dir().ok()?.join("settings.json");
+	let text = std::fs::read_to_string(path).ok()?;
+	let value: serde_json::Value = serde_json::from_str(&text).ok()?;
+	let root = value.get("dataDir")?.as_str()?.trim().to_string();
+	if root.is_empty() {
+		None
+	} else {
+		Some(root)
+	}
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -118,6 +131,7 @@ pub fn run() {
 		.invoke_handler(tauri::generate_handler![
 			reload_scripts,
 			list_scripts,
+			open_scripts_dir,
 			read_script,
 			write_script,
 			open_scripted_map,
@@ -208,6 +222,14 @@ pub fn run() {
 				let state = app.state::<LuaState>().inner().clone();
 				let locked = state.lock();
 				if let Ok(mut h) = locked {
+					if let Some(dir) = configured_data_root(app.handle()).map(|r| lua_host::scripts_dir_in(&r)) {
+						if !dir.is_dir() {
+							if let Err(e) = commands::copy_path(&h.dir, &dir) {
+								eprintln!("[lua] seed scripts into {}: {}", dir.display(), e);
+							}
+						}
+						h.dir = dir;
+					}
 					match h.load_all() {
 						Ok(n) => println!("[lua] loaded {} script(s) from {}", n, h.dir.display()),
 						Err(e) => {

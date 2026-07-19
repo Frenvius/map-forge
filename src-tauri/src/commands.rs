@@ -112,7 +112,7 @@ pub fn copy_data_dir(from: String, to: String) -> Result<(), String> {
 	copy_path(&src, &dst)
 }
 
-fn copy_path(src: &std::path::Path, dst: &std::path::Path) -> Result<(), String> {
+pub fn copy_path(src: &std::path::Path, dst: &std::path::Path) -> Result<(), String> {
 	if src.is_dir() {
 		fs::create_dir_all(dst).map_err(|e| e.to_string())?;
 		for entry in fs::read_dir(src).map_err(|e| e.to_string())?.flatten() {

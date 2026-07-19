@@ -6,6 +6,10 @@ export async function listScripts(): Promise<string[]> {
   return invoke<string[]>('list_scripts');
 }
 
+export async function openScriptsDir(): Promise<void> {
+  return invoke<void>('open_scripts_dir');
+}
+
 export async function readScript(name: string): Promise<string> {
   return invoke<string>('read_script', { name });
 }

@@ -2,7 +2,7 @@ import React from 'react';
 
 import { Button } from '~/components/commons/ui/button';
 import { Checkbox } from '~/components/commons/ui/checkbox';
-import { readScript, listScripts, writeScript } from '~/adapter/scripts';
+import { readScript, listScripts, writeScript, openScriptsDir } from '~/adapter/scripts';
 import { isLuaEnabled, setLuaEnabled } from '~/usecase/util/luaSettings';
 import { Dialog, DialogTitle, DialogHeader, DialogFooter, DialogContent } from '~/components/commons/ui/dialog';
 
@@ -94,7 +94,15 @@ const ScriptEditor = ({ open, onReloaded, onOpenChange }: ScriptEditorProps) => 
           />
         </div>
         <DialogFooter>
-          <span className="mr-auto px-2 text-xs text-muted-foreground">{status}</span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="mr-auto"
+            onClick={() => void openScriptsDir().catch((e) => setStatus(`error: ${e}`))}
+          >
+            Open Folder
+          </Button>
+          <span className="px-2 text-xs text-muted-foreground">{status}</span>
           <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
             Close
           </Button>

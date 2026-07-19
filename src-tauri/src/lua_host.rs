@@ -44,6 +44,10 @@ impl LuaHost {
 
 pub type LuaState = Arc<Mutex<LuaHost>>;
 
+pub fn scripts_dir_in(root: &str) -> PathBuf {
+	PathBuf::from(root).join("scripts")
+}
+
 pub fn scripts_dir() -> PathBuf {
 	let candidates = [
 		std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.join("data").join("scripts"))),
@@ -56,6 +60,14 @@ pub fn scripts_dir() -> PathBuf {
 		}
 	}
 	PathBuf::from("data/scripts")
+}
+
+#[tauri::command]
+pub fn open_scripts_dir(lua: State<LuaState>) -> Result<(), String> {
+	let dir = lua.lock().map_err(|e| e.to_string())?.dir.clone();
+	std::fs::create_dir_all(&dir).map_err(|e| format!("scripts dir {}: {}", dir.display(), e))?;
+	let abs = std::fs::canonicalize(&dir).unwrap_or(dir);
+	tauri_plugin_opener::open_path(abs.to_string_lossy().trim_start_matches(r"\\?\"), None::<&str>).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
