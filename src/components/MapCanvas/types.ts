@@ -52,6 +52,7 @@ export interface HoverInfo {
   z: number;
   hasTile: boolean;
   item: HoverItem | null;
+  box: { w: number; h: number } | null;
 }
 
 export interface ContextMenuState {

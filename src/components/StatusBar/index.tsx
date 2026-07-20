@@ -31,6 +31,13 @@ interface StatusBarProps {
 
 const TileDescription = ({ hover }: { hover: HoverInfo | null }) => {
   if (!hover) return null;
+  if (hover.box)
+    return (
+      <span className="truncate">
+        Selecting <span className="text-foreground">{hover.box.w}</span> x <span className="text-foreground">{hover.box.h}</span> (
+        <span className="text-foreground">{hover.box.w * hover.box.h}</span> tiles)
+      </span>
+    );
   if (!hover.item) return <span className="text-muted-foreground/70">{hover.hasTile ? 'Empty tile' : 'Nothing'}</span>;
 
   const { name, serverId, clientId, count } = hover.item;

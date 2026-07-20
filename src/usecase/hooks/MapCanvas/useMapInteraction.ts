@@ -1005,7 +1005,11 @@ export function useMapInteraction(deps: InteractionDeps) {
         item = { serverId, clientId, name: itemNames.get(serverId) ?? '', count };
       }
     }
-    return { x: pos.x, y: pos.y, z: pos.z, hasTile: found >= 0, item };
+    const bs = selection.box.current;
+    const box = bs
+      ? { w: Math.abs(pos.x - bs.startTile.x) + 1, h: Math.abs(pos.y - bs.startTile.y) + 1 }
+      : null;
+    return { x: pos.x, y: pos.y, z: pos.z, hasTile: found >= 0, item, box };
   }
 
   const toSelected = (info: HoverInfo): SelectedItem | null =>
@@ -1964,6 +1968,7 @@ export function useMapInteraction(deps: InteractionDeps) {
         boxes.forEach((b, i) => selection.selectBox(b.z, b.ax, b.ay, b.bx, b.by, bs.additive || i > 0));
         for (const b of boxes) selectMarkersInBox(b.z, b.ax, b.ay, b.bx, b.by);
         inputs.current.onSelect(toSelected(hoverAt(bs.curTile)));
+        emit(`Selected ${plural(selection.entries.current.size, 'tile')}`);
       }
     }
     finishMove();
