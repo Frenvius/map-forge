@@ -180,7 +180,7 @@ fn borderize(
 			idx = 1;
 		}
 		for s in result.items {
-			let c = otb.client_id(s).unwrap_or(0);
+			let c = otb.client_id(s).unwrap_or(s);
 			stack.insert(idx, (c, s));
 			idx += 1;
 		}
@@ -205,7 +205,7 @@ fn apply_specific_case(stack: &mut Vec<(u16, u16)>, otb: &OtbItems, sc: &materia
 		let server = stack[i].1;
 		if sc.matches.contains(&server) {
 			if !replaced && server == sc.to_replace {
-				stack[i] = (otb.client_id(sc.with).unwrap_or(0), sc.with);
+				stack[i] = (otb.client_id(sc.with).unwrap_or(sc.with), sc.with);
 				replaced = true;
 				i += 1;
 			} else if sc.delete_all || !sc.keep_border {
@@ -270,7 +270,7 @@ fn wallize(m: &mut MapModel, mats: &Materials, otb: &OtbItems, z: u8, tiles: &Ha
 		let stack = tile_stack_mut(m, z, x, y);
 		for (idx, new_server) in changes {
 			if let Some(slot) = stack.get_mut(idx) {
-				*slot = (otb.client_id(new_server).unwrap_or(0), new_server);
+				*slot = (otb.client_id(new_server).unwrap_or(new_server), new_server);
 			}
 		}
 		touched.insert(chunk_key_of(x, y));
@@ -331,7 +331,7 @@ where
 		let stack = tile_stack_mut(m, z, x, y);
 		for (idx, new_server) in changes {
 			if let Some(slot) = stack.get_mut(idx) {
-				*slot = (otb.client_id(new_server).unwrap_or(0), new_server);
+				*slot = (otb.client_id(new_server).unwrap_or(new_server), new_server);
 			}
 		}
 		touched.insert(chunk_key_of(x, y));
@@ -434,7 +434,7 @@ fn run_paint(
 				if block_guard && item_blocks(place, otb, item) && tile_has_blocking(m, place, z, tx, ty) {
 					continue;
 				}
-				let client = otb.client_id(item).unwrap_or(0);
+				let client = otb.client_id(item).unwrap_or(item);
 				insert_ordered(tile_stack_mut(m, z, tx, ty), place, Some(mats), client, item);
 				touched.insert(chunk_key_of(tx, ty));
 				painted.insert((tx, ty));
