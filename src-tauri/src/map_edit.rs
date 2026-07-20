@@ -4,7 +4,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use tauri::ipc::Response;
 
 use crate::map_model::{
-	chunk_key_of, door_id_at, empty_model, flags_at, house_id_at, push_u16, push_u32, stack_at, tile_stack_mut, MapModel,
+	chunk_key_of, door_id_at, empty_model, first_item_at, flags_at, house_id_at, push_u16, push_u32, serialize_chunks, stack_at,
+	tile_stack_mut, with_stack, MapModel,
 	ACTION_DELETE, ACTION_ERASE, ACTION_FLAG, ACTION_HOUSE, ACTION_MOVE, ACTION_PAINT, CHUNK,
 };
 
@@ -128,8 +129,7 @@ fn insert_ordered(stack: &mut Vec<(u16, u16)>, place: &HashMap<u16, PlaceFlags>,
 }
 
 fn ground_brush_at(m: &MapModel, mats: &Materials, place: &HashMap<u16, PlaceFlags>, z: u8, x: u16, y: u16) -> u32 {
-	let stack = stack_at(m, z, x, y);
-	if let Some(&(c, s)) = stack.first() {
+	if let Some((c, s)) = first_item_at(m, z, x, y) {
 		if is_ground_item(place, Some(mats), c, s) {
 			return mats.server_to_ground.get(&s).copied().unwrap_or(0);
 		}
@@ -171,14 +171,16 @@ fn borderize(
 			}
 		}
 		let own_optional = (force_optional && tiles.contains(&(x, y)))
-			|| (optional && stack_at(m, z, x, y).iter().any(|&(_, s)| mats.is_optional_border_item(s)));
+			|| (optional && with_stack(m, z, x, y, |st| st.iter().any(|&(_, s)| mats.is_optional_border_item(s))));
 		computed.push(((x, y), mats.calculate_borders(own, &neigh, own_optional)));
 	}
 
 	let mut touched: HashSet<u32> = HashSet::new();
+	let mut before: Vec<(u16, u16)> = Vec::new();
 	for ((x, y), result) in computed {
 		let stack = tile_stack_mut(m, z, x, y);
-		let before = stack.clone();
+		before.clear();
+		before.extend_from_slice(stack);
 		stack.retain(|&(_, s)| !mats.is_border_item(s));
 		let mut idx = 0;
 		if stack.first().is_some_and(|&(c, s)| is_ground_item(place, Some(mats), c, s)) {
@@ -192,7 +194,7 @@ fn borderize(
 		for sc in &result.specifics {
 			apply_specific_case(stack, otb, sc);
 		}
-		if *stack != before {
+		if stack[..] != before[..] {
 			touched.insert(chunk_key_of(x, y));
 		}
 	}
@@ -225,9 +227,11 @@ fn apply_specific_case(stack: &mut Vec<(u16, u16)>, otb: &OtbItems, sc: &materia
 }
 
 fn tile_has_wall(m: &MapModel, mats: &Materials, own_wall: u32, z: u8, x: u16, y: u16) -> bool {
-	stack_at(m, z, x, y)
-		.iter()
-		.any(|&(_, s)| mats.wall_brush_for(s).is_some_and(|other| mats.walls_connect(own_wall, other)))
+	with_stack(m, z, x, y, |stack| {
+		stack
+			.iter()
+			.any(|&(_, s)| mats.wall_brush_for(s).is_some_and(|other| mats.walls_connect(own_wall, other)))
+	})
 }
 
 fn wallize(m: &mut MapModel, mats: &Materials, otb: &OtbItems, z: u8, tiles: &HashSet<(u16, u16)>) -> HashSet<u32> {
@@ -301,7 +305,7 @@ where
 	}
 
 	let tile_has = |m: &MapModel, own: u32, x: u16, y: u16| -> bool {
-		stack_at(m, z, x, y).iter().any(|&(_, s)| brush_for(mats, s) == Some(own))
+		with_stack(m, z, x, y, |stack| stack.iter().any(|&(_, s)| brush_for(mats, s) == Some(own)))
 	};
 
 	let mut computed: Vec<((u16, u16), Vec<(usize, u16)>)> = Vec::new();
@@ -388,7 +392,9 @@ fn item_blocks(place: &HashMap<u16, PlaceFlags>, otb: &OtbItems, server: u16) ->
 }
 
 fn tile_has_blocking(m: &MapModel, place: &HashMap<u16, PlaceFlags>, z: u8, x: u16, y: u16) -> bool {
-	stack_at(m, z, x, y).iter().any(|&(c, _)| place.get(&c).is_some_and(|p| p.blocking))
+	with_stack(m, z, x, y, |stack| {
+		stack.iter().any(|&(c, _)| place.get(&c).is_some_and(|p| p.blocking))
+	})
 }
 
 fn run_paint(
@@ -432,7 +438,7 @@ fn run_paint(
 					continue;
 				}
 				let (tx, ty) = (tx as u16, ty as u16);
-				let has_ground = stack_at(m, z, tx, ty).first().is_some_and(|&(c, s)| is_ground_item(place, Some(mats), c, s));
+				let has_ground = first_item_at(m, z, tx, ty).is_some_and(|(c, s)| is_ground_item(place, Some(mats), c, s));
 				if !crate::scripting::allow_place(item, has_ground) {
 					continue;
 				}
@@ -450,7 +456,7 @@ fn run_paint(
 			Some(picked) => (picked, otb.client_id(picked).unwrap_or(picked)),
 			None => (server_id, client_id),
 		};
-		let has_ground = stack_at(m, z, x, y).first().is_some_and(|&(c, s)| is_ground_item(place, mats, c, s));
+		let has_ground = first_item_at(m, z, x, y).is_some_and(|(c, s)| is_ground_item(place, mats, c, s));
 		if !crate::scripting::allow_place(server_id, has_ground) {
 			continue;
 		}
@@ -473,7 +479,7 @@ fn run_paint(
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-pub fn paint_tiles(
+pub async fn paint_tiles(
 	map_id: u32,
 	z: u8,
 	xs: Vec<u16>,
@@ -483,12 +489,12 @@ pub fn paint_tiles(
 	is_doodad: bool,
 	automagic: bool,
 	brush_name: String,
-	otb_state: tauri::State<OtbState>,
-	map_state: tauri::State<MapState>,
-	materials_state: tauri::State<MaterialsState>,
-	placement_state: tauri::State<PlacementState>,
-	lua_state: tauri::State<LuaState>,
-) -> Result<Vec<u32>, String> {
+	otb_state: tauri::State<'_, OtbState>,
+	map_state: tauri::State<'_, MapState>,
+	materials_state: tauri::State<'_, MaterialsState>,
+	placement_state: tauri::State<'_, PlacementState>,
+	lua_state: tauri::State<'_, LuaState>,
+) -> Result<Response, String> {
 	if xs.len() != ys.len() {
 		return Err("xs and ys length mismatch".into());
 	}
@@ -516,7 +522,15 @@ pub fn paint_tiles(
 	let touched = run_paint(m, mats, &place, otb, z, &xs, &ys, server_id, client_id, is_ground, is_doodad, &brush_name, automagic, false);
 	m.record_commit(ACTION_PAINT);
 	advance_roll_salt();
-	Ok(touched.into_iter().collect())
+	let keys: Vec<u32> = touched.into_iter().collect();
+	m.ensure_chunks(z, &keys, otb)?;
+	let mut out: Vec<u8> = Vec::new();
+	push_u32(&mut out, keys.len() as u32);
+	for key in &keys {
+		push_u32(&mut out, *key);
+	}
+	out.extend_from_slice(&serialize_chunks(m, z, &keys));
+	Ok(Response::new(out))
 }
 
 #[tauri::command]
@@ -708,7 +722,7 @@ const PREVIEW_AUTOMAGIC_CAP: usize = 16384;
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-pub fn preview_paint(
+pub async fn preview_paint(
 	map_id: u32,
 	z: u8,
 	xs: Vec<u16>,
@@ -718,10 +732,10 @@ pub fn preview_paint(
 	is_doodad: bool,
 	brush_name: String,
 	delta_only: bool,
-	otb_state: tauri::State<OtbState>,
-	map_state: tauri::State<MapState>,
-	materials_state: tauri::State<MaterialsState>,
-	placement_state: tauri::State<PlacementState>,
+	otb_state: tauri::State<'_, OtbState>,
+	map_state: tauri::State<'_, MapState>,
+	materials_state: tauri::State<'_, MaterialsState>,
+	placement_state: tauri::State<'_, PlacementState>,
 ) -> Result<Response, String> {
 	let empty = || Response::new(vec![0u8; 4]);
 	if xs.len() != ys.len() || xs.is_empty() {

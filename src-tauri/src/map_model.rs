@@ -540,6 +540,20 @@ pub(crate) fn base_tile_items(m: &MapModel, z: u8, chunk_key: u32, x: u16, y: u1
 	Vec::new()
 }
 
+pub(crate) fn base_first_item(m: &MapModel, z: u8, chunk_key: u32, x: u16, y: u16) -> Option<(u16, u16)> {
+	let &(start, end) = m.floors.get(&z)?.get(&chunk_key)?;
+	for t in start as usize..end as usize {
+		if m.tile_x[t] == x && m.tile_y[t] == y {
+			let s = m.item_off[t] as usize;
+			if s >= m.item_off[t + 1] as usize {
+				return None;
+			}
+			return Some((m.client_ids[s], m.server_ids[s]));
+		}
+	}
+	None
+}
+
 pub(crate) fn chunk_key_of(x: u16, y: u16) -> u32 {
 	((x as u32 / CHUNK) << 16) | (y as u32 / CHUNK)
 }
@@ -628,6 +642,24 @@ pub(crate) fn stack_at(m: &MapModel, z: u8, x: u16, y: u16) -> Vec<(u16, u16)> {
 		return stack.clone();
 	}
 	base_tile_items(m, z, chunk_key, x, y)
+}
+
+pub(crate) fn with_stack<R>(m: &MapModel, z: u8, x: u16, y: u16, f: impl FnOnce(&[(u16, u16)]) -> R) -> R {
+	let chunk_key = chunk_key_of(x, y);
+	let pos = (x as u32) << 16 | y as u32;
+	if let Some(stack) = m.edits.get(&z).and_then(|c| c.get(&chunk_key)).and_then(|t| t.get(&pos)) {
+		return f(stack);
+	}
+	f(&base_tile_items(m, z, chunk_key, x, y))
+}
+
+pub(crate) fn first_item_at(m: &MapModel, z: u8, x: u16, y: u16) -> Option<(u16, u16)> {
+	let chunk_key = chunk_key_of(x, y);
+	let pos = (x as u32) << 16 | y as u32;
+	if let Some(stack) = m.edits.get(&z).and_then(|c| c.get(&chunk_key)).and_then(|t| t.get(&pos)) {
+		return stack.first().copied();
+	}
+	base_first_item(m, z, chunk_key, x, y)
 }
 
 pub(crate) fn tile_stack_mut<'a>(m: &'a mut MapModel, z: u8, x: u16, y: u16) -> &'a mut Vec<(u16, u16)> {

@@ -163,6 +163,11 @@ export async function setMapProperties(
   await invoke('set_map_properties', { mapId, patch });
 }
 
+export interface PaintResult {
+  touched: number[];
+  chunks: Map<string, ChunkTiles>;
+}
+
 export async function getMapStatistics(mapId: number): Promise<MapStatistics> {
   return invoke<MapStatistics>('map_statistics', { mapId });
 }
@@ -177,8 +182,24 @@ export async function paintTiles(
   isDoodad: boolean,
   automagic: boolean,
   brushName = ''
-): Promise<number[]> {
-  return invoke<number[]>('paint_tiles', { mapId, z, xs, ys, serverId, isGround, isDoodad, automagic, brushName });
+): Promise<PaintResult> {
+  const response = await invoke<Uint8Array | ArrayBuffer>('paint_tiles', {
+    mapId,
+    z,
+    xs,
+    ys,
+    serverId,
+    isGround,
+    isDoodad,
+    automagic,
+    brushName
+  });
+  const u8 = toUint8(response);
+  const view = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  const count = view.getUint32(0, true);
+  const touched: number[] = new Array(count);
+  for (let i = 0; i < count; i++) touched[i] = view.getUint32(4 + i * 4, true);
+  return { touched, chunks: decodeChunks(view, 4 + count * 4) };
 }
 
 export async function paintZone(
@@ -436,15 +457,9 @@ export async function setHistoryLimits(mapId: number, maxSteps: number, maxBytes
   await invoke('set_history_limits', { mapId, maxSteps, maxBytes });
 }
 
-export async function fetchMapChunks(mapId: number, z: number, keys: number[]): Promise<Map<string, ChunkTiles>> {
+function decodeChunks(view: DataView, offset: number): Map<string, ChunkTiles> {
   const result = new Map<string, ChunkTiles>();
-  if (keys.length === 0) return result;
-
-  const response = await invoke<Uint8Array | ArrayBuffer>('get_map_chunks', { mapId, z, keys });
-  const u8 = toUint8(response);
-  const view = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
-
-  let o = 0;
+  let o = offset;
   const chunkCount = view.getUint32(o, true);
   o += 4;
   for (let c = 0; c < chunkCount; c++) {
@@ -499,6 +514,13 @@ export async function fetchMapChunks(mapId: number, z: number, keys: number[]): 
     });
   }
   return result;
+}
+
+export async function fetchMapChunks(mapId: number, z: number, keys: number[]): Promise<Map<string, ChunkTiles>> {
+  if (keys.length === 0) return new Map();
+  const response = await invoke<Uint8Array | ArrayBuffer>('get_map_chunks', { mapId, z, keys });
+  const u8 = toUint8(response);
+  return decodeChunks(new DataView(u8.buffer, u8.byteOffset, u8.byteLength), 0);
 }
 
 export async function fetchChunkTooltips(mapId: number, z: number, keys: number[]): Promise<Map<string, ChunkTooltips>> {

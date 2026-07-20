@@ -1141,7 +1141,7 @@ export function useMapRenderer(deps: RendererDeps) {
     }
 
     const previewTiles = scene.boxGhostTiles.current;
-    if (previewTiles && previewTiles.length > 0 && selection.box.current) {
+    if (previewTiles && previewTiles.length > 0) {
       const ghost = cachedPreviewGhost(previewTiles, missing);
       if (ghost.length > 0) renderer.drawGhost(ghost, camX, camY, scale, 0.6);
     }

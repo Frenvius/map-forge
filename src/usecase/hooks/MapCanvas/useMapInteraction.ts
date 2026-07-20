@@ -1,6 +1,5 @@
 import React from 'react';
 
-import { Position, PreviewTile } from '~/domain/map';
 import { MapHouses } from '~/domain/house';
 import { isZoneTool } from '~/domain/tools';
 import { ZONE_TOOL_FLAG } from '~/domain/zones';
@@ -13,6 +12,7 @@ import { readWalkableMask } from '~/usecase/hunt/mask';
 import { buildItemPreview } from '~/usecase/itemPreview';
 import { planGeneration } from '~/lib/generator/generate';
 import { formatPosition } from '~/usecase/positionFormat';
+import { Position, ChunkTiles, PreviewTile } from '~/domain/map';
 import { MountainOptions, ResolvedMountain } from '~/domain/mountain';
 import { GenPlan, ResolvedBiome, GenerateOptions } from '~/domain/biome';
 import { MapSpawns, emptyMapSpawns, buildMapSpawns } from '~/domain/creature';
@@ -56,6 +56,7 @@ import {
   eraseBrush,
   deleteItem,
   paintTiles,
+  PaintResult,
   previewPaint,
   packChunkKey,
   moveSelection,
@@ -540,10 +541,9 @@ export function useMapInteraction(deps: InteractionDeps) {
       inputs.current.automagic,
       brush.kind === 'doodad' || brush.kind === 'ground' ? brush.name : ''
     )
-      .then((touched) => {
-        if (touched.length === 0) for (let i = 0; i < xs.length; i++) tiles.queueRefetch(xs[i], ys[i], pos.z);
-        for (const key of touched) tiles.queueRefetch((key >>> 16) * CHUNK, (key & 0xffff) * CHUNK, pos.z);
-        notifyEdit(pos.z);
+      .then((result) => {
+        if (result.touched.length === 0) for (let i = 0; i < xs.length; i++) tiles.queueRefetch(xs[i], ys[i], pos.z);
+        else applyPaintResult(result, pos.z);
       })
       .catch((err) => console.error('Failed to paint tile', err));
   }
@@ -600,8 +600,11 @@ export function useMapInteraction(deps: InteractionDeps) {
       inputs.current.automagic,
       brush.kind === 'doodad' || brush.kind === 'ground' ? brush.name : ''
     )
-      .then((touched) => refetchKeysNow(touched, z))
-      .catch((err) => console.error('Failed to paint box', err));
+      .then((result) => applyPaintResult(result, z))
+      .catch((err) => {
+        clearBoxPreview();
+        console.error('Failed to paint box', err);
+      });
   }
 
   type PenDrag =
@@ -748,9 +751,8 @@ export function useMapInteraction(deps: InteractionDeps) {
     setPenCursorIfChanged(PEN_CURSOR);
     const z = inputs.current.floorZ;
     paintTiles(inputs.current.map.id, z, xs, ys, brush.paintId, true, false, inputs.current.automagic, brush.name)
-      .then((touched) => {
-        refetchKeysNow(touched, z);
-        notifyEdit(z);
+      .then((result) => {
+        applyPaintResult(result, z);
         void attachUndoSidecar(
           inputs.current.map.id,
           JSON.stringify({ pen: saved } satisfies Sidecar),
@@ -1002,9 +1004,13 @@ export function useMapInteraction(deps: InteractionDeps) {
     notifyEdit(z);
   }
 
-  async function refetchKeysNow(keys: number[], z: number) {
-    if (keys.length === 0) return;
-    const res = await fetchMapChunks(inputs.current.map.id, z, keys);
+  function applyPaintResult(result: PaintResult, z: number) {
+    storeChunks(result.touched, result.chunks, z);
+    scene.boxGhostTiles.current = null;
+    previewKey.current = null;
+  }
+
+  function storeChunks(keys: number[], res: Map<string, ChunkTiles>, z: number) {
     for (const k of keys) {
       const cx = k >>> 16;
       const cy = k & 0xffff;
@@ -1012,6 +1018,11 @@ export function useMapInteraction(deps: InteractionDeps) {
       meshes.forget(`${z},${cx},${cy}`);
     }
     notifyEdit(z);
+  }
+
+  async function refetchKeysNow(keys: number[], z: number) {
+    if (keys.length === 0) return;
+    storeChunks(keys, await fetchMapChunks(inputs.current.map.id, z, keys), z);
   }
 
   function invalidateTagged(tagged: [number, number][]) {
@@ -1066,9 +1077,7 @@ export function useMapInteraction(deps: InteractionDeps) {
       }
     }
     const bs = selection.box.current;
-    const box = bs
-      ? { w: Math.abs(pos.x - bs.startTile.x) + 1, h: Math.abs(pos.y - bs.startTile.y) + 1 }
-      : null;
+    const box = bs ? { w: Math.abs(pos.x - bs.startTile.x) + 1, h: Math.abs(pos.y - bs.startTile.y) + 1 } : null;
     return { x: pos.x, y: pos.y, z: pos.z, hasTile: found >= 0, item, box };
   }
 
@@ -1243,7 +1252,7 @@ export function useMapInteraction(deps: InteractionDeps) {
       total += g.xs.length;
       tasks.push(
         paintTiles(inputs.current.map.id, z, g.xs, g.ys, tile.paintId, true, false, inputs.current.automagic, tile.name).then(
-          (touched) => refetchKeysNow(touched, z)
+          (result) => applyPaintResult(result, z)
         )
       );
     }
@@ -2002,8 +2011,9 @@ export function useMapInteraction(deps: InteractionDeps) {
     if (bs) {
       selection.box.current = null;
       setBoxing(false);
-      clearBoxPreview();
       const tool = inputs.current.activeTool;
+      const holdGhost = tool === 'brush' && !bs.additive;
+      if (!holdGhost) clearBoxPreview();
       if (tool === 'brush') {
         if (bs.additive) eraseBox(bs);
         else paintBox(bs);
