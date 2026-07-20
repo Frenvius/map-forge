@@ -213,7 +213,7 @@ pub async fn open_otbm(
 		}
 
 		let bytes = fs::read(&path).map_err(|e| format!("Failed to read {}: {}", path, e))?;
-		let guard = otb.lock().map_err(|e| format!("Lock error: {}", e))?;
+		let guard = otb.read().map_err(|e| format!("Lock error: {}", e))?;
 		let otb = guard.as_ref().ok_or("items.otb not loaded - call load_otb first")?;
 
 		let mut collector = OtbmCollector {

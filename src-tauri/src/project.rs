@@ -196,7 +196,7 @@ pub fn reset_loaded_assets(app: &tauri::AppHandle) {
 	if let Ok(mut placement) = app.state::<crate::PlacementState>().lock() {
 		placement.clear();
 	}
-	if let Ok(mut otb) = app.state::<crate::OtbState>().lock() {
+	if let Ok(mut otb) = app.state::<crate::OtbState>().write() {
 		*otb = None;
 	}
 	if let Ok(mut materials) = app.state::<crate::MaterialsState>().lock() {

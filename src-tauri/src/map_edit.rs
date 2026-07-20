@@ -62,9 +62,14 @@ fn tile_seed(x: u16, y: u16) -> u32 {
 	(x as u32).wrapping_mul(73856093) ^ (y as u32).wrapping_mul(19349663)
 }
 
+static ROLL_SALT: AtomicU32 = AtomicU32::new(0);
+
 fn paint_roll(x: u16, y: u16) -> u32 {
-	static COUNTER: AtomicU32 = AtomicU32::new(0);
-	tile_seed(x, y) ^ COUNTER.fetch_add(0x9E37_79B9, Ordering::Relaxed)
+	tile_seed(x, y) ^ ROLL_SALT.load(Ordering::Relaxed)
+}
+
+fn advance_roll_salt() {
+	ROLL_SALT.fetch_add(0x9E37_79B9, Ordering::Relaxed);
 }
 
 fn is_ground_item(place: &HashMap<u16, PlaceFlags>, mats: Option<&Materials>, client: u16, server: u16) -> bool {
@@ -488,7 +493,7 @@ pub fn paint_tiles(
 		return Err("xs and ys length mismatch".into());
 	}
 
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty_otb = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty_otb);
 	let client_id = match otb_guard.as_ref() {
@@ -510,6 +515,7 @@ pub fn paint_tiles(
 	m.record_begin();
 	let touched = run_paint(m, mats, &place, otb, z, &xs, &ys, server_id, client_id, is_ground, is_doodad, &brush_name, automagic, false);
 	m.record_commit(ACTION_PAINT);
+	advance_roll_salt();
 	Ok(touched.into_iter().collect())
 }
 
@@ -531,7 +537,7 @@ pub fn paint_zone(
 		return Err("xs and ys length mismatch".into());
 	}
 
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let materials_guard = materials_state.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -585,7 +591,7 @@ pub fn set_house(
 		return Err("xs and ys length mismatch".into());
 	}
 
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let materials_guard = materials_state.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -653,7 +659,7 @@ pub fn house_sizes(
 	otb_state: tauri::State<OtbState>,
 	map_state: tauri::State<MapState>,
 ) -> Result<HashMap<u32, u32>, String> {
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -697,7 +703,8 @@ pub fn house_sizes(
 	Ok(sizes)
 }
 
-const PREVIEW_AREA_CAP: u32 = 4096;
+const PREVIEW_AREA_CAP: u32 = 262144;
+const PREVIEW_AUTOMAGIC_CAP: usize = 16384;
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
@@ -721,7 +728,7 @@ pub fn preview_paint(
 		return Ok(empty());
 	}
 
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty_otb = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty_otb);
 	let client_id = match otb_guard.as_ref() {
@@ -733,10 +740,6 @@ pub fn preview_paint(
 		return Ok(empty());
 	};
 	let place = placement_state.lock().map_err(|e| format!("Lock error: {}", e))?;
-	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
-	let real = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
-	let edit_tiles: Vec<(u16, u16)> = xs.iter().zip(ys.iter()).map(|(&a, &b)| (a, b)).collect();
-	real.ensure_tiles(z, &edit_tiles, otb)?;
 
 	let min_x = *xs.iter().min().unwrap();
 	let max_x = *xs.iter().max().unwrap();
@@ -748,17 +751,43 @@ pub fn preview_paint(
 	}
 
 	let clamp = |v: i32| v.clamp(0, u16::MAX as i32) as u16;
-	let mut scratch = empty_model(real.width, real.height);
-	for y in clamp(min_y as i32 - 2)..=clamp(max_y as i32 + 2) {
-		for x in clamp(min_x as i32 - 2)..=clamp(max_x as i32 + 2) {
-			let s = stack_at(real, z, x, y);
-			if !s.is_empty() {
-				*tile_stack_mut(&mut scratch, z, x, y) = s;
+	let (sx0, sy0) = (clamp(min_x as i32 - 2), clamp(min_y as i32 - 2));
+	let (sx1, sy1) = (clamp(max_x as i32 + 2), clamp(max_y as i32 + 2));
+	let span_w = (sx1 - sx0) as usize + 1;
+
+	let mut scratch;
+	let mut base: Vec<Vec<(u16, u16)>> = Vec::with_capacity(span_w * ((sy1 - sy0) as usize + 1));
+	{
+		let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+		let real = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+		let edit_tiles: Vec<(u16, u16)> = xs.iter().zip(ys.iter()).map(|(&a, &b)| (a, b)).collect();
+		real.ensure_tiles(z, &edit_tiles, otb)?;
+		scratch = empty_model(real.width, real.height);
+		for y in sy0..=sy1 {
+			for x in sx0..=sx1 {
+				base.push(stack_at(real, z, x, y));
 			}
 		}
 	}
 
-	run_paint(&mut scratch, Some(mats), &place, otb, z, &xs, &ys, server_id, client_id, is_ground, is_doodad, &brush_name, true, false);
+	for (i, s) in base.iter().enumerate() {
+		if s.is_empty() {
+			continue;
+		}
+		let x = sx0 + (i % span_w) as u16;
+		let y = sy0 + (i / span_w) as u16;
+		*tile_stack_mut(&mut scratch, z, x, y) = s.clone();
+	}
+
+	let base_at = |x: u16, y: u16| -> &[(u16, u16)] {
+		if x < sx0 || x > sx1 || y < sy0 || y > sy1 {
+			return &[];
+		}
+		&base[(y - sy0) as usize * span_w + (x - sx0) as usize]
+	};
+
+	let automagic = xs.len() <= PREVIEW_AUTOMAGIC_CAP;
+	run_paint(&mut scratch, Some(mats), &place, otb, z, &xs, &ys, server_id, client_id, is_ground, is_doodad, &brush_name, automagic, false);
 
 	let mut out: Vec<u8> = Vec::new();
 	push_u32(&mut out, 0);
@@ -766,7 +795,7 @@ pub fn preview_paint(
 	for y in clamp(min_y as i32 - 1)..=clamp(max_y as i32 + 1) {
 		for x in clamp(min_x as i32 - 1)..=clamp(max_x as i32 + 1) {
 			let new = stack_at(&scratch, z, x, y);
-			let old = stack_at(real, z, x, y);
+			let old = base_at(x, y);
 			if new == old {
 				continue;
 			}
@@ -806,7 +835,7 @@ pub fn move_item(
 	if from_x == to_x && from_y == to_y {
 		return Ok(Vec::new());
 	}
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let materials_guard = materials_state.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -857,7 +886,7 @@ pub fn move_selection(
 		return Ok(Vec::new());
 	}
 
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let materials_guard = materials_state.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -947,7 +976,7 @@ pub fn delete_item(
 	materials_state: tauri::State<MaterialsState>,
 	placement_state: tauri::State<PlacementState>,
 ) -> Result<Vec<u32>, String> {
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let materials_guard = materials_state.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -997,7 +1026,7 @@ pub fn erase_brush(
 	materials_state: tauri::State<MaterialsState>,
 	placement_state: tauri::State<PlacementState>,
 ) -> Result<Vec<u32>, String> {
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let materials_guard = materials_state.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -1042,7 +1071,7 @@ pub fn borderize_brush(
 		return Err("xs and ys length mismatch".into());
 	}
 
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let materials_guard = materials_state.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -1094,7 +1123,7 @@ pub fn erase_area(
 	materials_state: tauri::State<MaterialsState>,
 	placement_state: tauri::State<PlacementState>,
 ) -> Result<Vec<u32>, String> {
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let materials_guard = materials_state.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -1188,7 +1217,7 @@ pub fn delete_selection(
 		return Err("selection arrays length mismatch".into());
 	}
 
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let materials_guard = materials_state.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -1251,7 +1280,7 @@ pub fn copy_selection(
 		return Err("selection arrays length mismatch".into());
 	}
 
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -1303,7 +1332,7 @@ pub fn paste_selection(
 		return Ok(Vec::new());
 	};
 
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let materials_guard = materials_state.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -1459,7 +1488,7 @@ pub fn generate_apply(
 		}
 	}
 
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty_otb = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty_otb);
 

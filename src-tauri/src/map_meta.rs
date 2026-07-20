@@ -125,7 +125,7 @@ pub fn map_statistics(
 	otb_state: tauri::State<OtbState>,
 	map_state: tauri::State<MapState>,
 ) -> Result<MapStatistics, String> {
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty = crate::formats::tibia::otb::OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;

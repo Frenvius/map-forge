@@ -247,7 +247,7 @@ pub fn load_otb(path: String, fm: tauri::State<FormatManagerState>, otb_state: t
 	let count = fm.lock().map_err(|e| format!("Lock error: {}", e))?.item_db_mut().load(&bytes)?;
 
 	let items = crate::formats::tibia::otb::parse_otb(&bytes)?;
-	*otb_state.lock().map_err(|e| format!("Lock error: {}", e))? = Some(items);
+	*otb_state.write().map_err(|e| format!("Lock error: {}", e))? = Some(items);
 	Ok(count)
 }
 

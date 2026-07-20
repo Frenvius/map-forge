@@ -1394,7 +1394,7 @@ pub fn get_map_chunks(
 	otb_state: tauri::State<OtbState>,
 	map_state: tauri::State<MapState>,
 ) -> Result<Response, String> {
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -1411,7 +1411,7 @@ pub fn get_chunk_tooltips(
 	otb_state: tauri::State<OtbState>,
 	map_state: tauri::State<MapState>,
 ) -> Result<Response, String> {
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -1440,7 +1440,7 @@ pub fn get_minimap(
 	palette_state: tauri::State<MinimapPaletteState>,
 ) -> Result<Response, String> {
 	let palette_guard = palette_state.lock().map_err(|e| format!("Lock error: {}", e))?;
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -1481,7 +1481,7 @@ pub fn get_tile_items(
 	otb_state: tauri::State<OtbState>,
 	map_state: tauri::State<MapState>,
 ) -> Result<TilePropertiesPayload, String> {
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -1528,7 +1528,7 @@ pub fn list_id_markers(
 	otb_state: tauri::State<OtbState>,
 	map_state: tauri::State<MapState>,
 ) -> Result<Vec<IdMarker>, String> {
-	let otb_guard = otb_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
 	let empty = OtbItems::default();
 	let otb = otb_guard.as_ref().unwrap_or(&empty);
 	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;

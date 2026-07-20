@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 mod formats;
 use formats::{FormatManager, FormatManagerState};
@@ -58,7 +58,7 @@ use map_model::{
 };
 use map_save::save_otbm;
 
-pub(crate) type OtbState = Arc<Mutex<Option<OtbItems>>>;
+pub(crate) type OtbState = Arc<RwLock<Option<OtbItems>>>;
 pub(crate) type MaterialsState = Arc<Mutex<Option<Materials>>>;
 pub(crate) type MapState = Arc<Mutex<MapStore>>;
 pub(crate) type MinimapPaletteState = Arc<Mutex<Vec<u8>>>;
@@ -80,7 +80,7 @@ pub fn run() {
 		Box::new(formats::tibia::providers::TibiaMetadataProvider),
 		Box::new(formats::tibia::providers::TibiaItemDatabase::new()),
 	)));
-	let otb_store: OtbState = Arc::new(Mutex::new(None));
+	let otb_store: OtbState = Arc::new(RwLock::new(None));
 	let map_store: MapState = Arc::new(Mutex::new(MapStore::default()));
 	let materials_store: MaterialsState = Arc::new(Mutex::new(None));
 	let placement_store: PlacementState = Arc::new(Mutex::new(HashMap::new()));

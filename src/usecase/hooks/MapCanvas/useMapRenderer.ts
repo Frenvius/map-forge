@@ -86,6 +86,16 @@ export function useMapRenderer(deps: RendererDeps) {
   const doodadGhostKey = React.useRef<string | null>(null);
   const doodadGhostSeq = React.useRef(0);
   const prevHlKey = React.useRef<string | null>(null);
+  const previewGhostCache = React.useRef<{
+    source: PreviewTile[];
+    mesh: Float32Array;
+    sprites: Set<number>;
+    version: number;
+    epoch: number;
+    incomplete: boolean;
+  } | null>(null);
+  const previewGhostSprites = React.useRef<Set<number>>(new Set());
+  const previewGhostIncomplete = React.useRef(false);
 
   function updateDoodadGhost(hover: Position | null, floorZ: number) {
     const brush = inputs.current.activeBrush;
@@ -611,6 +621,32 @@ export function useMapRenderer(deps: RendererDeps) {
     });
   }
 
+  function cachedPreviewGhost(previewTiles: PreviewTile[], missing: Set<number>): Float32Array {
+    const cache = previewGhostCache.current;
+    if (
+      cache &&
+      cache.source === previewTiles &&
+      cache.version === atlas.version.current &&
+      cache.epoch === atlas.epoch.current &&
+      !cache.incomplete
+    ) {
+      for (const sid of cache.sprites) atlas.lastUsed.current.set(sid, frameTick.current);
+      return cache.mesh;
+    }
+    previewGhostIncomplete.current = false;
+    previewGhostSprites.current = new Set();
+    const mesh = buildPreviewGhost(previewTiles, missing);
+    previewGhostCache.current = {
+      source: previewTiles,
+      mesh,
+      sprites: previewGhostSprites.current,
+      version: atlas.version.current,
+      epoch: atlas.epoch.current,
+      incomplete: previewGhostIncomplete.current
+    };
+    return mesh;
+  }
+
   function buildPreviewGhost(previewTiles: PreviewTile[], missing: Set<number>): Float32Array {
     const { items } = inputs.current;
     const inst: number[] = [];
@@ -634,12 +670,17 @@ export function useMapRenderer(deps: RendererDeps) {
               const data = atlas.data.current.get(sid);
               if (!data) {
                 missing.add(sid);
+                previewGhostIncomplete.current = true;
                 continue;
               }
               atlas.lastUsed.current.set(sid, frameTick.current);
+              previewGhostSprites.current.add(sid);
               if (data.empty) continue;
               const slot = atlas.slotFor(sid, data);
-              if (slot < 0) continue;
+              if (slot < 0) {
+                previewGhostIncomplete.current = true;
+                continue;
+              }
               const { u0, v0 } = slotUV(slot);
               inst.push((tx - w) * TILE - ox, (ty - h) * TILE - oy, u0, v0, 0, 1, 0);
             }
@@ -1101,13 +1142,13 @@ export function useMapRenderer(deps: RendererDeps) {
 
     const previewTiles = scene.boxGhostTiles.current;
     if (previewTiles && previewTiles.length > 0 && selection.box.current) {
-      const ghost = buildPreviewGhost(previewTiles, missing);
+      const ghost = cachedPreviewGhost(previewTiles, missing);
       if (ghost.length > 0) renderer.drawGhost(ghost, camX, camY, scale, 0.6);
     }
 
     updateDoodadGhost(hover, floorZ);
     if (doodadGhost.current && doodadGhost.current.length > 0) {
-      const ghost = buildPreviewGhost(doodadGhost.current, missing);
+      const ghost = cachedPreviewGhost(doodadGhost.current, missing);
       if (ghost.length > 0) renderer.drawGhost(ghost, camX, camY, scale, 0.6);
     }
 

@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { Position } from '~/domain/map';
+import { Position, PreviewTile } from '~/domain/map';
 import { MapHouses } from '~/domain/house';
 import { isZoneTool } from '~/domain/tools';
 import { ZONE_TOOL_FLAG } from '~/domain/zones';
@@ -502,6 +502,10 @@ export function useMapInteraction(deps: InteractionDeps) {
 
   const previewKey = React.useRef<string | null>(null);
   const previewSeq = React.useRef(0);
+  const previewBusy = React.useRef(false);
+  const previewClientIds = React.useRef(new Map<number, number>());
+  const PREVIEW_MARGIN = 4;
+  const COARSE_PREVIEW_ZOOM = 0.25;
 
   function brushFootprint(cx: number, cy: number, penWidth: number): { xs: number[]; ys: number[] } {
     const reach = Math.max(0, Math.round(penWidth) - 1);
@@ -544,11 +548,31 @@ export function useMapInteraction(deps: InteractionDeps) {
       .catch((err) => console.error('Failed to paint tile', err));
   }
 
-  function boxTiles(bs: BoxSelection) {
-    const minX = Math.min(bs.startTile.x, bs.curTile.x);
-    const maxX = Math.max(bs.startTile.x, bs.curTile.x);
-    const minY = Math.min(bs.startTile.y, bs.curTile.y);
-    const maxY = Math.max(bs.startTile.y, bs.curTile.y);
+  function visibleTileRect(): { minX: number; minY: number; maxX: number; maxY: number } | null {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const z = camera.zoomRef.current;
+    const cam = camera.ref.current;
+    return {
+      minX: Math.floor(cam.x / TILE) - PREVIEW_MARGIN,
+      minY: Math.floor(cam.y / TILE) - PREVIEW_MARGIN,
+      maxX: Math.ceil((cam.x + canvas.clientWidth / z) / TILE) + PREVIEW_MARGIN,
+      maxY: Math.ceil((cam.y + canvas.clientHeight / z) / TILE) + PREVIEW_MARGIN
+    };
+  }
+
+  function boxTiles(bs: BoxSelection, clipToView = false) {
+    let minX = Math.min(bs.startTile.x, bs.curTile.x);
+    let maxX = Math.max(bs.startTile.x, bs.curTile.x);
+    let minY = Math.min(bs.startTile.y, bs.curTile.y);
+    let maxY = Math.max(bs.startTile.y, bs.curTile.y);
+    const view = clipToView ? visibleTileRect() : null;
+    if (view) {
+      minX = Math.max(minX, view.minX);
+      minY = Math.max(minY, view.minY);
+      maxX = Math.min(maxX, view.maxX);
+      maxY = Math.min(maxY, view.maxY);
+    }
     const xs: number[] = [];
     const ys: number[] = [];
     for (let y = minY; y <= maxY; y++) {
@@ -853,6 +877,25 @@ export function useMapInteraction(deps: InteractionDeps) {
     scene.boxGhostTiles.current = null;
   }
 
+  function coarseGhost(xs: number[], ys: number[], serverId: number): PreviewTile[] | null {
+    const clientId = previewClientIds.current.get(serverId);
+    if (clientId == null) {
+      mapClientIds([serverId])
+        .then(([cid]) => {
+          previewClientIds.current.set(serverId, cid ?? 0);
+          previewKey.current = null;
+          updateBoxPreview();
+        })
+        .catch(() => void 0);
+      return null;
+    }
+    if (clientId === 0) return null;
+    const ids = new Uint16Array([clientId]);
+    const tiles: PreviewTile[] = new Array(xs.length);
+    for (let i = 0; i < xs.length; i++) tiles[i] = { x: xs[i], y: ys[i], clientIds: ids };
+    return tiles;
+  }
+
   function updateBoxPreview() {
     const bs = selection.box.current;
     const brush = inputs.current.activeBrush;
@@ -861,10 +904,20 @@ export function useMapInteraction(deps: InteractionDeps) {
       return;
     }
     const z = bs.startTile.z;
-    const { xs, ys } = boxTiles(bs);
+    const { xs, ys } = boxTiles(bs, true);
+    if (xs.length === 0) {
+      clearBoxPreview();
+      return;
+    }
     const key = `${z},${brush.serverId},${xs[0]},${ys[0]},${xs[xs.length - 1]},${ys[ys.length - 1]}`;
     if (key === previewKey.current) return;
     previewKey.current = key;
+    if (camera.zoomRef.current < COARSE_PREVIEW_ZOOM) {
+      scene.boxGhostTiles.current = coarseGhost(xs, ys, brush.serverId);
+      return;
+    }
+    if (previewBusy.current) return;
+    previewBusy.current = true;
     const seq = ++previewSeq.current;
     previewPaint(
       inputs.current.map.id,
@@ -879,7 +932,14 @@ export function useMapInteraction(deps: InteractionDeps) {
       .then((tiles) => {
         if (seq === previewSeq.current) scene.boxGhostTiles.current = tiles;
       })
-      .catch((err) => console.error('Failed to preview paint', err));
+      .catch((err) => console.error('Failed to preview paint', err))
+      .finally(() => {
+        previewBusy.current = false;
+        if (key !== previewKey.current) {
+          previewKey.current = null;
+          updateBoxPreview();
+        }
+      });
   }
 
   function eraseAt(pos: Position) {

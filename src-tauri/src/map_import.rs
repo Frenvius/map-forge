@@ -185,7 +185,7 @@ pub async fn import_load(
 	use tauri::Emitter;
 	let otb = otb_state.inner().clone();
 	let stage = tauri::async_runtime::spawn_blocking(move || -> Result<ImportStage, String> {
-		let guard = otb.lock().map_err(|e| format!("Lock error: {}", e))?;
+		let guard = otb.read().map_err(|e| format!("Lock error: {}", e))?;
 		let empty = OtbItems::default();
 		let otb = guard.as_ref().unwrap_or(&empty);
 		let mut report = |f: f64| {
@@ -437,7 +437,7 @@ pub async fn import_commit(
 		let mut import_guard = import.lock().map_err(|e| format!("Lock error: {}", e))?;
 		let stage = import_guard.as_ref().ok_or("no import staged - call import_load first")?;
 
-		let otb_guard = otb.lock().map_err(|e| format!("Lock error: {}", e))?;
+		let otb_guard = otb.read().map_err(|e| format!("Lock error: {}", e))?;
 		let empty_otb = OtbItems::default();
 		let otb = otb_guard.as_ref().unwrap_or(&empty_otb);
 
