@@ -3,6 +3,9 @@ use serde::{Deserialize, Serialize};
 use crate::map_model::{Town, Waypoint};
 use crate::{MapState, OtbState};
 
+pub const MIN_MAP_SIZE: u16 = 64;
+pub const MAX_MAP_SIZE: u16 = 65000;
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MapProperties {
@@ -22,6 +25,8 @@ pub struct MapProperties {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MapPropertiesPatch {
+	width: u16,
+	height: u16,
 	description: String,
 	spawn_file: String,
 	house_file: String,
@@ -82,6 +87,8 @@ pub fn get_map_properties(map_id: u32, map_state: tauri::State<MapState>) -> Res
 pub fn set_map_properties(map_id: u32, patch: MapPropertiesPatch, map_state: tauri::State<MapState>) -> Result<(), String> {
 	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
 	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+	m.width = patch.width.clamp(MIN_MAP_SIZE, MAX_MAP_SIZE);
+	m.height = patch.height.clamp(MIN_MAP_SIZE, MAX_MAP_SIZE);
 	m.description = patch.description;
 	m.spawn_file = patch.spawn_file;
 	m.house_file = patch.house_file;

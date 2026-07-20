@@ -158,7 +158,7 @@ export async function getMapProperties(mapId: number): Promise<MapProperties> {
 
 export async function setMapProperties(
   mapId: number,
-  patch: Pick<MapProperties, 'description' | 'spawnFile' | 'houseFile' | 'otbmVersion' | 'itemsMinor'>
+  patch: Pick<MapProperties, 'width' | 'height' | 'description' | 'spawnFile' | 'houseFile' | 'otbmVersion' | 'itemsMinor'>
 ): Promise<void> {
   await invoke('set_map_properties', { mapId, patch });
 }

@@ -14,6 +14,9 @@ interface MapPropertiesDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+const MIN_MAP_SIZE = 64;
+const MAX_MAP_SIZE = 65000;
+
 const OTBM_VERSIONS: { value: number; label: string }[] = [
   { value: 1, label: 'OTServ 0.5.0' },
   { value: 2, label: 'OTServ 0.6.0' },
@@ -37,6 +40,8 @@ const MapPropertiesDialog = ({ open, mapId, onSaved, onOpenChange }: MapProperti
   const save = () => {
     if (mapId === null || !props) return;
     void setMapProperties(mapId, {
+      width: props.width,
+      height: props.height,
       description: props.description,
       spawnFile: props.spawnFile,
       houseFile: props.houseFile,
@@ -88,13 +93,25 @@ const MapPropertiesDialog = ({ open, mapId, onSaved, onOpenChange }: MapProperti
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+              <label className="flex flex-col gap-1 text-xs font-medium text-foreground">
                 Width
-                <Input disabled value={props.width} />
+                <Input
+                  type="number"
+                  min={MIN_MAP_SIZE}
+                  max={MAX_MAP_SIZE}
+                  value={props.width}
+                  onChange={(e) => patch({ width: Number(e.target.value) })}
+                />
               </label>
-              <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+              <label className="flex flex-col gap-1 text-xs font-medium text-foreground">
                 Height
-                <Input disabled value={props.height} />
+                <Input
+                  type="number"
+                  min={MIN_MAP_SIZE}
+                  max={MAX_MAP_SIZE}
+                  value={props.height}
+                  onChange={(e) => patch({ height: Number(e.target.value) })}
+                />
               </label>
             </div>
 

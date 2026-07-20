@@ -285,6 +285,8 @@ const App = () => {
       file = spawnFileFallback(path);
       if (props) {
         await setMapProperties(mapId, {
+          width: props.width,
+          height: props.height,
           description: props.description,
           spawnFile: file,
           houseFile: props.houseFile,
@@ -312,6 +314,8 @@ const App = () => {
       file = (path.split(/[\\/]/).pop() ?? 'map.otbm').replace(/\.otbm$/i, '-house.xml');
       if (props) {
         await setMapProperties(mapId, {
+          width: props.width,
+          height: props.height,
           description: props.description,
           spawnFile: props.spawnFile,
           houseFile: file,
@@ -913,7 +917,15 @@ const App = () => {
 
       <MapTowns open={townsOpen} onGoto={gotoPosition} onOpenChange={setTownsOpen} mapId={active?.map.id ?? null} />
 
-      <MapProperties open={mapPropsOpen} mapId={active?.map.id ?? null} onOpenChange={setMapPropsOpen} />
+      <MapProperties
+        open={mapPropsOpen}
+        mapId={active?.map.id ?? null}
+        onOpenChange={setMapPropsOpen}
+        onSaved={() => {
+          if (activeMapId === null) return;
+          void getMapProperties(activeMapId).then((p) => patchActiveMap({ width: p.width, height: p.height }));
+        }}
+      />
 
       <MapStatistics
         spawns={spawns}
