@@ -534,7 +534,7 @@ export function useMapInteraction(deps: InteractionDeps) {
       brush.isGround,
       brush.kind === 'doodad',
       inputs.current.automagic,
-      brush.kind === 'doodad' ? brush.name : ''
+      brush.kind === 'doodad' || brush.kind === 'ground' ? brush.name : ''
     )
       .then((touched) => {
         if (touched.length === 0) for (let i = 0; i < xs.length; i++) tiles.queueRefetch(xs[i], ys[i], pos.z);
@@ -574,7 +574,7 @@ export function useMapInteraction(deps: InteractionDeps) {
       brush.isGround,
       brush.kind === 'doodad',
       inputs.current.automagic,
-      brush.kind === 'doodad' ? brush.name : ''
+      brush.kind === 'doodad' || brush.kind === 'ground' ? brush.name : ''
     )
       .then((touched) => refetchKeysNow(touched, z))
       .catch((err) => console.error('Failed to paint box', err));
@@ -723,7 +723,7 @@ export function useMapInteraction(deps: InteractionDeps) {
     penDrag.current = null;
     setPenCursorIfChanged(PEN_CURSOR);
     const z = inputs.current.floorZ;
-    paintTiles(inputs.current.map.id, z, xs, ys, brush.paintId, true, false, inputs.current.automagic)
+    paintTiles(inputs.current.map.id, z, xs, ys, brush.paintId, true, false, inputs.current.automagic, brush.name)
       .then((touched) => {
         refetchKeysNow(touched, z);
         notifyEdit(z);
@@ -874,7 +874,7 @@ export function useMapInteraction(deps: InteractionDeps) {
       brush.serverId,
       brush.isGround,
       brush.kind === 'doodad',
-      brush.kind === 'doodad' ? brush.name : ''
+      brush.kind === 'doodad' || brush.kind === 'ground' ? brush.name : ''
     )
       .then((tiles) => {
         if (seq === previewSeq.current) scene.boxGhostTiles.current = tiles;
@@ -1178,8 +1178,8 @@ export function useMapInteraction(deps: InteractionDeps) {
     for (const [z, g] of byZ) {
       total += g.xs.length;
       tasks.push(
-        paintTiles(inputs.current.map.id, z, g.xs, g.ys, tile.paintId, true, false, inputs.current.automagic).then((touched) =>
-          refetchKeysNow(touched, z)
+        paintTiles(inputs.current.map.id, z, g.xs, g.ys, tile.paintId, true, false, inputs.current.automagic, tile.name).then(
+          (touched) => refetchKeysNow(touched, z)
         )
       );
     }

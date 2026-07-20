@@ -44,6 +44,18 @@ pub struct GroundBrush {
 }
 
 impl GroundBrush {
+	pub fn pick_item(&self, roll: u32) -> Option<u16> {
+		if self.total_chance <= 0 {
+			return self.items.first().map(|&(id, _)| id);
+		}
+		let target = (roll % self.total_chance as u32) as i32;
+		self.items
+			.iter()
+			.find(|&&(_, cumulative)| target < cumulative)
+			.or_else(|| self.items.last())
+			.map(|&(id, _)| id)
+	}
+
 	fn has_optional(&self) -> bool {
 		self.optional_border_id != 0
 	}
@@ -274,5 +286,45 @@ impl Materials {
 			}
 		}
 		BorderResult { items: out, specifics }
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::GroundBrush;
+
+	fn brush(chances: &[(u16, i32)]) -> GroundBrush {
+		let mut items = Vec::new();
+		let mut total = 0;
+		for &(id, chance) in chances {
+			total += chance;
+			items.push((id, total));
+		}
+		GroundBrush { items, total_chance: total, ..Default::default() }
+	}
+
+	#[test]
+	fn pick_item_follows_declared_weights() {
+		let b = brush(&[(10, 70), (20, 20), (30, 10)]);
+		let mut counts = [0usize; 3];
+		for roll in 0..b.total_chance as u32 {
+			match b.pick_item(roll).unwrap() {
+				10 => counts[0] += 1,
+				20 => counts[1] += 1,
+				30 => counts[2] += 1,
+				other => panic!("unexpected id {}", other),
+			}
+		}
+		assert_eq!(counts, [70, 20, 10]);
+	}
+
+	#[test]
+	fn pick_item_skips_zero_chance_and_survives_empty_totals() {
+		let b = brush(&[(10, 0), (20, 5)]);
+		assert!((0..5).all(|roll| b.pick_item(roll) == Some(20)));
+
+		let flat = brush(&[(10, 0), (20, 0)]);
+		assert_eq!(flat.pick_item(0), Some(10));
+		assert_eq!(GroundBrush::default().pick_item(0), None);
 	}
 }

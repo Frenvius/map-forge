@@ -340,6 +340,10 @@ impl Materials {
 		self.brush(id)
 	}
 
+	pub fn ground_brush_by_name(&self, name: &str) -> Option<&GroundBrush> {
+		self.brush(*self.name_to_id.get(name)?)
+	}
+
 	fn brush(&self, id: u32) -> Option<&GroundBrush> {
 		if id == 0 {
 			return None;

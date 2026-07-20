@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use tauri::ipc::Response;
 
@@ -59,6 +60,11 @@ const WALL_NEIGHBOUR_OFFSETS: [(i32, i32); 4] = [(0, -1), (-1, 0), (1, 0), (0, 1
 
 fn tile_seed(x: u16, y: u16) -> u32 {
 	(x as u32).wrapping_mul(73856093) ^ (y as u32).wrapping_mul(19349663)
+}
+
+fn paint_roll(x: u16, y: u16) -> u32 {
+	static COUNTER: AtomicU32 = AtomicU32::new(0);
+	tile_seed(x, y) ^ COUNTER.fetch_add(0x9E37_79B9, Ordering::Relaxed)
 }
 
 fn is_ground_item(place: &HashMap<u16, PlaceFlags>, mats: Option<&Materials>, client: u16, server: u16) -> bool {
@@ -406,6 +412,12 @@ fn run_paint(
 		None
 	};
 
+	let ground_brush = if is_ground && !is_doodad {
+		mats.and_then(|mt| mt.ground_brush_by_name(brush_name))
+	} else {
+		None
+	};
+
 	for i in 0..xs.len() {
 		let (x, y) = (xs[i], ys[i]);
 		if let (Some(mats), Some(brush)) = (mats, doodad_brush) {
@@ -429,6 +441,10 @@ fn run_paint(
 			}
 			continue;
 		}
+		let (server_id, client_id) = match ground_brush.and_then(|b| b.pick_item(paint_roll(x, y))) {
+			Some(picked) => (picked, otb.client_id(picked).unwrap_or(picked)),
+			None => (server_id, client_id),
+		};
 		let has_ground = stack_at(m, z, x, y).first().is_some_and(|&(c, s)| is_ground_item(place, mats, c, s));
 		if !crate::scripting::allow_place(server_id, has_ground) {
 			continue;
@@ -1650,6 +1666,46 @@ mod tests {
 
 		run_paint(&mut m, Some(&mats), &place, &otb, 7, &[51], &[51], 4527, otb.client_id(4527).unwrap_or(0), false, false, "", false, false);
 		assert!(!stack_at(&m, 7, 51, 51).is_empty(), "non-vetoed id still places");
+	}
+
+	#[test]
+	fn ground_brush_paints_declared_variants() {
+		let otb = parse_otb(&fs::read(format!("{}/items.otb", DATA)).unwrap()).unwrap();
+		let mats = load_materials();
+		let brush = mats.ground_brush_by_name("grass").expect("grass ground brush");
+		assert!(brush.items.len() > 1, "grass declares several variants");
+
+		let grass = otb.client_id(4526).unwrap_or(0);
+		let mut place = HashMap::new();
+		place.insert(grass, PlaceFlags { ground: true, top_order: 0, blocking: false });
+		let mut m = build_map_model(600, 600, &[], &[], &[], &[], &[], &[], &[], &[], &[], &[], &[], Vec::new(), 0);
+
+		let xs: Vec<u16> = (0..500).map(|i| 50 + i % 25).collect();
+		let ys: Vec<u16> = (0..500).map(|i| 50 + i / 25).collect();
+		run_paint(&mut m, Some(&mats), &place, &otb, 7, &xs, &ys, 4526, grass, true, false, "grass", false, false);
+
+		let painted: HashSet<u16> = xs.iter().zip(ys.iter()).filter_map(|(&x, &y)| stack_at(&m, 7, x, y).first().map(|&(_, s)| s)).collect();
+		assert!(painted.len() > 1, "weighted list produces more than one ground id, got {:?}", painted);
+		assert!(painted.iter().all(|s| brush.items.iter().any(|&(id, _)| id == *s)), "every painted id belongs to the brush");
+	}
+
+	#[test]
+	fn raw_item_paint_is_not_rerolled() {
+		let otb = parse_otb(&fs::read(format!("{}/items.otb", DATA)).unwrap()).unwrap();
+		let mats = load_materials();
+		let grass = otb.client_id(4526).unwrap_or(0);
+		let mut place = HashMap::new();
+		place.insert(grass, PlaceFlags { ground: true, top_order: 0, blocking: false });
+		let mut m = build_map_model(600, 600, &[], &[], &[], &[], &[], &[], &[], &[], &[], &[], &[], Vec::new(), 0);
+
+		let xs: Vec<u16> = (0..200).map(|i| 100 + i % 20).collect();
+		let ys: Vec<u16> = (0..200).map(|i| 100 + i / 20).collect();
+		run_paint(&mut m, Some(&mats), &place, &otb, 7, &xs, &ys, 4526, grass, true, false, "", false, false);
+
+		assert!(
+			xs.iter().zip(ys.iter()).all(|(&x, &y)| stack_at(&m, 7, x, y).first().map(|&(_, s)| s) == Some(4526)),
+			"an empty brush name places the literal id"
+		);
 	}
 
 	#[test]
