@@ -116,8 +116,9 @@ async function loadItemNames(dir: string): Promise<Map<number, string>> {
 }
 
 export interface MapItemsPaths {
-  otb: string;
-  xml: string | null;
+  path: string;
+  names: string | null;
+  format: string | null;
 }
 
 export async function resolveMapItems(mapPath: string): Promise<MapItemsPaths | null> {

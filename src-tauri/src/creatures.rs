@@ -84,9 +84,11 @@ pub fn resolve_creature_dirs(map_path: String) -> Option<CreatureDirs> {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ItemsPaths {
-	pub otb: String,
-	pub xml: Option<String>,
+	pub path: String,
+	pub names: Option<String>,
+	pub format: Option<String>,
 }
 
 const SERVER_DIR_MARKERS: [&str; 3] = ["world", "monster", "npc"];
@@ -95,21 +97,51 @@ fn is_server_data_dir(base: &Path) -> bool {
 	SERVER_DIR_MARKERS.iter().any(|d| base.join(d).is_dir())
 }
 
-fn items_at(base: &Path) -> Option<ItemsPaths> {
+fn otb_at(base: &Path) -> Option<ItemsPaths> {
 	let otb = base.join("items").join("items.otb");
-	if otb.is_file() && is_server_data_dir(base) {
-		let xml = otb.with_file_name("items.xml");
-		return Some(ItemsPaths {
-			otb: otb.to_string_lossy().into_owned(),
-			xml: xml.is_file().then(|| xml.to_string_lossy().into_owned()),
-		});
+	if !otb.is_file() || !is_server_data_dir(base) {
+		return None;
 	}
-	None
+	let xml = otb.with_file_name("items.xml");
+	Some(ItemsPaths {
+		path: otb.to_string_lossy().into_owned(),
+		names: xml.is_file().then(|| xml.to_string_lossy().into_owned()),
+		format: None,
+	})
+}
+
+fn scripted_itemdb_at(base: &Path, extensions: &[String]) -> Option<ItemsPaths> {
+	if extensions.is_empty() {
+		return None;
+	}
+	let mut found: Vec<ItemsPaths> = fs::read_dir(base.join("items"))
+		.ok()?
+		.flatten()
+		.filter(|e| e.path().is_file())
+		.filter_map(|e| {
+			let path = e.path();
+			let ext = path.extension()?.to_string_lossy().to_ascii_lowercase();
+			extensions.contains(&ext).then(|| ItemsPaths {
+				path: path.to_string_lossy().into_owned(),
+				names: None,
+				format: Some(ext),
+			})
+		})
+		.collect();
+	found.sort_by(|a, b| a.path.cmp(&b.path));
+	found.into_iter().next()
 }
 
 #[tauri::command]
-pub fn resolve_items_dir(map_path: String) -> Option<ItemsPaths> {
-	walk_ancestors(&map_path, items_at)
+pub fn resolve_items_dir(map_path: String, lua_state: tauri::State<crate::lua_host::LuaState>) -> Option<ItemsPaths> {
+	let extensions = lua_state
+		.lock()
+		.ok()
+		.map(|guard| crate::lua_format::itemdb_extensions(&guard.lua))
+		.unwrap_or_default();
+	walk_ancestors(&map_path, |base| {
+		scripted_itemdb_at(base, &extensions).or_else(|| otb_at(base))
+	})
 }
 
 fn attr_u16(node: &roxmltree::Node, name: &str) -> u16 {
@@ -250,4 +282,46 @@ pub fn unwatch_creatures(state: tauri::State<CreatureWatcherState>) -> Result<()
 	let mut guard = state.lock().map_err(|e| format!("Lock error: {}", e))?;
 	*guard = None;
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn temp_root(name: &str) -> PathBuf {
+		let dir = std::env::temp_dir().join(format!("map-forge-items-{}", name));
+		let _ = fs::remove_dir_all(&dir);
+		fs::create_dir_all(dir.join("items")).unwrap();
+		dir
+	}
+
+	#[test]
+	fn an_otb_needs_a_server_data_sibling_to_count() {
+		let root = temp_root("otb-guard");
+		fs::write(root.join("items").join("items.otb"), b"x").unwrap();
+		assert!(otb_at(&root).is_none());
+
+		fs::create_dir_all(root.join("world")).unwrap();
+		let found = otb_at(&root).unwrap();
+		assert!(found.path.ends_with("items.otb"));
+		assert_eq!(found.format, None);
+	}
+
+	#[test]
+	fn a_registered_extension_is_found_without_any_server_marker() {
+		let root = temp_root("scripted");
+		fs::write(root.join("items").join("things.t"), b"x").unwrap();
+		let extensions = vec!["t".to_string()];
+
+		let found = scripted_itemdb_at(&root, &extensions).unwrap();
+		assert!(found.path.ends_with("things.t"));
+		assert_eq!(found.format.as_deref(), Some("t"));
+	}
+
+	#[test]
+	fn no_registered_extensions_means_no_scripted_match() {
+		let root = temp_root("no-formats");
+		fs::write(root.join("items").join("things.t"), b"x").unwrap();
+		assert!(scripted_itemdb_at(&root, &[]).is_none());
+	}
 }

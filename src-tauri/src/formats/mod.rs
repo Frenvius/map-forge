@@ -75,6 +75,10 @@ impl FormatManager {
         &*self.item_db
     }
 
+    pub fn set_item_db(&mut self, item_db: Box<dyn ItemDatabaseProvider>) {
+        self.item_db = item_db;
+    }
+
     pub fn item_db_mut(&mut self) -> &mut dyn ItemDatabaseProvider {
         &mut *self.item_db
     }

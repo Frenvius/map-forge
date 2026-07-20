@@ -360,7 +360,7 @@ const App = () => {
     setZoom,
     setView,
     patchActiveMap
-  } = useMapTabs(assets, { setStatus, setError, onAfterSave: persistSidecars, version, switchVersion });
+  } = useMapTabs(assets, { setStatus, setError, onAfterSave: persistSidecars, version, switchVersion, retryAssets });
 
   activeIdRef.current = activeId;
 

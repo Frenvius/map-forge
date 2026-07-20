@@ -6,10 +6,18 @@ import { snapZoom } from '~/usecase/zoom';
 import { activeProject } from '~/adapter/project';
 import { getMapView, setMapView } from '~/adapter/mapViews';
 import { loadEditorConfig, loadGeneralConfig } from '~/adapter/preferences';
-import { registeredFormats, itemNames as fetchItemNames } from '~/adapter/scripts';
 import { addRecentMap, loadRecentMaps, clearRecentMaps } from '~/adapter/recentMaps';
+import { registeredFormats, loadScriptedItemdb, itemNames as fetchItemNames } from '~/adapter/scripts';
 import { newOtbm, openOtbm, closeMap, saveOtbm, backupMap, openScriptedMap, saveScriptedMap } from '~/adapter/map';
-import { loadOtb, LoadedAssets, defaultDataDir, resolveMapItems, peekOtbmVersion, loadItemNamesPath } from '~/adapter/assets';
+import {
+  loadOtb,
+  LoadedAssets,
+  MapItemsPaths,
+  defaultDataDir,
+  resolveMapItems,
+  peekOtbmVersion,
+  loadItemNamesPath
+} from '~/adapter/assets';
 
 const NEW_MAP_WIDTH = 1024;
 const NEW_MAP_HEIGHT = 1024;
@@ -35,6 +43,7 @@ interface MapTabsActions {
   onAfterSave?: (mapId: number, path: string) => Promise<void>;
   version: number;
   switchVersion: (v: number) => Promise<void>;
+  retryAssets: () => void;
 }
 
 export interface MapTabsApi {
@@ -62,7 +71,7 @@ export interface MapTabsApi {
 
 export const useMapTabs = (
   assets: LoadedAssets | null,
-  { setStatus, setError, onAfterSave, version, switchVersion }: MapTabsActions
+  { setStatus, setError, onAfterSave, version, switchVersion, retryAssets }: MapTabsActions
 ): MapTabsApi => {
   const [tabs, setTabs] = React.useState<MapTab[]>([]);
   const [recent, setRecent] = React.useState<string[]>([]);
@@ -75,14 +84,34 @@ export const useMapTabs = (
   const persistTimer = React.useRef(0);
   const [itemNames, setItemNames] = React.useState<Map<number, string> | null>(null);
   const loadedOtbPath = React.useRef<string | null>(null);
+  const loadedItemdbPath = React.useRef<string | null>(null);
+
+  const applyDiscoveredItemdb = async (found: MapItemsPaths) => {
+    const loaded = loadedItemdbPath.current;
+    if (loaded === found.path) return;
+    if (loaded) {
+      setStatus(
+        `Opened using the item db already loaded from ${loaded}, not ${found.path} - item names and ids come from the other map's item db. Declare mapForge.itemdb in the project manifest to pin one for the whole project.`
+      );
+      return;
+    }
+    await loadScriptedItemdb(found.path);
+    loadedItemdbPath.current = found.path;
+    retryAssets();
+  };
 
   const prepareItems = async (
     path?: string,
     scripted = false
   ): Promise<{ otbPath: string; names: Map<number, string>; version: number }> => {
-    if (scripted) {
+    const declaredItemdb = (await activeProject().catch(() => null))?.itemdb ?? null;
+    const discovered = !declaredItemdb && path ? await resolveMapItems(path).catch(() => null) : null;
+    if (discovered?.format) await applyDiscoveredItemdb(discovered);
+
+    if (scripted || declaredItemdb || discovered?.format) {
       return { otbPath: '', names: new Map<number, string>(), version };
     }
+
     let detectedVersion = version;
     let peekedDataDir: string | null = null;
     let stampedMinor: number | null = null;
@@ -105,8 +134,7 @@ export const useMapTabs = (
       }
     }
 
-    const found = path ? await resolveMapItems(path).catch(() => null) : null;
-    let otbPath: string | null = found?.otb ?? null;
+    let otbPath: string | null = discovered?.path ?? null;
 
     if (!otbPath && peekedDataDir) {
       otbPath = `${peekedDataDir}/items.otb`;
@@ -119,9 +147,9 @@ export const useMapTabs = (
       loadedOtbPath.current = otbPath;
     }
 
-    const names = found
-      ? found.xml
-        ? await loadItemNamesPath(found.xml)
+    const names = discovered
+      ? discovered.names
+        ? await loadItemNamesPath(discovered.names)
         : new Map<number, string>()
       : await loadItemNamesPath(`${defaultDataDir()}/items.xml`).catch(() => new Map<number, string>());
 

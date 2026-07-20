@@ -179,6 +179,7 @@ pub fn reset_loaded_assets(app: &tauri::AppHandle) {
 
 	if let Ok(mut fm) = app.state::<crate::formats::FormatManagerState>().lock() {
 		fm.set_sprite(Box::new(crate::formats::tibia::spr_manager::SprManager::new()));
+		fm.set_item_db(Box::new(crate::formats::tibia::providers::TibiaItemDatabase::new()));
 	}
 	if let Ok(mut db) = app.state::<crate::lua_format::ItemDbState>().lock() {
 		*db = crate::lua_format::ItemDb::default();

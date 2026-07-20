@@ -256,16 +256,18 @@ pub fn map_client_ids(
 	server_ids: Vec<u16>,
 	fm: tauri::State<FormatManagerState>,
 	client_ids: tauri::State<crate::lua_format::ClientIdState>,
+	itemdb: tauri::State<crate::lua_format::ItemDbState>,
 ) -> Result<Vec<u32>, String> {
-	let mgr = fm.lock().map_err(|e| format!("Lock error: {}", e))?;
-	if mgr.item_db().all_server_ids().is_empty() {
-		drop(mgr);
-		let map = client_ids.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let scripted = !itemdb.lock().map_err(|e| format!("Lock error: {}", e))?.items.is_empty();
+	let map = client_ids.lock().map_err(|e| format!("Lock error: {}", e))?;
+	if scripted || !map.is_empty() {
 		return Ok(server_ids
 			.into_iter()
 			.map(|sid| u32::from(map.get(&sid).copied().unwrap_or(sid)))
 			.collect());
 	}
+	drop(map);
+	let mgr = fm.lock().map_err(|e| format!("Lock error: {}", e))?;
 	Ok(server_ids
 		.into_iter()
 		.map(|sid| mgr.item_db().client_id(sid).map(u32::from).unwrap_or(0))
@@ -277,19 +279,19 @@ pub fn all_server_ids(
 	fm: tauri::State<FormatManagerState>,
 	itemdb: tauri::State<crate::lua_format::ItemDbState>,
 ) -> Result<Vec<u16>, String> {
-	let mgr = fm.lock().map_err(|e| format!("Lock error: {}", e))?;
-	let ids = mgr.item_db().all_server_ids();
-	if !ids.is_empty() {
-		return Ok(ids);
-	}
-	drop(mgr);
 	let db = itemdb.lock().map_err(|e| format!("Lock error: {}", e))?;
 	let mut v: Vec<u16> = db.items.keys().filter_map(|&k| u16::try_from(k).ok()).collect();
-	v.sort_unstable();
-	if v.is_empty() {
+	drop(db);
+	if !v.is_empty() {
+		v.sort_unstable();
+		return Ok(v);
+	}
+	let mgr = fm.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let ids = mgr.item_db().all_server_ids();
+	if ids.is_empty() {
 		return Err("No items loaded".to_string());
 	}
-	Ok(v)
+	Ok(ids)
 }
 
 #[tauri::command]

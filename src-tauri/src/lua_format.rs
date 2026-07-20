@@ -669,10 +669,8 @@ pub fn save_scripted_map(map_id: u32, path: String, map_state: State<MapState>, 
 	Ok(())
 }
 
-#[tauri::command]
-pub fn registered_formats(lua_state: State<LuaState>) -> Result<Vec<(String, String, String)>, String> {
-	let guard = lua_state.lock().map_err(|e| e.to_string())?;
-	let forge: Table = guard.lua.globals().get("forge").map_err(|e| e.to_string())?;
+fn formats_of(lua: &Lua) -> Result<Vec<(String, String, String)>, String> {
+	let forge: Table = lua.globals().get("forge").map_err(|e| e.to_string())?;
 	let formats: Table = forge.get("_formats").map_err(|e| e.to_string())?;
 	let mut out = Vec::new();
 	for pair in formats.pairs::<String, Table>() {
@@ -682,6 +680,21 @@ pub fn registered_formats(lua_state: State<LuaState>) -> Result<Vec<(String, Str
 		out.push((ext, name, kind));
 	}
 	Ok(out)
+}
+
+pub fn itemdb_extensions(lua: &Lua) -> Vec<String> {
+	formats_of(lua)
+		.unwrap_or_default()
+		.into_iter()
+		.filter(|(_, _, kind)| kind == "itemdb")
+		.map(|(ext, _, _)| ext.to_ascii_lowercase())
+		.collect()
+}
+
+#[tauri::command]
+pub fn registered_formats(lua_state: State<LuaState>) -> Result<Vec<(String, String, String)>, String> {
+	let guard = lua_state.lock().map_err(|e| e.to_string())?;
+	formats_of(&guard.lua)
 }
 
 #[tauri::command]
