@@ -64,17 +64,16 @@ export async function scriptedThings(): Promise<ScriptedThing[]> {
 
 export interface UiConfig {
   clientVersions: boolean;
-  assets: { ext: string; label: string; setting: string; itemdb: string | null } | null;
+  assets: { ext: string; label: string } | null;
 }
 
 export interface AppConfig {
   name: string | null;
-  dataDir: string | null;
   floorOffset: number | null;
 }
 
 export async function appConfig(): Promise<AppConfig> {
-  if (!isLuaEnabled()) return { name: null, dataDir: null, floorOffset: null };
+  if (!isLuaEnabled()) return { name: null, floorOffset: null };
   return invoke<AppConfig>('app_config');
 }
 

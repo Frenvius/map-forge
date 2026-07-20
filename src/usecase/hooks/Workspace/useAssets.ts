@@ -5,9 +5,10 @@ import { PaletteData } from '~/domain/palette';
 import { loadPalette } from '~/adapter/palette';
 import { setFloorShift } from '~/usecase/floors';
 import { setMinimapPalette } from '~/adapter/minimap';
+import { loadClientConfig } from '~/adapter/preferences';
 import { buildScriptedAssets } from '~/usecase/scriptedAssets';
-import { loadAssetPath, loadClientConfig } from '~/adapter/preferences';
 import { loadAssets, initDataDir, LoadedAssets } from '~/adapter/assets';
+import { ProjectInfo, projectError, activeProject } from '~/adapter/project';
 import { uiConfig, appConfig, loadScriptedAssets, loadScriptedItemdb } from '~/adapter/scripts';
 
 export interface AssetsState {
@@ -18,6 +19,7 @@ export interface AssetsState {
   dataDir: string;
   version: number;
   assetLabel: string | null;
+  project: ProjectInfo | null;
   clientConfigured: boolean;
   assetsMissing: boolean;
   retryAssets: () => void;
@@ -38,6 +40,7 @@ export const useAssets = (): AssetsState => {
   const [version, setVersion] = React.useState(0);
   const [clientConfigured, setClientConfigured] = React.useState(true);
   const [assetLabel, setAssetLabel] = React.useState<string | null>(null);
+  const [project, setProject] = React.useState<ProjectInfo | null>(null);
   const [assetsMissing, setAssetsMissing] = React.useState(false);
   const [reloadKey, setReloadKey] = React.useState(0);
   const [minimapReady, setMinimapReady] = React.useState(false);
@@ -90,6 +93,13 @@ export const useAssets = (): AssetsState => {
     setAssetsMissing(false);
     setStatus('Loading client assets...');
     void (async () => {
+      const active = await activeProject().catch(() => null);
+      if (cancelled) return;
+      setProject(active);
+      const failure = await projectError().catch(() => null);
+      if (cancelled) return;
+      if (failure) setError(failure);
+
       const app = await appConfig().catch(() => null);
       setFloorShift(app?.floorOffset ?? 1);
       const config = await loadClientConfig();
@@ -103,17 +113,16 @@ export const useAssets = (): AssetsState => {
       const ui = await uiConfig().catch(() => null);
       setAssetLabel(ui?.assets && !ui.clientVersions ? ui.assets.label || 'Assets' : null);
       if (ui?.assets && !ui.clientVersions) {
-        const saved = await loadAssetPath(ui.assets.setting).catch(() => '');
+        const saved = active?.assets ?? '';
         if (!saved) {
           setClientConfigured(false);
           setAssetsMissing(true);
-          setStatus(`Select ${ui.assets.label} in Preferences`);
+          setStatus(active ? `${active.name} declares no ${ui.assets.label} file` : `No ${ui.assets.label} file configured`);
           return;
         }
         setClientConfigured(true);
         try {
-          const dir = saved.replace(/[^\\/]+$/, '');
-          if (ui.assets.itemdb) await loadScriptedItemdb(`${dir}${ui.assets.itemdb}`).catch(() => 0);
+          if (active?.itemdb) await loadScriptedItemdb(active.itemdb).catch(() => 0);
           await loadScriptedAssets(saved);
           const scripted = await buildScriptedAssets(saved);
           if (cancelled) return;
@@ -169,6 +178,7 @@ export const useAssets = (): AssetsState => {
     dataDir,
     version,
     assetLabel,
+    project,
     clientConfigured,
     assetsMissing,
     retryAssets,

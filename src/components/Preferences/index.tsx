@@ -4,12 +4,13 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { cn } from '~/usecase/classNames';
 import { Input } from '~/components/commons/ui/input';
 import HuntTab from '~/components/Preferences/HuntTab';
+import { uiConfig, UiConfig } from '~/adapter/scripts';
 import { Button } from '~/components/commons/ui/button';
 import EditorTab from '~/components/Preferences/EditorTab';
 import GeneralTab from '~/components/Preferences/GeneralTab';
+import { ProjectInfo, activeProject } from '~/adapter/project';
 import { copyDataDir, defaultDataRoot } from '~/adapter/assets';
 import ClientVersionTab from '~/components/Preferences/ClientVersionTab';
-import { uiConfig, UiConfig, loadScriptedAssets } from '~/adapter/scripts';
 import {
   Dialog,
   DialogTitle,
@@ -25,8 +26,6 @@ import {
   ClientConfig,
   EditorConfig,
   GeneralConfig,
-  loadAssetPath,
-  saveAssetPath,
   loadHuntConfig,
   saveHuntConfig,
   loadClientConfig,
@@ -60,8 +59,7 @@ const Preferences = ({ open: dialogOpen, initialTab = 'general', onSaved, onRese
   const [general, setGeneral] = React.useState<GeneralConfig>(defaultGeneralConfig);
   const [editor, setEditor] = React.useState<EditorConfig>(defaultEditorConfig);
   const [hunt, setHunt] = React.useState<HuntConfig>(defaultHuntConfig);
-  const [assetPath, setAssetPath] = React.useState('');
-  const [assetStatus, setAssetStatus] = React.useState('');
+  const [project, setProject] = React.useState<ProjectInfo | null>(null);
   const [dataDir, setDataDir] = React.useState('');
   const [pendingDataDir, setPendingDataDir] = React.useState<string | null>(null);
   const [dataError, setDataError] = React.useState('');
@@ -71,11 +69,11 @@ const Preferences = ({ open: dialogOpen, initialTab = 'general', onSaved, onRese
     if (!dialogOpen) return;
     setTab(initialTab);
     void uiConfig()
-      .then((u) => {
-        setUi(u);
-        if (u.assets) void loadAssetPath(u.assets.setting).then(setAssetPath);
-      })
+      .then(setUi)
       .catch(() => setUi(DEFAULT_UI));
+    void activeProject()
+      .then(setProject)
+      .catch(() => setProject(null));
     void loadClientConfig().then(setConfig);
     void loadGeneralConfig().then(setGeneral);
     void loadEditorConfig().then(setEditor);
@@ -127,24 +125,6 @@ const Preferences = ({ open: dialogOpen, initialTab = 'general', onSaved, onRese
   ];
   const activeTab = tabs.some((t) => t.id === tab) ? tab : 'general';
 
-  const pickAssets = async () => {
-    if (!ui.assets) return;
-    const selected = await open({
-      multiple: false,
-      filters: [{ name: ui.assets.label, extensions: [ui.assets.ext] }]
-    });
-    if (!selected || typeof selected !== 'string') return;
-    setAssetPath(selected);
-    setAssetStatus('Loading...');
-    try {
-      const count = await loadScriptedAssets(selected);
-      await saveAssetPath(ui.assets.setting, selected);
-      setAssetStatus(`Loaded ${count} sprites`);
-    } catch (e) {
-      setAssetStatus(`Error: ${e}`);
-    }
-  };
-
   const save = () => {
     void saveClientConfig(config);
     void saveGeneralConfig(general);
@@ -179,33 +159,32 @@ const Preferences = ({ open: dialogOpen, initialTab = 'general', onSaved, onRese
               ))}
             </nav>
             <div className="min-w-0 flex-1 overflow-y-auto p-4">
-            {activeTab === 'general' && (
-              <GeneralTab
-                config={general}
-                dataDir={dataDir}
-                onChange={setGeneral}
-                onResetDataDir={resetDataDir}
-                onResetLayout={() => onResetLayout?.()}
-                onPickDataDir={() => void pickDataDir()}
-              />
-            )}
-            {activeTab === 'editor' && <EditorTab config={editor} onChange={setEditor} />}
-            {activeTab === 'hunt' && <HuntTab config={hunt} onChange={setHunt} />}
-            {activeTab === 'client' && <ClientVersionTab config={config} onChange={setConfig} />}
-            {activeTab === 'assets' && ui.assets && (
-              <div className="flex flex-col gap-3">
-                <label className="flex flex-col gap-1.5 text-xs font-medium text-foreground">
-                  {ui.assets.label} file
-                  <div className="flex gap-2">
-                    <Input readOnly value={assetPath} placeholder={`Select a .${ui.assets.ext} file`} />
-                    <Button size="sm" onClick={pickAssets}>
-                      Browse...
-                    </Button>
-                  </div>
-                </label>
-                {assetStatus && <span className="text-xs text-muted-foreground">{assetStatus}</span>}
-              </div>
-            )}
+              {activeTab === 'general' && (
+                <>
+                  <GeneralTab
+                    config={general}
+                    onChange={setGeneral}
+                    onResetLayout={() => onResetLayout?.()}
+                    data={{ dir: dataDir, onPick: () => void pickDataDir(), onReset: resetDataDir }}
+                  />
+                </>
+              )}
+              {activeTab === 'editor' && <EditorTab config={editor} onChange={setEditor} />}
+              {activeTab === 'hunt' && <HuntTab config={hunt} onChange={setHunt} />}
+              {activeTab === 'client' && <ClientVersionTab config={config} onChange={setConfig} />}
+              {activeTab === 'assets' && ui.assets && (
+                <div className="flex flex-col gap-3">
+                  <label className="flex flex-col gap-1.5 text-xs font-medium text-foreground">
+                    {ui.assets.label} file
+                    <Input readOnly value={project?.assets ?? ''} placeholder={`Declared by the project (.${ui.assets.ext})`} />
+                  </label>
+                  <span className="text-xs text-muted-foreground">
+                    {project?.assets
+                      ? 'Set by the project manifest. Open a different project to change it.'
+                      : `No ${ui.assets.label} file configured.`}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>

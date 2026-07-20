@@ -21,12 +21,13 @@ mod map_load;
 mod map_meta;
 mod map_model;
 mod map_save;
+mod project;
 mod scripting;
 
 use formats::tibia::client_version::peek_otbm_version;
 use commands::{
-	all_server_ids, backup_map, close_spr_file, copy_data_dir, default_data_dir, default_data_root, load_materials, load_otb,
-	map_client_ids, open_data_dir, open_spr_file, open_url, parse_dat_file_bin, read_file, read_file_header, read_file_text,
+	all_server_ids, backup_map, close_spr_file, copy_data_dir, default_data_root, load_materials, load_otb, map_client_ids,
+	open_data_dir, open_spr_file, open_url, parse_dat_file_bin, project_data_dir, read_file, read_file_header, read_file_text,
 	read_sprites_batch_rgba, read_sprites_rgba, read_sprites_rgba_lz4, set_window_acrylic, write_file_text,
 };
 use creatures::{
@@ -43,7 +44,11 @@ use lua_format::{
 	app_config, lua_app_config, save_scripted_map, scripted_things, ui_config, ClientIdState, ItemDb, ItemDbState, ItemSpriteState,
 	ThingDef, ThingsState,
 };
-use lua_host::{list_scripts, open_scripts_dir, read_script, reload_scripts, scripts_dir, write_script, LuaHost, LuaState};
+use lua_host::{list_scripts, open_scripts_dir, read_script, reload_scripts, write_script, LuaHost, LuaState};
+use project::{
+	project_active, project_close, project_error, project_open, project_recent, project_recent_clear, project_state_get,
+	project_state_set, ProjectSlot, ProjectState,
+};
 use map_import::{import_cancel, import_commit, import_load, import_preview, new_import_state, ImportState};
 use map_load::open_otbm;
 use map_meta::{get_map_properties, get_towns, get_waypoints, map_statistics, set_map_properties, set_towns};
@@ -68,19 +73,6 @@ pub(crate) struct PlaceFlags {
 pub(crate) type PlacementState = Arc<Mutex<HashMap<u16, PlaceFlags>>>;
 pub(crate) type CopyBufferState = Arc<Mutex<Option<CopyBuffer>>>;
 
-fn configured_data_root(app: &tauri::AppHandle) -> Option<String> {
-	use tauri::Manager;
-	let path = app.path().app_config_dir().ok()?.join("settings.json");
-	let text = std::fs::read_to_string(path).ok()?;
-	let value: serde_json::Value = serde_json::from_str(&text).ok()?;
-	let root = value.get("dataDir")?.as_str()?.trim().to_string();
-	if root.is_empty() {
-		None
-	} else {
-		Some(root)
-	}
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
 	let format_manager: FormatManagerState = Arc::new(Mutex::new(FormatManager::new(
@@ -95,7 +87,8 @@ pub fn run() {
 	let copy_buffer: CopyBufferState = Arc::new(Mutex::new(None));
 	let minimap_palette: MinimapPaletteState = Arc::new(Mutex::new(Vec::new()));
 	let creature_watcher: CreatureWatcherState = Mutex::new(None);
-	let lua_host: LuaState = Arc::new(Mutex::new(LuaHost::new(scripts_dir())));
+	let lua_host: LuaState = Arc::new(Mutex::new(LuaHost::new(std::path::PathBuf::new())));
+	let project_state: ProjectState = Arc::new(Mutex::new(ProjectSlot::default()));
 	let item_db: ItemDbState = Arc::new(Mutex::new(ItemDb::default()));
 	let item_sprites: ItemSpriteState = Arc::new(Mutex::new(HashMap::new()));
 	let scripted_things_state: ThingsState = Arc::new(Mutex::new(Vec::<ThingDef>::new()));
@@ -123,6 +116,7 @@ pub fn run() {
 		.manage(minimap_palette)
 		.manage(creature_watcher)
 		.manage(lua_host)
+		.manage(project_state)
 		.manage(item_db)
 		.manage(item_sprites)
 		.manage(scripted_things_state)
@@ -150,9 +144,17 @@ pub fn run() {
 			write_file_text,
 			backup_map,
 			read_file_header,
-			default_data_dir,
+			project_active,
+			project_error,
+			project_open,
+			project_close,
+			project_recent,
+			project_recent_clear,
 			default_data_root,
 			copy_data_dir,
+			project_state_get,
+			project_state_set,
+			project_data_dir,
 			open_data_dir,
 			open_url,
 			open_spr_file,
@@ -219,26 +221,17 @@ pub fn run() {
 		.setup(move |app| {
 			{
 				use tauri::Manager;
-				let state = app.state::<LuaState>().inner().clone();
-				let locked = state.lock();
-				if let Ok(mut h) = locked {
-					if let Some(dir) = configured_data_root(app.handle()).map(|r| lua_host::scripts_dir_in(&r)) {
-						if !dir.is_dir() {
-							if let Err(e) = commands::copy_path(&h.dir, &dir) {
-								eprintln!("[lua] seed scripts into {}: {}", dir.display(), e);
-							}
-						}
-						h.dir = dir;
-					}
-					match h.load_all() {
-						Ok(n) => println!("[lua] loaded {} script(s) from {}", n, h.dir.display()),
-						Err(e) => {
-							h.last_error = Some(e.clone());
-							eprintln!("[lua] load failed: {}", e);
-						}
-					}
+				let resolved = project::resolve_active(app.handle());
+				let lua = app.state::<LuaState>().inner().clone();
+				project::apply_scripts(resolved.project.as_ref(), &lua);
+				match resolved.project.as_ref() {
+					Some(p) => println!("[project] {} ({})", p.manifest.name, p.root.display()),
+					None => println!("[project] none"),
 				}
-				if let Some(name) = lua_app_config(&state).name {
+				if let Ok(mut slot) = app.state::<ProjectState>().lock() {
+					*slot = resolved;
+				}
+				if let Some(name) = lua_app_config(&lua).name {
 					if let Some(window) = app.get_webview_window("main") {
 						let _ = window.set_title(&name);
 					}

@@ -780,8 +780,6 @@ pub fn item_sprite(item_id: u32, item_sprite_state: State<ItemSpriteState>) -> R
 pub struct UiAssets {
 	pub ext: String,
 	pub label: String,
-	pub setting: String,
-	pub itemdb: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -803,12 +801,7 @@ fn read_ui_config(lua: &Lua) -> UiConfig {
 		cfg.client_versions = cv;
 	}
 	if let Ok(a) = ui.get::<Table>("assets") {
-		cfg.assets = Some(UiAssets {
-			ext: a.get("ext").unwrap_or_default(),
-			label: a.get("label").unwrap_or_default(),
-			setting: a.get("setting").unwrap_or_else(|_| "scriptedAssetPath".to_string()),
-			itemdb: a.get::<String>("itemdb").ok().filter(|s| !s.is_empty()),
-		});
+		cfg.assets = Some(UiAssets { ext: a.get("ext").unwrap_or_default(), label: a.get("label").unwrap_or_default() });
 	}
 	cfg
 }
@@ -823,8 +816,6 @@ pub fn ui_config(lua_state: State<LuaState>) -> Result<UiConfig, String> {
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
 	pub name: Option<String>,
-	pub data_dir: Option<String>,
-	pub client_data: Option<String>,
 	pub floor_offset: Option<f64>,
 }
 
@@ -839,16 +830,6 @@ fn read_app_config(lua: &Lua) -> AppConfig {
 	if let Ok(name) = app.get::<String>("name") {
 		if !name.is_empty() {
 			cfg.name = Some(name);
-		}
-	}
-	if let Ok(dir) = app.get::<String>("data_dir") {
-		if !dir.is_empty() {
-			cfg.data_dir = Some(dir);
-		}
-	}
-	if let Ok(dir) = app.get::<String>("client_data") {
-		if !dir.is_empty() {
-			cfg.client_data = Some(dir);
 		}
 	}
 	if let Ok(offset) = app.get::<f64>("floor_offset") {
@@ -1031,14 +1012,11 @@ mod tests {
 		assert!(d.client_versions, "default keeps client version tab");
 		assert!(d.assets.is_none());
 
-		let host2 = host_with(
-			"forge.ui = { client_versions = false, assets = { ext = 'pak', label = 'Assets', itemdb = 'items.db' } }",
-		);
+		let host2 = host_with("forge.ui = { client_versions = false, assets = { ext = 'pak', label = 'Assets' } }");
 		let c = read_ui_config(&host2.lua);
 		assert!(!c.client_versions, "lua hides client version tab");
 		assert_eq!(c.assets.as_ref().map(|a| a.ext.as_str()), Some("pak"));
 		assert_eq!(c.assets.as_ref().map(|a| a.label.as_str()), Some("Assets"));
-		assert_eq!(c.assets.as_ref().and_then(|a| a.itemdb.as_deref()), Some("items.db"));
 	}
 
 	#[test]

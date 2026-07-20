@@ -71,12 +71,9 @@ pub async fn backup_map(path: String, keep: u32) -> Result<(), String> {
 	Ok(())
 }
 
-pub fn data_dir_for(version: u32, client_data: Option<String>, custom_root: Option<String>) -> String {
+pub fn legacy_data_dir(version: u32, custom_root: Option<String>) -> String {
 	let exe = std::env::current_exe().ok();
 	let exe_dir = exe.as_deref().and_then(|e| e.parent());
-	if let Some(cd) = client_data {
-		return exe_dir.map(|b| b.join(&cd).to_string_lossy().into_owned()).unwrap_or(cd);
-	}
 	let root = custom_root.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
 	if let Some(root) = root {
 		return PathBuf::from(root).join(version.to_string()).to_string_lossy().into_owned();
@@ -86,8 +83,21 @@ pub fn data_dir_for(version: u32, client_data: Option<String>, custom_root: Opti
 }
 
 #[tauri::command]
-pub fn default_data_dir(version: u32, custom_root: Option<String>, lua_state: tauri::State<crate::lua_host::LuaState>) -> String {
-	data_dir_for(version, crate::lua_format::lua_app_config(&lua_state).client_data, custom_root)
+pub fn project_data_dir(
+	app: tauri::AppHandle,
+	version: u32,
+	project: tauri::State<crate::project::ProjectState>,
+) -> Result<String, String> {
+	let from_project = project
+		.lock()
+		.map_err(|e| e.to_string())?
+		.project
+		.as_ref()
+		.and_then(|p| p.data_dir(version));
+	Ok(match from_project {
+		Some(dir) => dir.to_string_lossy().into_owned(),
+		None => legacy_data_dir(version, crate::settings::legacy_data_dir(&app)),
+	})
 }
 
 #[tauri::command]
@@ -112,7 +122,7 @@ pub fn copy_data_dir(from: String, to: String) -> Result<(), String> {
 	copy_path(&src, &dst)
 }
 
-pub fn copy_path(src: &std::path::Path, dst: &std::path::Path) -> Result<(), String> {
+fn copy_path(src: &std::path::Path, dst: &std::path::Path) -> Result<(), String> {
 	if src.is_dir() {
 		fs::create_dir_all(dst).map_err(|e| e.to_string())?;
 		for entry in fs::read_dir(src).map_err(|e| e.to_string())?.flatten() {

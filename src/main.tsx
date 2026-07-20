@@ -21,7 +21,6 @@ import { LoadedSprite } from '~/domain/sprite';
 import { loadSprites } from '~/adapter/sprites';
 import { loadSpawns } from '~/adapter/creatures';
 import ToolsPanel from '~/components/ToolsPanel';
-import Preferences, { TabId } from '~/components/Preferences';
 import AboutDialog from '~/components/AboutDialog';
 import { MIN_ZOOM, MAX_ZOOM } from '~/usecase/zoom';
 import PalettePanel from '~/components/PalettePanel';
@@ -42,6 +41,7 @@ import PanelDockMenu from '~/components/Dock/PanelDockMenu';
 import { useDock } from '~/usecase/hooks/Workspace/useDock';
 import { SPRITE_SIZE, getSpriteIndex } from '~/domain/tibia';
 import { PanelId, baseKind, panelMeta } from '~/domain/dock';
+import Preferences, { TabId } from '~/components/Preferences';
 import { MapSpawns, buildMapSpawns } from '~/domain/creature';
 import SaveProgressModal from '~/components/SaveProgressModal';
 import CreatureDataDialog from '~/components/CreatureDataDialog';
@@ -190,6 +190,7 @@ const App = () => {
     error,
     dataDir,
     version,
+    project,
     assetLabel,
     clientConfigured,
     assetsMissing,
@@ -965,11 +966,11 @@ const App = () => {
           <AssetsMissing
             error={error}
             dataDir={dataDir}
-            target={{ label: assetLabel ?? `version ${version}`, scripted: assetLabel !== null }}
             onRetry={retryAssets}
             clientConfigured={clientConfigured}
             onOpenSettings={() => openPreferences(assetLabel ? 'assets' : 'client')}
             onOpenFolder={() => void openDataDir(dataDir.replace(/[\\/][^\\/]+$/, ''))}
+            target={{ label: assetLabel ?? `version ${version}`, scripted: assetLabel !== null, project: project?.name ?? null }}
           />
         ) : (
           <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">

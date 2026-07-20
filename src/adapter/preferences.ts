@@ -7,13 +7,6 @@ const KEY = 'clientConfig';
 const GENERAL_KEY = 'generalConfig';
 const EDITOR_KEY = 'editorConfig';
 const HUNT_KEY = 'huntConfig';
-export async function loadAssetPath(key: string): Promise<string> {
-  return getSetting<string>(key, '');
-}
-
-export async function saveAssetPath(key: string, path: string): Promise<void> {
-  await setSetting(key, path);
-}
 
 export async function loadDataDir(): Promise<string> {
   return getSetting<string>(DATA_DIR_KEY, '');

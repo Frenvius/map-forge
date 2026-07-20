@@ -3,6 +3,7 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 
 import { MapMeta } from '~/domain/map';
 import { snapZoom } from '~/usecase/zoom';
+import { activeProject } from '~/adapter/project';
 import { getMapView, setMapView } from '~/adapter/mapViews';
 import { loadEditorConfig, loadGeneralConfig } from '~/adapter/preferences';
 import { registeredFormats, itemNames as fetchItemNames } from '~/adapter/scripts';
@@ -268,7 +269,7 @@ export const useMapTabs = (
     const extensions = ['otbm', ...scripted.filter((f) => f.kind === 'map').map((f) => f.ext)];
     const selected = await open({
       multiple: false,
-      defaultPath: defaultDataDir(),
+      defaultPath: (await activeProject().catch(() => null))?.maps ?? defaultDataDir(),
       title: 'Open map',
       filters: [{ name: 'Maps', extensions }]
     });

@@ -18,6 +18,12 @@ impl LuaHost {
 
 	pub fn load_all(&mut self) -> Result<usize, String> {
 		let lua = unsafe { Lua::unsafe_new() };
+		if !self.dir.is_dir() {
+			self.lua = lua;
+			self.loaded = 0;
+			self.last_error = None;
+			return Ok(0);
+		}
 		let mut files: Vec<PathBuf> = std::fs::read_dir(&self.dir)
 			.map_err(|e| format!("scripts dir {}: {}", self.dir.display(), e))?
 			.filter_map(|e| e.ok().map(|e| e.path()))
@@ -44,27 +50,12 @@ impl LuaHost {
 
 pub type LuaState = Arc<Mutex<LuaHost>>;
 
-pub fn scripts_dir_in(root: &str) -> PathBuf {
-	PathBuf::from(root).join("scripts")
-}
-
-pub fn scripts_dir() -> PathBuf {
-	let candidates = [
-		std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.join("data").join("scripts"))),
-		Some(PathBuf::from("data/scripts")),
-		Some(PathBuf::from("../data/scripts")),
-	];
-	for c in candidates.into_iter().flatten() {
-		if c.is_dir() {
-			return c;
-		}
-	}
-	PathBuf::from("data/scripts")
-}
-
 #[tauri::command]
 pub fn open_scripts_dir(lua: State<LuaState>) -> Result<(), String> {
 	let dir = lua.lock().map_err(|e| e.to_string())?.dir.clone();
+	if dir.as_os_str().is_empty() {
+		return Err("this project declares no scripts folder".to_string());
+	}
 	std::fs::create_dir_all(&dir).map_err(|e| format!("scripts dir {}: {}", dir.display(), e))?;
 	let abs = std::fs::canonicalize(&dir).unwrap_or(dir);
 	tauri_plugin_opener::open_path(abs.to_string_lossy().trim_start_matches(r"\\?\"), None::<&str>).map_err(|e| e.to_string())

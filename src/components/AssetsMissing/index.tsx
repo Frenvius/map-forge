@@ -4,7 +4,7 @@ import { Button } from '~/components/commons/ui/button';
 
 interface AssetsMissingProps {
   dataDir: string;
-  target: { label: string; scripted: boolean };
+  target: { label: string; scripted: boolean; project: string | null };
   error: string | null;
   clientConfigured: boolean;
   onOpenFolder: () => void;
@@ -39,8 +39,18 @@ const AssetsMissing = ({
         </p>
       ) : (
         <p className="text-xs leading-relaxed text-muted-foreground">
-          No {target.label} file selected. Set it in Preferences &rsaquo; {target.scripted ? target.label : 'Client Version'}, then
-          reload.
+          {target.scripted ? (
+            target.project ? (
+              <>
+                {target.project} declares no {target.label} file. Add it to the project manifest, or open a different project in
+                Preferences &rsaquo; General.
+              </>
+            ) : (
+              <>No {target.label} file is configured. Open a project that provides one in Preferences &rsaquo; General.</>
+            )
+          ) : (
+            <>No client folder selected. Set it in Preferences &rsaquo; Client Version, then reload.</>
+          )}
         </p>
       )}
       {dataDir && (

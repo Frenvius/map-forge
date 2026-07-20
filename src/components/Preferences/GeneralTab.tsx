@@ -6,18 +6,16 @@ import { formatPosition, COPY_POSITION_FORMATS } from '~/usecase/positionFormat'
 import { Select, SelectItem, SelectValue, SelectContent, SelectTrigger } from '~/components/commons/ui/select';
 
 interface GeneralTabProps {
-  dataDir: string;
   config: GeneralConfig;
+  data: { dir: string; onPick: () => void; onReset: () => void };
   onResetLayout: () => void;
-  onPickDataDir: () => void;
-  onResetDataDir: () => void;
   onChange: (config: GeneralConfig) => void;
 }
 
 const STACK_OPTIONS = Array.from({ length: MAX_STACK - MIN_STACK + 1 }, (_, i) => MIN_STACK + i);
 const SAMPLE_POSITION = { x: 1000, y: 1000, z: 7 };
 
-const GeneralTab = ({ config, dataDir, onResetLayout, onPickDataDir, onResetDataDir, onChange }: GeneralTabProps) => {
+const GeneralTab = ({ config, data, onResetLayout, onChange }: GeneralTabProps) => {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4">
@@ -144,15 +142,15 @@ const GeneralTab = ({ config, dataDir, onResetLayout, onPickDataDir, onResetData
       <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 flex-col">
           <span className="text-xs font-medium">Data folder</span>
-          <span className="truncate text-[10px] text-muted-foreground">{dataDir || 'Bundled (next to the app)'}</span>
+          <span className="truncate text-[10px] text-muted-foreground">{data.dir || 'Bundled (next to the app)'}</span>
         </div>
         <div className="flex shrink-0 gap-2">
-          {dataDir && (
-            <Button size="sm" variant="ghost" onClick={onResetDataDir}>
+          {data.dir && (
+            <Button size="sm" variant="ghost" onClick={data.onReset}>
               Use default
             </Button>
           )}
-          <Button size="sm" variant="outline" onClick={onPickDataDir}>
+          <Button size="sm" variant="outline" onClick={data.onPick}>
             Browse...
           </Button>
         </div>

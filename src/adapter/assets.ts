@@ -2,7 +2,6 @@ import { invoke } from '@tauri-apps/api/core';
 
 import { Thing } from '~/domain/thing';
 import { ThingType } from '~/domain/tibia';
-import { getSetting } from '~/adapter/settings';
 import { CreatureLook } from '~/domain/creature';
 import { loadCreatureDb } from '~/adapter/creatures';
 import { CLIENT_VERSIONS } from '~/lib/formats/tibia/types';
@@ -14,8 +13,7 @@ export const DATA_DIR_KEY = 'dataDir';
 let cachedDataDir = '';
 
 export async function initDataDir(version = DEFAULT_VERSION): Promise<string> {
-  const customRoot = (await getSetting<string>(DATA_DIR_KEY, '')).trim();
-  cachedDataDir = await invoke<string>('default_data_dir', { version, customRoot: customRoot || null });
+  cachedDataDir = await invoke<string>('project_data_dir', { version });
   return cachedDataDir;
 }
 

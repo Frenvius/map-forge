@@ -1,5 +1,6 @@
 import React from 'react';
-import { Save, FilePlus, RefreshCw, FileInput, FolderOpen } from 'lucide-react';
+import { open } from '@tauri-apps/plugin-dialog';
+import { Save, Package, FilePlus, RefreshCw, FileInput, FolderOpen } from 'lucide-react';
 
 import { openDataDir } from '~/adapter/assets';
 import { openTilesetEditor } from '~/adapter/windows';
@@ -7,11 +8,13 @@ import { TOOLTIP_TYPE_GROUPS } from '~/domain/tooltips';
 import { useAssetsBundle } from '~/usecase/context/AssetsContext';
 import { PaletteCategoryId, PALETTE_CATEGORIES } from '~/domain/palette';
 import { useEditorSettings } from '~/usecase/context/EditorSettingsContext';
+import { openProject, PROJECT_EXT, closeProject, RecentProject, recentProjects, clearRecentProjects } from '~/adapter/project';
 import {
   Menubar,
   MenubarSub,
   MenubarMenu,
   MenubarItem,
+  MenubarLabel,
   MenubarContent,
   MenubarTrigger,
   MenubarShortcut,
@@ -105,9 +108,44 @@ const AppMenu = ({
     compensateSelection,
     toggleCompensateSelection
   } = useEditorSettings();
-  const { dataDir } = useAssetsBundle();
+  const { dataDir, project } = useAssetsBundle();
   const anyZoneVisible = zoneVisibility.pz || zoneVisibility.nopvp || zoneVisibility.nologout || zoneVisibility.pvp;
   const stop = (e: React.MouseEvent) => e.stopPropagation();
+
+  const pickProject = async () => {
+    const selected = await open({
+      multiple: false,
+      title: 'Open project',
+      filters: [{ name: 'Forge Project', extensions: [PROJECT_EXT] }]
+    });
+    if (!selected || typeof selected !== 'string') return;
+    await openProject(selected);
+    window.location.reload();
+  };
+
+  const handleCloseProject = async () => {
+    await closeProject();
+    window.location.reload();
+  };
+
+  const openRecentProject = async (path: string) => {
+    await openProject(path);
+    window.location.reload();
+  };
+
+  const [recentProjectList, setRecentProjectList] = React.useState<RecentProject[]>([]);
+
+  React.useEffect(() => {
+    void recentProjects()
+      .then(setRecentProjectList)
+      .catch(() => setRecentProjectList([]));
+  }, []);
+
+  const clearProjectHistory = () => {
+    void clearRecentProjects()
+      .then(() => setRecentProjectList([]))
+      .catch(() => undefined);
+  };
 
   return (
     <Menubar>
@@ -157,6 +195,40 @@ const AppMenu = ({
             <FileInput className="mr-2 h-3.5 w-3.5" />
             Import Map...
           </MenubarItem>
+          <MenubarSeparator />
+          <MenubarSub>
+            <MenubarSubTrigger>
+              <Package className="mr-2 h-3.5 w-3.5" />
+              Project
+            </MenubarSubTrigger>
+            <MenubarSubContent>
+              {project && (
+                <>
+                  <MenubarLabel className="flex items-center gap-2">
+                    <Package className="h-3.5 w-3.5" />
+                    <span className="truncate">{project.name}</span>
+                  </MenubarLabel>
+                  <MenubarSeparator />
+                </>
+              )}
+              <MenubarItem onSelect={() => void pickProject()}>Open Project...</MenubarItem>
+              <MenubarItem disabled={!project} onSelect={() => void handleCloseProject()}>
+                Close Project
+              </MenubarItem>
+              {recentProjectList.length > 0 && (
+                <>
+                  <MenubarSeparator />
+                  {recentProjectList.map((entry) => (
+                    <MenubarItem key={entry.path} title={entry.path} onSelect={() => void openRecentProject(entry.path)}>
+                      {entry.name ?? basename(entry.path)}
+                    </MenubarItem>
+                  ))}
+                  <MenubarSeparator />
+                  <MenubarItem onSelect={clearProjectHistory}>Clear Recent Projects</MenubarItem>
+                </>
+              )}
+            </MenubarSubContent>
+          </MenubarSub>
           <MenubarSeparator />
           <MenubarItem disabled={!hasActive} onSelect={onCloseMap}>
             Close Map

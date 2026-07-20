@@ -84,7 +84,11 @@ pub struct OtbmVersionInfo {
 }
 
 #[tauri::command]
-pub fn peek_otbm_version(path: String) -> Result<OtbmVersionInfo, String> {
+pub fn peek_otbm_version(
+    app: tauri::AppHandle,
+    path: String,
+    project: tauri::State<crate::project::ProjectState>,
+) -> Result<OtbmVersionInfo, String> {
     let mut f = std::fs::File::open(&path).map_err(|e| format!("Failed to open {}: {}", path, e))?;
     let mut buf = vec![0u8; 256];
     use std::io::Read;
@@ -94,10 +98,14 @@ pub fn peek_otbm_version(path: String) -> Result<OtbmVersionInfo, String> {
     let (otbm_version, items_major, items_minor) = read_otbm_version(&buf)?;
     let dir_name = data_dir_for_otb_id(items_minor);
     let version = dir_name.and_then(|d| d.parse::<u32>().ok());
+    let active = project.lock().map_err(|e| e.to_string())?;
     let data_dir = dir_name.and_then(|d| {
-        let dir = crate::commands::data_dir_for(d.parse::<u32>().unwrap_or(0), None, None);
-        let otb = std::path::Path::new(&dir).join("items.otb");
-        otb.is_file().then_some(dir)
+        let v = d.parse::<u32>().unwrap_or(0);
+        let dir = match active.project.as_ref().and_then(|p| p.data_dir(v)) {
+            Some(dir) => dir,
+            None => std::path::PathBuf::from(crate::commands::legacy_data_dir(v, crate::settings::legacy_data_dir(&app))),
+        };
+        dir.join("items.otb").is_file().then(|| dir.to_string_lossy().into_owned())
     });
 
     Ok(OtbmVersionInfo { otbm_version, items_major, items_minor, data_dir, version })
