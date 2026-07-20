@@ -1,6 +1,7 @@
 import React from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { Save, Package, FilePlus, RefreshCw, FileInput, FolderOpen } from 'lucide-react';
+import { revealItemInDir } from '@tauri-apps/plugin-opener';
+import { Save, Package, FilePlus, RefreshCw, FileInput, FolderOpen, FolderOpenDot } from 'lucide-react';
 
 import { openDataDir } from '~/adapter/assets';
 import { openTilesetEditor } from '~/adapter/windows';
@@ -174,8 +175,17 @@ const AppMenu = ({
               ) : (
                 <>
                   {recent.map((path) => (
-                    <MenubarItem key={path} title={path} onSelect={() => onOpenRecent(path)}>
-                      {basename(path)}
+                    <MenubarItem key={path} title={path} onSelect={() => onOpenRecent(path)} className="group pr-1">
+                      <span className="flex-1 truncate">{basename(path)}</span>
+                      <button
+                        className="ml-2 inline-flex rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void revealItemInDir(path);
+                        }}
+                      >
+                        <FolderOpenDot className="h-3.5 w-3.5" />
+                      </button>
                     </MenubarItem>
                   ))}
                   <MenubarSeparator />
