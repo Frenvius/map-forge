@@ -353,6 +353,11 @@ const MapCanvas = (props: MapCanvasProps) => {
         onDoubleClick={interaction.handlers.onDoubleClick}
         onContextMenu={interaction.handlers.onContextMenu}
       />
+      <div
+        ref={scene.mapExtentRef}
+        style={{ transformOrigin: 'top left', boxShadow: '0 0 0 100000px rgba(0, 0, 0, 0.45)' }}
+        className="pointer-events-none absolute left-0 top-0 hidden"
+      />
       <canvas aria-hidden ref={overlayRef} className="pointer-events-none absolute left-0 top-0 h-full w-full" />
       <canvas aria-hidden ref={scene.huntCanvasRef} className="pointer-events-none absolute left-0 top-0 h-full w-full" />
       {activeTool === 'pen' && <PenOverlay camera={camera} pen={interaction.pen} />}

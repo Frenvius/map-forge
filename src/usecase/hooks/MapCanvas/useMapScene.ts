@@ -80,6 +80,7 @@ export interface MapScene {
   huntSelected: React.MutableRefObject<number | null>;
   huntAreaBoxRef: React.RefObject<HTMLDivElement>;
   huntCanvasRef: React.RefObject<HTMLCanvasElement>;
+  mapExtentRef: React.RefObject<HTMLDivElement>;
 }
 
 export function useMapScene(): MapScene {
@@ -118,6 +119,7 @@ export function useMapScene(): MapScene {
     huntDrag: React.useRef<{ index: number; moved: boolean } | null>(null),
     huntSelected: React.useRef<number | null>(null),
     huntAreaBoxRef: React.useRef<HTMLDivElement>(null),
-    huntCanvasRef: React.useRef<HTMLCanvasElement>(null)
+    huntCanvasRef: React.useRef<HTMLCanvasElement>(null),
+    mapExtentRef: React.useRef<HTMLDivElement>(null)
   };
 }

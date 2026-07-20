@@ -7,7 +7,7 @@ import { slotUV, GLRenderer } from '~/usecase/glRenderer';
 import { MapCanvasInputs } from '~/components/MapCanvas/types';
 import { floorShift, visibleFloorRange } from '~/usecase/floors';
 import { SpawnArea, CreaturePlacement } from '~/domain/creature';
-import { Position, ChunkTiles, PreviewTile } from '~/domain/map';
+import { MapMeta, Position, ChunkTiles, PreviewTile } from '~/domain/map';
 import { isCountStack, getSpriteIndex, stackSpriteIndex } from '~/domain/tibia';
 import { packChunkKey, previewPaint, fetchMapChunks, fetchChunkTooltips } from '~/adapter/map';
 import { TooltipBox, layoutTooltip, drawTooltipBox, buildTooltipFields, resolveTooltipTheme } from '~/usecase/tooltipOverlay';
@@ -65,6 +65,16 @@ export interface RendererDeps {
 
 const TOOLTIP_MIN_ZOOM = 0.5;
 const GOTO_HIGHLIGHT_MS = 1600;
+
+function chunkExtent(map: MapMeta) {
+  const { minX, minY, maxX, maxY } = map.bounds;
+  return {
+    minCx: Math.min(0, Math.floor(minX / CHUNK)),
+    minCy: Math.min(0, Math.floor(minY / CHUNK)),
+    maxCx: Math.max(Math.floor(maxX / CHUNK), Math.floor(Math.max(0, map.width - 1) / CHUNK)),
+    maxCy: Math.max(Math.floor(maxY / CHUNK), Math.floor(Math.max(0, map.height - 1) / CHUNK))
+  };
+}
 
 export function useMapRenderer(deps: RendererDeps) {
   const { canvasRef, overlayRef, gl, camera, inputs, atlas, tiles, tooltips, meshes, selection, scene, stats } = deps;
@@ -189,11 +199,7 @@ export function useMapRenderer(deps: RendererDeps) {
     const z = inputs.current.floorZ;
     const types = inputs.current.tooltipTypes;
     const theme = resolveTooltipTheme();
-    const { minX, minY, maxX, maxY } = inputs.current.map.bounds;
-    const minCx = Math.floor(minX / CHUNK);
-    const minCy = Math.floor(minY / CHUNK);
-    const maxCx = Math.floor(maxX / CHUNK);
-    const maxCy = Math.floor(maxY / CHUNK);
+    const { minCx, minCy, maxCx, maxCy } = chunkExtent(inputs.current.map);
     const startCx = Math.max(minCx, Math.floor(camX / CHUNK_WORLD));
     const endCx = Math.min(maxCx, Math.floor((camX + vw / zoom) / CHUNK_WORLD));
     const startCy = Math.max(minCy, Math.floor(camY / CHUNK_WORLD));
@@ -744,6 +750,20 @@ export function useMapRenderer(deps: RendererDeps) {
     el.style.transform = `translate(${(x0 - camX) * zoom}px, ${(y0 - camY) * zoom}px)`;
   }
 
+  function updateMapExtent(camX: number, camY: number, zoom: number) {
+    const el = scene.mapExtentRef.current;
+    if (!el) return;
+    const { width, height } = inputs.current.map;
+    if (width <= 0 || height <= 0) {
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = 'block';
+    el.style.width = `${width * TILE * zoom}px`;
+    el.style.height = `${height * TILE * zoom}px`;
+    el.style.transform = `translate(${-camX * zoom}px, ${-camY * zoom}px)`;
+  }
+
   function updateHuntAreaBox(camX: number, camY: number, zoom: number) {
     const el = scene.huntAreaBoxRef.current;
     if (!el) return;
@@ -912,11 +932,7 @@ export function useMapRenderer(deps: RendererDeps) {
       renderer.setHighlight(0.35 + 0.45 * Math.abs(Math.cos(t * Math.PI * 3)) * (1 - t));
     }
 
-    const { minX, minY, maxX, maxY } = inputs.current.map.bounds;
-    const minCx = Math.floor(minX / CHUNK);
-    const minCy = Math.floor(minY / CHUNK);
-    const maxCx = Math.floor(maxX / CHUNK);
-    const maxCy = Math.floor(maxY / CHUNK);
+    const { minCx, minCy, maxCx, maxCy } = chunkExtent(inputs.current.map);
 
     const { startZ, endZ } = visibleFloorRange(floorZ);
     const dimLowerFloors = startZ !== endZ;
@@ -1126,6 +1142,7 @@ export function useMapRenderer(deps: RendererDeps) {
     updateGhost(camX, camY, zoom);
     updateSelectionBox(camX, camY, zoom);
     updateSpawnBox(camX, camY, zoom);
+    updateMapExtent(camX, camY, zoom);
     updateHuntAreaBox(camX, camY, zoom);
     updateHouseExits(camX, camY, zoom);
     drawTooltips(camX, camY, zoom, vw, vh);
