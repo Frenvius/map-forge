@@ -155,8 +155,13 @@ export async function loadAssets(dataDir: string, clientDir: string, version = D
   const datPath = `${clientDir}/${otfi.metadataFile ?? 'Tibia.dat'}`;
   const sprPath = `${clientDir}/${otfi.spritesFile ?? 'Tibia.spr'}`;
 
-  const otbItemCount = await invoke<number>('load_otb', { path: `${dataDir}/items.otb` }).catch(() => 0);
-  await invoke<number>('load_materials', { dataDir }).catch(() => undefined);
+  const otbItemCount = await invoke<number>('load_otb', { path: `${dataDir}/items.otb` }).catch((e) => {
+    console.error(`load_otb failed for ${dataDir}/items.otb:`, e);
+    return 0;
+  });
+  await invoke<number>('load_materials', { dataDir }).catch((e) => {
+    console.error(`load_materials failed for ${dataDir}:`, e);
+  });
   const itemNames = await loadItemNames(dataDir);
   const creatures = await loadCreatureDb(dataDir);
   const [spawnMarkerClientId, waypointMarkerClientId] =

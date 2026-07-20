@@ -161,12 +161,18 @@ export const useMapTabs = (
     let cancelled = false;
     void (async () => {
       if (active.version !== version) {
-        await switchVersion(active.version).catch(() => undefined);
+        await switchVersion(active.version).catch((e) => {
+          console.error(`switchVersion to ${active.version} failed:`, e);
+          setError(`Failed to switch to client version ${active.version}: ${e}`);
+        });
       }
       if (cancelled) return;
       if (active.otbPath && active.otbPath !== loadedOtbPath.current) {
         loadedOtbPath.current = active.otbPath;
-        await loadOtb(active.otbPath).catch(() => undefined);
+        await loadOtb(active.otbPath).catch((e) => {
+          console.error(`load_otb failed for ${active.otbPath}:`, e);
+          setError(`Failed to load ${active.otbPath}: ${e}`);
+        });
       }
     })();
     setItemNames(active.itemNames);

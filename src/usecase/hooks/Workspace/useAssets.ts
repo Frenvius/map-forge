@@ -62,7 +62,10 @@ export const useAssets = (): AssetsState => {
     setVersion(v);
     loadedVersionRef.current = v;
 
-    const pal = await loadPalette(resolvedDataDir, a.items).catch(() => null);
+    const pal = await loadPalette(resolvedDataDir, a.items).catch((e) => {
+      console.error(`loadPalette failed for ${resolvedDataDir}:`, e);
+      return null;
+    });
     setPalette(pal);
   }, []);
 
@@ -122,14 +125,29 @@ export const useAssets = (): AssetsState => {
         }
         setClientConfigured(true);
         try {
-          if (active?.itemdb) await loadScriptedItemdb(active.itemdb).catch(() => 0);
+          if (active?.itemdb) {
+            await loadScriptedItemdb(active.itemdb).catch((e) => {
+              console.error(`loadScriptedItemdb failed for ${active.itemdb}:`, e);
+              return 0;
+            });
+          }
           await loadScriptedAssets(saved);
           const scripted = await buildScriptedAssets(saved);
           if (cancelled) return;
           setAssets(scripted);
-          await invoke('load_materials', { dataDir: resolvedDataDir }).catch(() => undefined);
-          const pal = await loadPalette(resolvedDataDir, scripted.items).catch(() => null);
+          const materialsError = await invoke('load_materials', { dataDir: resolvedDataDir }).then(
+            () => null,
+            (e) => {
+              console.error(`load_materials failed for ${resolvedDataDir}:`, e);
+              return String(e);
+            }
+          );
+          const pal = await loadPalette(resolvedDataDir, scripted.items).catch((e) => {
+            console.error(`loadPalette failed for ${resolvedDataDir}:`, e);
+            return null;
+          });
           setPalette(pal);
+          if (materialsError) setError(`Automagic is off - materials failed to load from ${resolvedDataDir}: ${materialsError}`);
           setStatus(`${ui.assets.label} ready - ${scripted.items.size} items${pal ? '' : ', no materials'}.`);
         } catch (e) {
           if (cancelled) return;
@@ -152,7 +170,10 @@ export const useAssets = (): AssetsState => {
         const a = await loadAssets(resolvedDataDir, clientDir, v);
         if (cancelled) return;
         setAssets(a);
-        const pal = await loadPalette(resolvedDataDir, a.items).catch(() => null);
+        const pal = await loadPalette(resolvedDataDir, a.items).catch((e) => {
+          console.error(`loadPalette failed for ${resolvedDataDir}:`, e);
+          return null;
+        });
         setPalette(pal);
         const parts = [`${a.spritesCount} sprites`];
         if (a.otbItemCount > 0) parts.push(`${a.otbItemCount} items`);
