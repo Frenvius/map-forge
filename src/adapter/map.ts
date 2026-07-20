@@ -267,6 +267,11 @@ export async function eraseArea(
   return invoke<number[]>('erase_area', { mapId, z, x0, y0, x1, y1, automagic, groundOnly });
 }
 
+export interface DeleteResult {
+  removed: number;
+  touched: [number, number][];
+}
+
 export async function deleteSelection(
   mapId: number,
   zs: number[],
@@ -274,8 +279,8 @@ export async function deleteSelection(
   ys: number[],
   all: boolean[],
   automagic: boolean
-): Promise<[number, number][]> {
-  return invoke<[number, number][]>('delete_selection', { mapId, zs, xs, ys, all, automagic });
+): Promise<DeleteResult> {
+  return invoke<DeleteResult>('delete_selection', { mapId, zs, xs, ys, all, automagic });
 }
 
 export async function copySelection(mapId: number, zs: number[], xs: number[], ys: number[], all: boolean[]): Promise<number> {

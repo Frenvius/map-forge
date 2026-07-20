@@ -1213,20 +1213,52 @@ pub fn erase_area(
 	Ok(touched.into_iter().collect())
 }
 
+fn auto_frontier(tiles: &HashSet<(u16, u16)>, voids: Option<&HashSet<(u16, u16)>>) -> HashSet<(u16, u16)> {
+	let Some(voids) = voids else {
+		return tiles.clone();
+	};
+	tiles
+		.iter()
+		.copied()
+		.filter(|&(x, y)| {
+			if !voids.contains(&(x, y)) {
+				return true;
+			}
+			for dy in -1i32..=1 {
+				for dx in -1i32..=1 {
+					let nx = (x as i32 + dx).clamp(0, u16::MAX as i32) as u16;
+					let ny = (y as i32 + dy).clamp(0, u16::MAX as i32) as u16;
+					if !voids.contains(&(nx, ny)) {
+						return true;
+					}
+				}
+			}
+			false
+		})
+		.collect()
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteResult {
+	pub removed: u32,
+	pub touched: Vec<(u8, u32)>,
+}
+
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-pub fn delete_selection(
+pub async fn delete_selection(
 	map_id: u32,
 	zs: Vec<u8>,
 	xs: Vec<u16>,
 	ys: Vec<u16>,
 	all: Vec<bool>,
 	automagic: bool,
-	otb_state: tauri::State<OtbState>,
-	map_state: tauri::State<MapState>,
-	materials_state: tauri::State<MaterialsState>,
-	placement_state: tauri::State<PlacementState>,
-) -> Result<Vec<(u8, u32)>, String> {
+	otb_state: tauri::State<'_, OtbState>,
+	map_state: tauri::State<'_, MapState>,
+	materials_state: tauri::State<'_, MaterialsState>,
+	placement_state: tauri::State<'_, PlacementState>,
+) -> Result<DeleteResult, String> {
 	if xs.len() != ys.len() || xs.len() != all.len() || xs.len() != zs.len() {
 		return Err("selection arrays length mismatch".into());
 	}
@@ -1252,31 +1284,37 @@ pub fn delete_selection(
 
 	let mut touched: HashSet<(u8, u32)> = HashSet::new();
 	let mut affected: HashMap<u8, HashSet<(u16, u16)>> = HashMap::new();
+	let mut emptied: HashMap<u8, HashSet<(u16, u16)>> = HashMap::new();
+	let mut removed = 0u32;
 	for i in 0..xs.len() {
 		let (z, x, y) = (zs[i], xs[i], ys[i]);
-		let stack = tile_stack_mut(m, z, x, y);
-		let changed = if all[i] {
-			let had = !stack.is_empty();
-			stack.clear();
-			had
-		} else {
-			stack.pop().is_some()
-		};
-		if changed {
-			touched.insert((z, chunk_key_of(x, y)));
-			affected.entry(z).or_default().insert((x, y));
+		if first_item_at(m, z, x, y).is_none() {
+			continue;
 		}
+		let stack = tile_stack_mut(m, z, x, y);
+		if all[i] {
+			stack.clear();
+		} else {
+			stack.pop();
+		}
+		if stack.is_empty() {
+			emptied.entry(z).or_default().insert((x, y));
+		}
+		removed += 1;
+		touched.insert((z, chunk_key_of(x, y)));
+		affected.entry(z).or_default().insert((x, y));
 	}
 
 	if automagic {
 		if let Some(mats) = mats {
 			for (&z, tiles) in &affected {
-				touched.extend(auto_all(m, mats, &place, otb, z, tiles).into_iter().map(|k| (z, k)));
+				let ring = auto_frontier(tiles, emptied.get(&z));
+				touched.extend(auto_all(m, mats, &place, otb, z, &ring).into_iter().map(|k| (z, k)));
 			}
 		}
 	}
 	m.record_commit(ACTION_DELETE);
-	Ok(touched.into_iter().collect())
+	Ok(DeleteResult { removed, touched: touched.into_iter().collect() })
 }
 
 #[tauri::command]

@@ -1198,17 +1198,19 @@ export function useMapInteraction(deps: InteractionDeps) {
 
     const s = selectionArrays();
     if (s) {
-      const count = s.xs.length;
+      let count = 0;
       deleteSelection(inputs.current.map.id, s.zs, s.xs, s.ys, s.all, inputs.current.automagic)
-        .then((touched) => {
+        .then((res) => {
+          count = res.removed;
           selection.clear();
-          return refetchTagged(touched);
+          return refetchTagged(res.touched);
         })
         .then(() => {
           pushCompound(selBefore, { hasItem: true, spawnBefore: spawnModel ? spawnBase : null, spawnAfter: spawnModel });
           atlas.version.current++;
           inputs.current.onSelect(null);
-          if (!silent) emit(`Deleted ${plural(count + markerCount, 'object')}`);
+          const total = count + markerCount;
+          if (!silent) emit(total > 0 ? `Deleted ${plural(total, 'object')}` : 'Nothing to delete');
         })
         .catch((err) => {
           console.error('Failed to delete selection', err);
