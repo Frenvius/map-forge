@@ -52,6 +52,8 @@ interface AppMenuProps {
   onAbout: () => void;
   onRequestExit: () => void;
   onImportMap: () => void;
+  onStripActionIds: () => void;
+  onStripUniqueIds: () => void;
 }
 
 const basename = (path: string) => path.split(/[\\/]/).pop() ?? path;
@@ -85,7 +87,9 @@ const AppMenu = ({
   onCheckUpdates,
   onAbout,
   onRequestExit,
-  onImportMap
+  onImportMap,
+  onStripActionIds,
+  onStripUniqueIds
 }: AppMenuProps) => {
   const {
     zoneVisibility,
@@ -274,6 +278,14 @@ const AppMenu = ({
               >
                 Visible Floors
               </MenubarCheckboxItem>
+            </MenubarSubContent>
+          </MenubarSub>
+          <MenubarSeparator />
+          <MenubarSub>
+            <MenubarSubTrigger disabled={!hasActive}>Dangerous</MenubarSubTrigger>
+            <MenubarSubContent>
+              <MenubarItem onSelect={onStripActionIds}>Strip All Action IDs</MenubarItem>
+              <MenubarItem onSelect={onStripUniqueIds}>Strip All Unique IDs</MenubarItem>
             </MenubarSubContent>
           </MenubarSub>
           <MenubarSeparator />

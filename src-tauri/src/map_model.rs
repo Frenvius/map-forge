@@ -182,6 +182,8 @@ pub struct MapModel {
 	pub(crate) waypoints: Vec<Waypoint>,
 	pub(crate) house_tile_count: u32,
 	pub(crate) item_attrs: HashMap<u64, ItemAttrs>,
+	pub(crate) strip_action_ids: bool,
+	pub(crate) strip_unique_ids: bool,
 	history: History,
 }
 
@@ -341,6 +343,8 @@ pub(crate) fn build_map_model(
 		waypoints: Vec::new(),
 		house_tile_count: 0,
 		item_attrs: HashMap::new(),
+		strip_action_ids: false,
+		strip_unique_ids: false,
 		history: History::default(),
 	}
 }
@@ -1281,6 +1285,8 @@ pub(crate) fn empty_model(width: u16, height: u16) -> MapModel {
 		waypoints: Vec::new(),
 		house_tile_count: 0,
 		item_attrs: HashMap::new(),
+		strip_action_ids: false,
+		strip_unique_ids: false,
 		history: History::default(),
 	}
 }
@@ -1340,6 +1346,8 @@ pub(crate) fn lazy_model(width: u16, height: u16, idx: &MapIndex, source: std::p
 		waypoints: Vec::new(),
 		house_tile_count: idx.house_tile_count,
 		item_attrs: HashMap::new(),
+		strip_action_ids: false,
+		strip_unique_ids: false,
 		history: History::default(),
 	}
 }
@@ -1622,6 +1630,38 @@ pub fn set_history_limits(map_id: u32, max_steps: u32, max_bytes: f64, map_state
 	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
 	m.set_history_limits(max_steps as usize, max_bytes as usize);
 	Ok(())
+}
+
+#[tauri::command]
+pub fn strip_action_ids(map_id: u32, map_state: tauri::State<MapState>) -> Result<u32, String> {
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+	let mut count = 0u32;
+	for attrs in m.item_attrs.values_mut() {
+		if attrs.action_id > 0 {
+			attrs.action_id = 0;
+			count += 1;
+		}
+	}
+	m.item_attrs.retain(|_, a| !a.is_default());
+	m.strip_action_ids = true;
+	Ok(count)
+}
+
+#[tauri::command]
+pub fn strip_unique_ids(map_id: u32, map_state: tauri::State<MapState>) -> Result<u32, String> {
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+	let mut count = 0u32;
+	for attrs in m.item_attrs.values_mut() {
+		if attrs.unique_id > 0 {
+			attrs.unique_id = 0;
+			count += 1;
+		}
+	}
+	m.item_attrs.retain(|_, a| !a.is_default());
+	m.strip_unique_ids = true;
+	Ok(count)
 }
 
 #[cfg(test)]

@@ -58,7 +58,7 @@ import { addWaypoint, nextWaypointName } from '~/usecase/waypointEdits';
 import { useMapCreatures } from '~/usecase/hooks/Workspace/useMapCreatures';
 import { useMapWaypoints } from '~/usecase/hooks/Workspace/useMapWaypoints';
 import { useAppShortcuts } from '~/usecase/hooks/Workspace/useAppShortcuts';
-import { getTowns, getMapProperties, setMapProperties } from '~/adapter/map';
+import { getTowns, getMapProperties, setMapProperties, stripActionIds, stripUniqueIds } from '~/adapter/map';
 import { AssetsProvider, useAssetsBundle } from '~/usecase/context/AssetsContext';
 import { useEditorSettings, EditorSettingsProvider } from '~/usecase/context/EditorSettingsContext';
 import { houseSizes, importLoad, importCommit, importCancel, importPreview, ImportPreview } from '~/adapter/map';
@@ -225,6 +225,8 @@ const App = () => {
   const [statsOpen, setStatsOpen] = React.useState(false);
   const [aboutOpen, setAboutOpen] = React.useState(false);
   const [closeConfirmOpen, setCloseConfirmOpen] = React.useState(false);
+  const [dangerousConfirm, setDangerousConfirm] = React.useState<'action-ids' | 'unique-ids' | null>(null);
+  const [idMarkersVersion, setIdMarkersVersion] = React.useState(0);
   const [scriptsOpen, setScriptsOpen] = React.useState(false);
   const [preferencesOpen, setPreferencesOpen] = React.useState(false);
   const [prefsTab, setPrefsTab] = React.useState<TabId>('general');
@@ -420,6 +422,19 @@ const App = () => {
 
   const [towns, setTownList] = React.useState<Town[]>([]);
   const activeMapId = active?.map.id ?? null;
+
+  const executeDangerousAction = React.useCallback(async () => {
+    if (activeMapId == null || !dangerousConfirm) return;
+    const count =
+      dangerousConfirm === 'action-ids' ? await stripActionIds(activeMapId) : await stripUniqueIds(activeMapId);
+    const label = dangerousConfirm === 'action-ids' ? 'action' : 'unique';
+    handleStatus(count > 0 ? `Stripped ${count} ${label} ID${count === 1 ? '' : 's'}` : `No ${label} IDs found`);
+    if (count > 0) {
+      markActiveDirty();
+      setIdMarkersVersion((v) => v + 1);
+    }
+    setDangerousConfirm(null);
+  }, [activeMapId, dangerousConfirm, handleStatus, markActiveDirty]);
   React.useEffect(() => {
     if (activeMapId === null) {
       setTownList([]);
@@ -818,7 +833,7 @@ const App = () => {
     }
     if (kind === 'idmarkers' && assets && active && idMarkersOpen) {
       return (
-        <IdMarkers dragHandle={handle} mapId={active.map.id} onGoto={gotoPosition} onClose={() => setIdMarkersOpen(false)} />
+        <IdMarkers dragHandle={handle} mapId={active.map.id} version={idMarkersVersion} onGoto={gotoPosition} onClose={() => setIdMarkersOpen(false)} />
       );
     }
     if (kind === 'minimap' && assets && active && minimapReady) {
@@ -884,6 +899,8 @@ const App = () => {
         onOpenRecent={(path) => void openPath(path)}
         onSelectPaletteCategory={setPaletteCategory}
         onCloseMap={() => activeId && closeTab(activeId)}
+        onStripActionIds={() => setDangerousConfirm('action-ids')}
+        onStripUniqueIds={() => setDangerousConfirm('unique-ids')}
       />
 
       <Preferences
@@ -912,6 +929,28 @@ const App = () => {
             </Button>
             <Button variant="destructive" onClick={() => void getCurrentWindow().destroy()}>
               Close without saving
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dangerousConfirm !== null} onOpenChange={(open) => !open && setDangerousConfirm(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {dangerousConfirm === 'action-ids' ? 'Strip All Action IDs' : 'Strip All Unique IDs'}
+            </DialogTitle>
+            <DialogDescription>
+              This will remove every {dangerousConfirm === 'action-ids' ? 'action' : 'unique'} ID from all items in the
+              map. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDangerousConfirm(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void executeDangerousAction()}>
+              Strip
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -20,6 +20,29 @@ const OTBM_ATTR_TILE_FLAGS: u8 = 3;
 const OTBM_ATTR_ITEM: u8 = 9;
 const OTBM_ATTR_HOUSEDOORID: u8 = 14;
 
+const OTBM_ATTR_ACTION_ID: u8 = 4;
+const OTBM_ATTR_UNIQUE_ID: u8 = 5;
+const OTBM_ATTR_TEXT: u8 = 6;
+const OTBM_ATTR_DESC: u8 = 7;
+const OTBM_ATTR_TELE_DEST: u8 = 8;
+const OTBM_ATTR_DEPOT_ID: u8 = 10;
+const OTBM_ATTR_RUNE_CHARGES: u8 = 12;
+const OTBM_ATTR_COUNT: u8 = 15;
+const OTBM_ATTR_CHARGES: u8 = 22;
+const OTBM_ATTR_TIER: u8 = 41;
+
+pub(crate) struct EmitCtx<'a> {
+	pub door_set: &'a HashSet<u16>,
+	pub strip_action_ids: bool,
+	pub strip_unique_ids: bool,
+}
+
+impl EmitCtx<'_> {
+	fn stripping(&self) -> bool {
+		self.strip_action_ids || self.strip_unique_ids
+	}
+}
+
 const OTBM_ATTR_DESCRIPTION: u8 = 1;
 const OTBM_ATTR_EXT_SPAWN_FILE: u8 = 11;
 const OTBM_ATTR_EXT_HOUSE_FILE: u8 = 13;
@@ -252,9 +275,69 @@ fn scan_node_end(b: &[u8], start: usize) -> usize {
 	b.len()
 }
 
-fn copy_children_inject_door(w: &mut NodeWriter, tail: &[u8], door_set: &HashSet<u16>, door_id: u8) {
+fn skip_item_attr(r: &mut EscReader, attr: u8) -> bool {
+	match attr {
+		OTBM_ATTR_COUNT | OTBM_ATTR_HOUSEDOORID | OTBM_ATTR_TIER | OTBM_ATTR_RUNE_CHARGES => {
+			r.u8();
+			true
+		}
+		OTBM_ATTR_ACTION_ID | OTBM_ATTR_UNIQUE_ID | OTBM_ATTR_CHARGES | OTBM_ATTR_DEPOT_ID => {
+			r.u16();
+			true
+		}
+		OTBM_ATTR_TELE_DEST => {
+			r.u16();
+			r.u16();
+			r.u8();
+			true
+		}
+		OTBM_ATTR_TEXT | OTBM_ATTR_DESC | OTBM_ATTR_DESCRIPTION => {
+			let n = r.u16() as usize;
+			for _ in 0..n {
+				r.u8();
+			}
+			true
+		}
+		_ => false,
+	}
+}
+
+fn emit_item_node(w: &mut NodeWriter, node: &[u8], inject_door: Option<u8>, ctx: &EmitCtx) {
+	let mut r = EscReader { b: node, pos: 1 };
+	if r.u8() != OTBM_ITEM {
+		w.raw_escaped(node);
+		return;
+	}
+	let id = r.u16();
+	w.node_start(OTBM_ITEM);
+	w.u16(id);
+	if let Some(d) = inject_door {
+		w.u8(OTBM_ATTR_HOUSEDOORID);
+		w.u8(d);
+	}
+
+	while let Some(b) = r.peek() {
+		if b == NODE_START || b == NODE_END {
+			break;
+		}
+		let attr_pos = r.pos;
+		let attr = r.u8();
+		if !skip_item_attr(&mut r, attr) {
+			w.raw_escaped(&node[attr_pos..]);
+			return;
+		}
+		let dropped = (attr == OTBM_ATTR_ACTION_ID && ctx.strip_action_ids)
+			|| (attr == OTBM_ATTR_UNIQUE_ID && ctx.strip_unique_ids);
+		if !dropped {
+			w.raw_escaped(&node[attr_pos..r.pos]);
+		}
+	}
+	w.raw_escaped(&node[r.pos..]);
+}
+
+fn copy_children(w: &mut NodeWriter, tail: &[u8], door_id: u8, ctx: &EmitCtx) {
 	let mut pos = 0usize;
-	let mut injected = false;
+	let mut injected = door_id == 0;
 	while pos < tail.len() {
 		match tail[pos] {
 			NODE_END => {
@@ -264,21 +347,17 @@ fn copy_children_inject_door(w: &mut NodeWriter, tail: &[u8], door_set: &HashSet
 			NODE_START => {
 				let ce = scan_node_end(tail, pos);
 				let mut hr = EscReader { b: tail, pos: pos + 1 };
-				let typ = hr.u8();
-				if typ == OTBM_ITEM && !injected {
-					let id = hr.u16();
-					if door_set.contains(&id) {
-						w.node_start(OTBM_ITEM);
-						w.u16(id);
-						w.u8(OTBM_ATTR_HOUSEDOORID);
-						w.u8(door_id);
-						w.raw_escaped(&tail[hr.pos..ce]);
-						injected = true;
-						pos = ce;
-						continue;
-					}
+				let inject = if !injected && hr.u8() == OTBM_ITEM && ctx.door_set.contains(&hr.u16()) {
+					injected = true;
+					Some(door_id)
+				} else {
+					None
+				};
+				if inject.is_some() || ctx.stripping() {
+					emit_item_node(w, &tail[pos..ce], inject, ctx);
+				} else {
+					w.raw_escaped(&tail[pos..ce]);
 				}
-				w.raw_escaped(&tail[pos..ce]);
 				pos = ce;
 			}
 			_ => {
@@ -289,7 +368,14 @@ fn copy_children_inject_door(w: &mut NodeWriter, tail: &[u8], door_set: &HashSet
 	}
 }
 
-fn emit_tile_override(w: &mut NodeWriter, span: &[u8], new_flags: Option<u32>, new_house: Option<u32>, new_door: Option<u8>, door_set: &HashSet<u16>) {
+struct TileOverride {
+	flags: Option<u32>,
+	house: Option<u32>,
+	door: Option<u8>,
+}
+
+fn emit_tile_override(w: &mut NodeWriter, span: &[u8], ov: TileOverride, ctx: &EmitCtx) {
+	let TileOverride { flags: new_flags, house: new_house, door: new_door } = ov;
 	let mut r = EscReader { b: span, pos: 2 };
 	let dx = r.u8();
 	let dy = r.u8();
@@ -327,13 +413,15 @@ fn emit_tile_override(w: &mut NodeWriter, span: &[u8], new_flags: Option<u32>, n
 			break;
 		}
 	}
-	match new_door {
-		Some(d) if d != 0 => copy_children_inject_door(w, &span[r.pos..], door_set, d),
-		_ => w.raw_escaped(&span[r.pos..]),
+	let door = new_door.unwrap_or(0);
+	if door != 0 || ctx.stripping() {
+		copy_children(w, &span[r.pos..], door, ctx);
+	} else {
+		w.raw_escaped(&span[r.pos..]);
 	}
 }
 
-fn emit_floor(w: &mut NodeWriter, bytes: Option<&[u8]>, z: u8, mut list: Vec<EmitTile>, door_set: &HashSet<u16>) -> Vec<ChunkEntry> {
+fn emit_floor(w: &mut NodeWriter, bytes: Option<&[u8]>, z: u8, mut list: Vec<EmitTile>, ctx: &EmitCtx) -> Vec<ChunkEntry> {
 	list.sort_unstable_by_key(|t| {
 		let (x, y) = t.xy();
 		(y / CHUNK, x / CHUNK, y, x)
@@ -361,12 +449,18 @@ fn emit_floor(w: &mut NodeWriter, bytes: Option<&[u8]>, z: u8, mut list: Vec<Emi
 		}
 		match *item {
 			EmitTile::Verbatim { start: s, end: e, .. } => {
-				w.raw_escaped(&bytes.expect("verbatim tile requires source bytes")[s..e]);
+				let span = &bytes.expect("verbatim tile requires source bytes")[s..e];
+				if ctx.stripping() {
+					emit_tile_override(w, span, TileOverride { flags: None, house: None, door: None }, ctx);
+				} else {
+					w.raw_escaped(span);
+				}
 			}
 			EmitTile::VerbatimOverride { start: s, end: e, flags, house, door, .. } => {
-				emit_tile_override(w, &bytes.expect("verbatim tile requires source bytes")[s..e], flags, house, door, door_set);
+				let span = &bytes.expect("verbatim tile requires source bytes")[s..e];
+				emit_tile_override(w, span, TileOverride { flags, house, door }, ctx);
 			}
-			EmitTile::Fresh { x, y, stack, flags, house, door } => serialize_tile_fresh(w, x, y, stack, flags, house, door, door_set),
+			EmitTile::Fresh { x, y, stack, flags, house, door } => serialize_tile_fresh(w, x, y, stack, flags, house, door, ctx.door_set),
 		}
 		count += 1;
 	}
@@ -438,7 +532,7 @@ fn build_index(model: &MapModel, chunks: Vec<ChunkEntry>, min_x: u16, min_y: u16
 	}
 }
 
-fn build_faithful(model: &MapModel, bytes: &[u8], door_set: &HashSet<u16>, report: &mut dyn FnMut(f64, &str)) -> Result<(Vec<u8>, MapIndex), String> {
+fn build_faithful(model: &MapModel, bytes: &[u8], ctx: &EmitCtx, report: &mut dyn FnMut(f64, &str)) -> Result<(Vec<u8>, MapIndex), String> {
 	let mut scan = SaveScan::default();
 	read_otbm(bytes, &mut scan)?;
 	report(0.1, "Re-encoding tiles");
@@ -528,7 +622,7 @@ fn build_faithful(model: &MapModel, bytes: &[u8], door_set: &HashSet<u16>, repor
 		if list.is_empty() {
 			continue;
 		}
-		chunks.extend(emit_floor(&mut w, Some(bytes), z, list, door_set));
+		chunks.extend(emit_floor(&mut w, Some(bytes), z, list, ctx));
 	}
 
 	serialize_towns(&mut w, model);
@@ -543,7 +637,7 @@ fn build_faithful(model: &MapModel, bytes: &[u8], door_set: &HashSet<u16>, repor
 	Ok((w.into_bytes(), index))
 }
 
-fn build_from_model(model: &MapModel, door_set: &HashSet<u16>, report: &mut dyn FnMut(f64, &str)) -> Result<(Vec<u8>, MapIndex), String> {
+fn build_from_model(model: &MapModel, ctx: &EmitCtx, report: &mut dyn FnMut(f64, &str)) -> Result<(Vec<u8>, MapIndex), String> {
 	let edits = flatten_edits(model);
 	let flag_edits = flatten_flag_edits(model);
 	let house_edits = flatten_house_edits(model);
@@ -624,7 +718,7 @@ fn build_from_model(model: &MapModel, door_set: &HashSet<u16>, report: &mut dyn 
 			.iter()
 			.map(|(x, y, st, fl, hs, dr)| EmitTile::Fresh { x: *x, y: *y, stack: st, flags: *fl, house: *hs, door: *dr })
 			.collect();
-		chunks.extend(emit_floor(&mut w, None, z, list, door_set));
+		chunks.extend(emit_floor(&mut w, None, z, list, ctx));
 	}
 
 	serialize_towns(&mut w, model);
@@ -710,10 +804,10 @@ pub(crate) fn export_tiles(model: &MapModel) -> Vec<ExportTile> {
 	out
 }
 
-fn build_otbm_bytes(model: &MapModel, source: Option<&[u8]>, door_set: &HashSet<u16>, report: &mut dyn FnMut(f64, &str)) -> Result<(Vec<u8>, MapIndex), String> {
+fn build_otbm_bytes(model: &MapModel, source: Option<&[u8]>, ctx: &EmitCtx, report: &mut dyn FnMut(f64, &str)) -> Result<(Vec<u8>, MapIndex), String> {
 	match source {
-		Some(bytes) => build_faithful(model, bytes, door_set, report),
-		None => build_from_model(model, door_set, report),
+		Some(bytes) => build_faithful(model, bytes, ctx, report),
+		None => build_from_model(model, ctx, report),
 	}
 }
 
@@ -749,8 +843,13 @@ pub async fn save_otbm(
 			None => None,
 		};
 
+		let ctx = EmitCtx {
+			door_set: &door_set,
+			strip_action_ids: model.strip_action_ids,
+			strip_unique_ids: model.strip_unique_ids,
+		};
 		let mut report = |value: f64, label: &str| emit(value, label);
-		let (out, mut idx) = build_otbm_bytes(model, source.as_deref(), &door_set, &mut report)?;
+		let (out, mut idx) = build_otbm_bytes(model, source.as_deref(), &ctx, &mut report)?;
 		idx.source_size = out.len() as u64;
 		emit(0.92, "Writing file...");
 		fs::write(&path, &out).map_err(|e| format!("Failed to write {}: {}", path, e))?;
@@ -840,6 +939,10 @@ mod tests {
 		}
 	}
 
+	fn ctx_with(door_set: &HashSet<u16>) -> EmitCtx<'_> {
+		EmitCtx { door_set, strip_action_ids: false, strip_unique_ids: false }
+	}
+
 	fn read_houses(bytes: &[u8]) -> Map<(u16, u16, u8), u32> {
 		let mut c = HouseCmp::default();
 		read_otbm(bytes, &mut c).unwrap();
@@ -858,9 +961,48 @@ mod tests {
 		let mut door_set = HashSet::new();
 		door_set.insert(0x04D2u16);
 		let mut w = NodeWriter::with_capacity(16);
-		copy_children_inject_door(&mut w, &tail, &door_set, 5);
+		copy_children(&mut w, &tail, 5, &ctx_with(&door_set));
 		let out = w.into_bytes();
 		assert_eq!(out, vec![0xFE, OTBM_ITEM, 0xD2, 0x04, OTBM_ATTR_HOUSEDOORID, 5, 0xFF, 0xFF]);
+	}
+
+	#[test]
+	fn strip_drops_only_the_targeted_id_attributes() {
+		let empty = HashSet::new();
+		let tail = [
+			0xFEu8,
+			OTBM_ITEM,
+			0xD2,
+			0x04,
+			OTBM_ATTR_ACTION_ID,
+			0x10,
+			0x27,
+			OTBM_ATTR_UNIQUE_ID,
+			0x20,
+			0x4E,
+			OTBM_ATTR_COUNT,
+			7,
+			0xFF,
+			0xFF,
+		];
+
+		let mut w = NodeWriter::with_capacity(32);
+		copy_children(&mut w, &tail, 0, &EmitCtx { door_set: &empty, strip_action_ids: true, strip_unique_ids: false });
+		assert_eq!(
+			w.into_bytes(),
+			vec![0xFE, OTBM_ITEM, 0xD2, 0x04, OTBM_ATTR_UNIQUE_ID, 0x20, 0x4E, OTBM_ATTR_COUNT, 7, 0xFF, 0xFF]
+		);
+
+		let mut w = NodeWriter::with_capacity(32);
+		copy_children(&mut w, &tail, 0, &EmitCtx { door_set: &empty, strip_action_ids: false, strip_unique_ids: true });
+		assert_eq!(
+			w.into_bytes(),
+			vec![0xFE, OTBM_ITEM, 0xD2, 0x04, OTBM_ATTR_ACTION_ID, 0x10, 0x27, OTBM_ATTR_COUNT, 7, 0xFF, 0xFF]
+		);
+
+		let mut w = NodeWriter::with_capacity(32);
+		copy_children(&mut w, &tail, 0, &EmitCtx { door_set: &empty, strip_action_ids: true, strip_unique_ids: true });
+		assert_eq!(w.into_bytes(), vec![0xFE, OTBM_ITEM, 0xD2, 0x04, OTBM_ATTR_COUNT, 7, 0xFF, 0xFF]);
 	}
 
 	#[test]
@@ -873,7 +1015,7 @@ mod tests {
 		let mut door_set = HashSet::new();
 		door_set.insert(1234u16);
 
-		let (out, _) = build_from_model(&model, &door_set, &mut |_, _| {}).unwrap();
+		let (out, _) = build_from_model(&model, &ctx_with(&door_set), &mut |_, _| {}).unwrap();
 		assert_eq!(read_houses(&out).get(&(10, 10, 7)), Some(&9));
 		assert_eq!(read_doors(&out).get(&(10, 10, 7)), Some(&3), "door item on the house tile carries its door id");
 	}
@@ -885,7 +1027,7 @@ mod tests {
 		let ck = crate::map_model::chunk_key_of(10, 10);
 		model.house_edits.entry(7).or_default().entry(ck).or_default().insert(pos, 42);
 
-		let (out, _) = build_from_model(&model, &HashSet::new(), &mut |_, _| {}).unwrap();
+		let (out, _) = build_from_model(&model, &ctx_with(&HashSet::new()), &mut |_, _| {}).unwrap();
 		assert_eq!(read_houses(&out).get(&(10, 10, 7)), Some(&42), "fresh house tile carries its house id");
 		assert_eq!(parse_tiles(&out).get(&(10, 10, 7)), Some(&vec![100]), "ground preserved on a house tile");
 	}
@@ -903,7 +1045,7 @@ mod tests {
 		let ck = crate::map_model::chunk_key_of(x, y);
 		model.house_edits.entry(z).or_default().entry(ck).or_default().insert(pos, 7);
 
-		let (out, _) = build_faithful(&model, &bytes, &HashSet::new(), &mut |_, _| {}).unwrap();
+		let (out, _) = build_faithful(&model, &bytes, &ctx_with(&HashSet::new()), &mut |_, _| {}).unwrap();
 		assert_eq!(parse_tiles(&out), before, "item stacks preserved when a house id is spliced in");
 		assert_eq!(read_houses(&out).get(&(x, y, z)), Some(&7), "house id spliced onto the verbatim tile");
 	}
@@ -929,7 +1071,7 @@ mod tests {
 		);
 		set_flag(&mut model, 7, 10, 10, 0x01);
 
-		let (out, _) = build_from_model(&model, &HashSet::new(), &mut |_, _| {}).unwrap();
+		let (out, _) = build_from_model(&model, &ctx_with(&HashSet::new()), &mut |_, _| {}).unwrap();
 		let mut cmp = FlagCmp::default();
 		read_otbm(&out, &mut cmp).unwrap();
 		assert_eq!(cmp.flags.get(&(10, 10, 7)), Some(&0x01), "tile flags written");
@@ -947,7 +1089,7 @@ mod tests {
 		let mut model = empty_model(0, 0);
 		set_flag(&mut model, z, x, y, 0x01);
 
-		let (out, _) = build_faithful(&model, &bytes, &HashSet::new(), &mut |_, _| {}).unwrap();
+		let (out, _) = build_faithful(&model, &bytes, &ctx_with(&HashSet::new()), &mut |_, _| {}).unwrap();
 		let after = parse_tiles(&out);
 		assert_eq!(before, after, "every tile's item stack is preserved when a zone flag is spliced in");
 
@@ -966,7 +1108,7 @@ mod tests {
 		let before = parse_tiles(&bytes);
 
 		let model = empty_model(0, 0);
-		let (out, _) = build_faithful(&model, &bytes, &HashSet::new(), &mut |_, _| {}).unwrap();
+		let (out, _) = build_faithful(&model, &bytes, &ctx_with(&HashSet::new()), &mut |_, _| {}).unwrap();
 		let after = parse_tiles(&out);
 
 		assert_eq!(before.len(), after.len(), "tile count unchanged");
@@ -976,7 +1118,7 @@ mod tests {
 	#[test]
 	fn footer_chunk_offsets_point_at_tile_areas() {
 		let bytes = std::fs::read("../data/860/forgotten.otbm").unwrap();
-		let (out, idx) = build_faithful(&empty_model(0, 0), &bytes, &HashSet::new(), &mut |_, _| {}).unwrap();
+		let (out, idx) = build_faithful(&empty_model(0, 0), &bytes, &ctx_with(&HashSet::new()), &mut |_, _| {}).unwrap();
 		let table = idx_to_table(&idx);
 		assert!(!table.is_empty(), "at least one chunk indexed");
 		for (_z, start, end, count) in table {
@@ -990,7 +1132,7 @@ mod tests {
 	#[test]
 	fn chunk_ranges_partition_every_tile() {
 		let bytes = std::fs::read("../data/860/forgotten.otbm").unwrap();
-		let (out, idx) = build_faithful(&empty_model(0, 0), &bytes, &HashSet::new(), &mut |_, _| {}).unwrap();
+		let (out, idx) = build_faithful(&empty_model(0, 0), &bytes, &ctx_with(&HashSet::new()), &mut |_, _| {}).unwrap();
 		let all = parse_tiles(&out);
 
 		let mut union: Map<(u16, u16, u8), Vec<u16>> = Map::new();
@@ -1018,7 +1160,7 @@ mod tests {
 
 		let otb = parse_otb(&std::fs::read("../data/860/items.otb").unwrap()).unwrap();
 		let src = std::fs::read("../data/860/forgotten.otbm").unwrap();
-		let (out, idx) = build_faithful(&empty_model(0, 0), &src, &HashSet::new(), &mut |_, _| {}).unwrap();
+		let (out, idx) = build_faithful(&empty_model(0, 0), &src, &ctx_with(&HashSet::new()), &mut |_, _| {}).unwrap();
 
 		let tmp = std::env::temp_dir().join("mapforge_lazy_ensure_test.otbm");
 		std::fs::write(&tmp, &out).unwrap();
@@ -1091,7 +1233,7 @@ mod tests {
 			Town { id: 2, name: "Carlin".to_string(), x: 32300, y: 31900, z: 6 },
 		];
 
-		let (out, idx) = build_from_model(&model, &HashSet::new(), &mut |_, _| {}).unwrap();
+		let (out, idx) = build_from_model(&model, &ctx_with(&HashSet::new()), &mut |_, _| {}).unwrap();
 		let mut meta = MetaCmp::default();
 		read_otbm(&out, &mut meta).unwrap();
 
@@ -1119,7 +1261,7 @@ mod tests {
 		let subtypes = vec![1u8; client_ids.len()];
 		let model = build_map_model(50, 50, &xs, &ys, &zs, &item_start, &item_count, &client_ids, &server_ids, &subtypes, &[], &[], &[], Vec::new(), 0);
 
-		let (out, idx) = build_from_model(&model, &HashSet::new(), &mut |_, _| {}).unwrap();
+		let (out, idx) = build_from_model(&model, &ctx_with(&HashSet::new()), &mut |_, _| {}).unwrap();
 		let tiles = parse_tiles(&out);
 
 		assert_eq!(tiles.get(&(10, 10, 7)), Some(&vec![100, 200, 300]));

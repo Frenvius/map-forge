@@ -34,6 +34,8 @@ interface ToolbarProps {
   onStatus: (message: string) => void;
   onRequestExit: () => void;
   onImportMap: () => void;
+  onStripActionIds: () => void;
+  onStripUniqueIds: () => void;
 }
 
 const Toolbar = ({
@@ -63,7 +65,9 @@ const Toolbar = ({
   onAbout,
   onStatus,
   onRequestExit,
-  onImportMap
+  onImportMap,
+  onStripActionIds,
+  onStripUniqueIds
 }: ToolbarProps) => {
   const win = getCurrentWindow();
   const updater = useUpdater();
@@ -131,6 +135,8 @@ const Toolbar = ({
         onToggleProperties={onToggleProperties}
         onCheckUpdates={() => void handleCheckUpdates()}
         onSelectPaletteCategory={onSelectPaletteCategory}
+        onStripActionIds={onStripActionIds}
+        onStripUniqueIds={onStripUniqueIds}
       />
 
       <div onMouseDown={stop} className="ml-auto flex items-center pr-2">

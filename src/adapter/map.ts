@@ -144,6 +144,14 @@ export async function listIdMarkers(mapId: number): Promise<IdMarker[]> {
   return invoke<IdMarker[]>('list_id_markers', { mapId });
 }
 
+export async function stripActionIds(mapId: number): Promise<number> {
+  return invoke<number>('strip_action_ids', { mapId });
+}
+
+export async function stripUniqueIds(mapId: number): Promise<number> {
+  return invoke<number>('strip_unique_ids', { mapId });
+}
+
 export async function setTowns(mapId: number, towns: Town[]): Promise<void> {
   await invoke('set_towns', { mapId, towns });
 }

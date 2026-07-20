@@ -54,7 +54,8 @@ use map_load::open_otbm;
 use map_meta::{get_map_properties, get_towns, get_waypoints, map_statistics, set_map_properties, set_towns};
 use map_model::{
 	attach_undo_sidecar, close_map, get_chunk_tooltips, get_map_chunks, get_minimap, get_tile_items, list_id_markers,
-	new_otbm, push_undo_sidecar, redo_edit, set_history_limits, set_minimap_palette, undo_edit, MapStore,
+	new_otbm, push_undo_sidecar, redo_edit, set_history_limits, set_minimap_palette, strip_action_ids, strip_unique_ids,
+	undo_edit, MapStore,
 };
 use map_save::save_otbm;
 
@@ -201,6 +202,8 @@ pub fn run() {
 			get_map_chunks,
 			get_chunk_tooltips,
 			list_id_markers,
+			strip_action_ids,
+			strip_unique_ids,
 			get_minimap,
 			set_minimap_palette,
 			set_window_acrylic,

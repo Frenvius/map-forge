@@ -8,12 +8,13 @@ import { DragHandleProps } from '~/components/Dock/DockablePanel';
 
 interface IdMarkersPanelProps {
   mapId: number | null;
+  version?: number;
   onClose?: () => void;
   dragHandle?: DragHandleProps;
   onGoto: (x: number, y: number, z: number) => void;
 }
 
-const IdMarkersPanel = ({ mapId, onGoto, dragHandle, onClose }: IdMarkersPanelProps) => {
+const IdMarkersPanel = ({ mapId, version, onGoto, dragHandle, onClose }: IdMarkersPanelProps) => {
   const [markers, setMarkers] = React.useState<IdMarker[]>([]);
   const [query, setQuery] = React.useState('');
 
@@ -29,7 +30,7 @@ const IdMarkersPanel = ({ mapId, onGoto, dragHandle, onClose }: IdMarkersPanelPr
     return () => {
       cancelled = true;
     };
-  }, [mapId]);
+  }, [mapId, version]);
 
   const list = React.useMemo(() => {
     const q = query.trim().toLowerCase();
