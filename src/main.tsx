@@ -270,7 +270,11 @@ const App = () => {
     if (activeIdRef.current) dirtyTabs.current.add(activeIdRef.current);
   }, []);
 
-  const handleHover = React.useCallback((info: HoverInfo | null) => statusApiRef.current?.setHover(info), []);
+  const cursorRef = React.useRef<{ x: number; y: number; z: number } | null>(null);
+  const handleHover = React.useCallback((info: HoverInfo | null) => {
+    statusApiRef.current?.setHover(info);
+    if (info) cursorRef.current = { x: info.x, y: info.y, z: info.z };
+  }, []);
   const handleSelect = React.useCallback((item: SelectedItem | null) => {
     setSelectedItem(item);
     statusApiRef.current?.setSelectedItem(item);
@@ -689,7 +693,7 @@ const App = () => {
   };
 
   const openEditTowns = () => {
-    if (active) setTownsOpen(true);
+    if (active) setTownsOpen((v) => !v);
   };
 
   const openMapProperties = () => {
@@ -915,7 +919,14 @@ const App = () => {
 
       <ScriptEditor open={scriptsOpen} onOpenChange={setScriptsOpen} />
 
-      <MapTowns open={townsOpen} onGoto={gotoPosition} onOpenChange={setTownsOpen} mapId={active?.map.id ?? null} />
+      <MapTowns
+        open={townsOpen}
+        onSaved={markActiveDirty}
+        cursorRef={cursorRef}
+        onGoto={gotoPosition}
+        mapId={active?.map.id ?? null}
+        onClose={() => setTownsOpen(false)}
+      />
 
       <MapProperties
         open={mapPropsOpen}
