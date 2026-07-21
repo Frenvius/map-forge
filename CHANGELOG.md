@@ -2,6 +2,38 @@
 
 All notable changes to Map Forge are documented here. Sections are generated from semantic commits at release time.
 
+## [0.1.2] - 2026-07-21
+
+### Added
+- Import Map window with a numeric offset and house/spawn merge options, plus an optional manual (drag-to-place) mode.
+- Editable item properties panel, including fluid recolor.
+- Containers tab in the Map IDs panel, with sort and delete.
+- Reveal a recent map in the file explorer.
+- Strip all action or unique IDs from the map.
+- Live box-selection size shown in the status bar.
+- Edit map width and height.
+- Scripted projects resolve asset paths from the .frg manifest before scripts run.
+- Reload script files from the Lua dialog.
+- Open the scripts folder from the Lua dialog.
+
+### Fixed
+- Asset and materials load failures are surfaced instead of failing silently.
+- Border and wall client IDs stay valid for maps without an OTB.
+- Ground brush rolls item variants by their declared chance.
+- Project item DB takes priority, and non-OTB item DBs are discovered.
+- Tooltips no longer clipped by panels.
+- Renders the full declared map area and shades outside it.
+- Assets-missing screen shows the scripted asset label.
+- Lua scripts dialog header aligned with its close button.
+
+### Performance
+- Faster selection delete.
+- Heavy map edits run off the main thread, keeping the UI responsive.
+- Smoother, faster box-paint ghost.
+
+### Changed
+- Town editor is now a floating panel instead of a modal dialog.
+
 ## [0.1.1] - 2026-07-02
 
 ### Added

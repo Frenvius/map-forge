@@ -1,6 +1,6 @@
 [package]
 name = "map-forge"
-version = "0.1.1"
+version = "0.1.2"
 description = "A Tibia OTBM map editor"
 edition = "2021"
 
