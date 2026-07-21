@@ -240,7 +240,7 @@ const App = () => {
   const statusApiRef = React.useRef<StatusBarApi | null>(null);
   const minimapApiRef = React.useRef<MinimapApi | null>(null);
   const mapCenterRef = React.useRef<((x: number, y: number) => void) | null>(null);
-  const mapHighlightRef = React.useRef<((x: number, y: number, z: number) => void) | null>(null);
+  const mapHighlightRef = React.useRef<((x: number, y: number, z: number, clientId?: number) => void) | null>(null);
   const mapRefetchRef = React.useRef<((tagged: [number, number][]) => void) | null>(null);
   const [importGhost, setImportGhost] = React.useState<{
     width: number;
@@ -719,10 +719,10 @@ const App = () => {
     if (active) setStatsOpen(true);
   };
 
-  const gotoPosition = (x: number, y: number, z: number) => {
+  const gotoPosition = (x: number, y: number, z: number, clientId?: number) => {
     setFloorZ(z);
     mapCenterRef.current?.(x, y);
-    mapHighlightRef.current?.(x, y, z);
+    mapHighlightRef.current?.(x, y, z, clientId);
   };
 
   useAppShortcuts({
@@ -833,7 +833,18 @@ const App = () => {
     }
     if (kind === 'idmarkers' && assets && active && idMarkersOpen) {
       return (
-        <IdMarkers dragHandle={handle} mapId={active.map.id} version={idMarkersVersion} onGoto={gotoPosition} onClose={() => setIdMarkersOpen(false)} />
+        <IdMarkers
+          dragHandle={handle}
+          mapId={active.map.id}
+          items={assets.items ?? null}
+          version={idMarkersVersion}
+          onGoto={gotoPosition}
+          onEdited={(tagged) => {
+            markActiveDirty();
+            if (tagged?.length) mapRefetchRef.current?.(tagged);
+          }}
+          onClose={() => setIdMarkersOpen(false)}
+        />
       );
     }
     if (kind === 'minimap' && assets && active && minimapReady) {

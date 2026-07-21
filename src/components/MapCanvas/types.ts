@@ -124,7 +124,7 @@ export interface MapCanvasProps {
   onViewChange?: (cx: number, cy: number) => void;
   viewRef?: React.MutableRefObject<MapView | null>;
   centerRef?: React.MutableRefObject<((x: number, y: number) => void) | null>;
-  highlightRef?: React.MutableRefObject<((x: number, y: number, z: number) => void) | null>;
+  highlightRef?: React.MutableRefObject<((x: number, y: number, z: number, clientId?: number) => void) | null>;
   refetchRef?: React.MutableRefObject<((tagged: [number, number][]) => void) | null>;
   importGhost?: { width: number; height: number; minZ: number; maxZ: number; preview: HTMLCanvasElement | null } | null;
   onImportDrop?: (pos: Position) => void;

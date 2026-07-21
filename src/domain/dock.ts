@@ -105,7 +105,7 @@ export const PANELS: Record<PanelKind, PanelMeta> = {
   },
   idmarkers: {
     id: 'idmarkers',
-    title: 'Action / Unique IDs',
+    title: 'Map IDs',
     variant: 'panel',
     resizable: true,
     stackable: true,

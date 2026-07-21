@@ -1594,6 +1594,73 @@ pub fn list_id_markers(
 	Ok(markers)
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemMarker {
+	pub x: u16,
+	pub y: u16,
+	pub z: u8,
+	pub client_id: u16,
+	pub server_id: u16,
+	pub has_contents: bool,
+}
+
+#[tauri::command]
+pub fn list_items_with_client_ids(
+	map_id: u32,
+	client_ids: Vec<u16>,
+	otb_state: tauri::State<OtbState>,
+	map_state: tauri::State<MapState>,
+) -> Result<Vec<ItemMarker>, String> {
+	let wanted: HashSet<u16> = client_ids.into_iter().collect();
+	if wanted.is_empty() {
+		return Ok(Vec::new());
+	}
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
+	let empty = OtbItems::default();
+	let otb = otb_guard.as_ref().unwrap_or(&empty);
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+
+	let floors = m.available_floors.clone();
+	for z in floors.iter().copied() {
+		m.ensure_floor(z, otb)?;
+	}
+
+	let mut out: Vec<ItemMarker> = Vec::new();
+	for z in floors {
+		let mut positions: Vec<(u16, u16)> = Vec::new();
+		if let Some(f) = m.floors.get(&z) {
+			for &(start, end) in f.values() {
+				for t in start as usize..end as usize {
+					positions.push((m.tile_x[t], m.tile_y[t]));
+				}
+			}
+		}
+		if let Some(c) = m.edits.get(&z) {
+			for tiles in c.values() {
+				for &pos in tiles.keys() {
+					positions.push(((pos >> 16) as u16, (pos & 0xFFFF) as u16));
+				}
+			}
+		}
+		positions.sort_unstable_by_key(|(x, y)| (*y, *x));
+		positions.dedup();
+		for (x, y) in positions {
+			for (idx, (client_id, server_id)) in stack_at(m, z, x, y).into_iter().enumerate() {
+				if wanted.contains(&client_id) {
+					let has_contents = m
+						.item_attrs
+						.get(&crate::formats::tibia::otbm::attrs_key(z, x, y, idx as u8))
+						.is_some_and(|a| a.has_contents);
+					out.push(ItemMarker { x, y, z, client_id, server_id, has_contents });
+				}
+			}
+		}
+	}
+	Ok(out)
+}
+
 #[tauri::command]
 pub fn undo_edit(map_id: u32, map_state: tauri::State<MapState>) -> Result<EditResult, String> {
 	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -1662,6 +1729,24 @@ pub fn strip_unique_ids(map_id: u32, map_state: tauri::State<MapState>) -> Resul
 	m.item_attrs.retain(|_, a| !a.is_default());
 	m.strip_unique_ids = true;
 	Ok(count)
+}
+
+#[tauri::command]
+pub fn clear_marker_at(map_id: u32, z: u8, x: u16, y: u16, action: bool, map_state: tauri::State<MapState>) -> Result<(), String> {
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+	for idx in 0..=255u8 {
+		let key = crate::formats::tibia::otbm::attrs_key(z, x, y, idx);
+		if let Some(a) = m.item_attrs.get_mut(&key) {
+			if action {
+				a.action_id = 0;
+			} else {
+				a.unique_id = 0;
+			}
+		}
+	}
+	m.item_attrs.retain(|_, a| !a.is_default());
+	Ok(())
 }
 
 #[cfg(test)]

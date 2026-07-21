@@ -40,6 +40,7 @@ pub struct ItemAttrs {
 	pub charges: u16,
 	pub tier: u8,
 	pub depot_id: u16,
+	pub has_contents: bool,
 }
 
 impl ItemAttrs {
@@ -51,6 +52,7 @@ impl ItemAttrs {
 			&& self.charges == 0
 			&& self.tier == 0
 			&& self.depot_id == 0
+			&& !self.has_contents
 	}
 }
 
@@ -424,11 +426,19 @@ impl<'a, V: OtbmVisitor> Parser<'a, V> {
 			}
 		}
 
+		self.r.skip_to_structural();
+		let mut has_child = false;
+		self.each_child(|p| {
+			has_child = true;
+			p.r.data_u8();
+			p.skip_subtree()
+		})?;
+		ia.has_contents = has_child;
+
 		if !ia.is_default() {
 			self.v.tile_item_attrs(tile_x, tile_y, base_z, item_idx as u8, ia);
 		}
-
-		self.skip_subtree()
+		Ok(())
 	}
 
 	fn skip_subtree(&mut self) -> Result<(), String> {

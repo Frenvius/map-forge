@@ -409,7 +409,7 @@ const AppMenu = ({
             onCheckedChange={onToggleIdMarkers}
             onSelect={(e) => e.preventDefault()}
           >
-            Action / Unique IDs
+            Map IDs
           </MenubarCheckboxItem>
           <MenubarSeparator />
           <MenubarItem onSelect={() => void openTilesetEditor()}>Tileset Editor...</MenubarItem>

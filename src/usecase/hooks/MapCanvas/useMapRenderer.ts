@@ -482,8 +482,10 @@ export function useMapRenderer(deps: RendererDeps) {
           }
         }
         const hl = scene.gotoHighlight.current;
-        const hlBit = hl && hl.z === z && hl.x === tx && hl.y === ty ? 4096 : 0;
-        const zoneBits = (ct.flags[i] ? visibleZoneBits(ct.flags[i], zoneVisibility) : 0) | houseBit | exitBit | blockBit | hlBit;
+        const hlTile = !!hl && hl.z === z && hl.x === tx && hl.y === ty;
+        const hlTileBit = hlTile && hl!.clientId == null ? 4096 : 0;
+        const zoneBitsBase =
+          (ct.flags[i] ? visibleZoneBits(ct.flags[i], zoneVisibility) : 0) | houseBit | exitBit | blockBit | hlTileBit;
         let drawElevation = 0;
         for (let ii = ct.itemOffset[i]; ii < end; ii++) {
           const thing = items.get(ct.clientIds[ii]);
@@ -496,6 +498,8 @@ export function useMapRenderer(deps: RendererDeps) {
           const oy = (thing.offsetY || 0) + drawElevation;
           const tint = selEntry ? (selEntry.all || ii === top ? 1 : 0) : 0;
           const spawn = groundSpawn !== 1 && (thing.isGround || thing.isGroundBorder) ? groundSpawn : 1;
+          const itemHlBit = hlTile && hl!.clientId != null && hl!.clientId === ct.clientIds[ii] ? 4096 : 0;
+          const zoneBits = zoneBitsBase | itemHlBit;
 
           for (let l = 0; l < thing.layers; l++) {
             for (let h = 0; h < thing.height; h++) {

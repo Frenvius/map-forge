@@ -1027,6 +1027,96 @@ pub fn delete_item(
 }
 
 #[tauri::command]
+pub fn remove_item_at(
+	map_id: u32,
+	z: u8,
+	x: u16,
+	y: u16,
+	client_id: u16,
+	otb_state: tauri::State<OtbState>,
+	map_state: tauri::State<MapState>,
+) -> Result<Vec<u32>, String> {
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
+	let empty = OtbItems::default();
+	let otb = otb_guard.as_ref().unwrap_or(&empty);
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+	m.ensure_tiles(z, &[(x, y)], otb)?;
+	m.record_begin();
+	let stack = tile_stack_mut(m, z, x, y);
+	let before = stack.len();
+	stack.retain(|&(c, _)| c != client_id);
+	let removed = stack.len() != before;
+	m.record_commit(ACTION_ERASE);
+	Ok(if removed { vec![chunk_key_of(x, y)] } else { Vec::new() })
+}
+
+#[tauri::command]
+pub fn remove_items_with_client_ids(
+	map_id: u32,
+	client_ids: Vec<u16>,
+	otb_state: tauri::State<OtbState>,
+	map_state: tauri::State<MapState>,
+) -> Result<Vec<(u32, u8)>, String> {
+	let wanted: HashSet<u16> = client_ids.into_iter().collect();
+	if wanted.is_empty() {
+		return Ok(Vec::new());
+	}
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
+	let empty = OtbItems::default();
+	let otb = otb_guard.as_ref().unwrap_or(&empty);
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+
+	let floors = m.available_floors.clone();
+	for z in floors.iter().copied() {
+		m.ensure_floor(z, otb)?;
+	}
+
+	let mut targets: Vec<(u8, u16, u16)> = Vec::new();
+	for z in floors {
+		let mut positions: Vec<(u16, u16)> = Vec::new();
+		if let Some(f) = m.floors.get(&z) {
+			for &(start, end) in f.values() {
+				for t in start as usize..end as usize {
+					positions.push((m.tile_x[t], m.tile_y[t]));
+				}
+			}
+		}
+		if let Some(c) = m.edits.get(&z) {
+			for tiles in c.values() {
+				for &pos in tiles.keys() {
+					positions.push(((pos >> 16) as u16, (pos & 0xFFFF) as u16));
+				}
+			}
+		}
+		positions.sort_unstable();
+		positions.dedup();
+		for (x, y) in positions {
+			if stack_at(m, z, x, y).iter().any(|&(c, _)| wanted.contains(&c)) {
+				targets.push((z, x, y));
+			}
+		}
+	}
+	if targets.is_empty() {
+		return Ok(Vec::new());
+	}
+
+	m.record_begin();
+	let mut touched: HashSet<(u32, u8)> = HashSet::new();
+	for (z, x, y) in targets {
+		let stack = tile_stack_mut(m, z, x, y);
+		let before = stack.len();
+		stack.retain(|&(c, _)| !wanted.contains(&c));
+		if stack.len() != before {
+			touched.insert((chunk_key_of(x, y), z));
+		}
+	}
+	m.record_commit(ACTION_ERASE);
+	Ok(touched.into_iter().collect())
+}
+
+#[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub fn erase_brush(
 	map_id: u32,

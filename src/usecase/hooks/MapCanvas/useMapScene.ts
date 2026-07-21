@@ -70,7 +70,7 @@ export interface MapScene {
   markerDrag: React.MutableRefObject<MarkerDrag | null>;
   markerDest: React.MutableRefObject<Position | null>;
   spawnResize: React.MutableRefObject<{ center: Position; radius: number } | null>;
-  gotoHighlight: React.MutableRefObject<{ x: number; y: number; z: number; start: number } | null>;
+  gotoHighlight: React.MutableRefObject<{ x: number; y: number; z: number; clientId?: number; start: number } | null>;
   huntRoute: React.MutableRefObject<HuntRouteRender | null>;
   huntRouteZ: React.MutableRefObject<number>;
   huntArea: React.MutableRefObject<HuntArea | null>;
@@ -110,7 +110,7 @@ export function useMapScene(): MapScene {
     markerDrag: React.useRef<MarkerDrag | null>(null),
     markerDest: React.useRef<Position | null>(null),
     spawnResize: React.useRef<{ center: Position; radius: number } | null>(null),
-    gotoHighlight: React.useRef<{ x: number; y: number; z: number; start: number } | null>(null),
+    gotoHighlight: React.useRef<{ x: number; y: number; z: number; clientId?: number; start: number } | null>(null),
     huntRoute: React.useRef<HuntRouteRender | null>(null),
     huntRouteZ: React.useRef(0),
     huntArea: React.useRef<HuntArea | null>(null),

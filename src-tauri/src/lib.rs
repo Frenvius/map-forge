@@ -37,7 +37,7 @@ use creatures::{
 use map_edit::{
 	borderize_brush, copy_selection, delete_item, delete_selection, erase_area, erase_brush, generate_apply, house_sizes, move_item, move_selection,
 	paint_tiles, paint_zone, paste_selection,
-	preview_paint, set_house, CopyBuffer,
+	preview_paint, remove_item_at, remove_items_with_client_ids, set_house, CopyBuffer,
 };
 use lua_format::{
 	item_name, item_names, item_sprite, load_scripted_assets, load_scripted_itemdb, open_scripted_map, registered_formats,
@@ -53,7 +53,8 @@ use map_import::{import_cancel, import_commit, import_load, import_preview, new_
 use map_load::open_otbm;
 use map_meta::{get_map_properties, get_towns, get_waypoints, map_statistics, set_map_properties, set_towns};
 use map_model::{
-	attach_undo_sidecar, close_map, get_chunk_tooltips, get_map_chunks, get_minimap, get_tile_items, list_id_markers,
+	attach_undo_sidecar, clear_marker_at, close_map, get_chunk_tooltips, get_map_chunks, get_minimap, get_tile_items,
+	list_id_markers, list_items_with_client_ids,
 	new_otbm, push_undo_sidecar, redo_edit, set_history_limits, set_minimap_palette, strip_action_ids, strip_unique_ids,
 	undo_edit, MapStore,
 };
@@ -202,6 +203,10 @@ pub fn run() {
 			get_map_chunks,
 			get_chunk_tooltips,
 			list_id_markers,
+			list_items_with_client_ids,
+			clear_marker_at,
+			remove_item_at,
+			remove_items_with_client_ids,
 			strip_action_ids,
 			strip_unique_ids,
 			get_minimap,

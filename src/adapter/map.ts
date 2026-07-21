@@ -144,6 +144,31 @@ export async function listIdMarkers(mapId: number): Promise<IdMarker[]> {
   return invoke<IdMarker[]>('list_id_markers', { mapId });
 }
 
+export interface ItemMarker {
+  x: number;
+  y: number;
+  z: number;
+  clientId: number;
+  serverId: number;
+  hasContents: boolean;
+}
+
+export async function listItemsWithClientIds(mapId: number, clientIds: number[]): Promise<ItemMarker[]> {
+  return invoke<ItemMarker[]>('list_items_with_client_ids', { mapId, clientIds });
+}
+
+export async function clearMarkerAt(mapId: number, x: number, y: number, z: number, action: boolean): Promise<void> {
+  return invoke('clear_marker_at', { mapId, x, y, z, action });
+}
+
+export async function removeItemAt(mapId: number, z: number, x: number, y: number, clientId: number): Promise<number[]> {
+  return invoke<number[]>('remove_item_at', { mapId, z, x, y, clientId });
+}
+
+export async function removeItemsWithClientIds(mapId: number, clientIds: number[]): Promise<[number, number][]> {
+  return invoke<[number, number][]>('remove_items_with_client_ids', { mapId, clientIds });
+}
+
 export async function stripActionIds(mapId: number): Promise<number> {
   return invoke<number>('strip_action_ids', { mapId });
 }

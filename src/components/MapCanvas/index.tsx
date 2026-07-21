@@ -193,8 +193,8 @@ const MapCanvas = (props: MapCanvasProps) => {
   React.useEffect(() => {
     const ref = props.highlightRef;
     if (!ref) return;
-    ref.current = (x, y, z) => {
-      scene.gotoHighlight.current = { x, y, z, start: performance.now() };
+    ref.current = (x, y, z, clientId) => {
+      scene.gotoHighlight.current = { x, y, z, clientId, start: performance.now() };
     };
     return () => {
       ref.current = null;
