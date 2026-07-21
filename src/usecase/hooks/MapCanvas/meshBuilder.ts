@@ -1,10 +1,10 @@
+import { Thing } from '~/domain/thing';
 import { slotUV } from '~/usecase/glRenderer';
 import { LoadedSprite } from '~/domain/sprite';
 import { SpawnArea, CreaturePlacement } from '~/domain/creature';
 import { isColorized, OutfitColors, colorizeOutfit } from '~/domain/outfit';
 import { TILE, CHUNK, MAX_ELEVATION } from '~/components/MapCanvas/constants';
-import { ThingType, isCountStack, getSpriteIndex, stackSpriteIndex } from '~/domain/tibia';
-import { Thing } from '~/domain/thing';
+import { ThingType, isCountStack, isFluidThing, getSpriteIndex, stackSpriteIndex, fluidSpriteIndex } from '~/domain/tibia';
 
 import { SpriteAtlas } from './useSpriteAtlas';
 import { ChunkTilesCache } from './useChunkTiles';
@@ -274,13 +274,14 @@ export function buildClipboardGhost(
       const px = thing.hangable ? 0 : thing.patternX > 0 ? tx % thing.patternX : 0;
       const py = thing.patternY > 0 ? ty % thing.patternY : 0;
       const countStack = isCountStack(thing);
-      const stackIdx = countStack ? stackSpriteIndex(thing, it.count) : 0;
+      const fluid = !countStack && isFluidThing(thing);
+      const frameIdx = countStack ? stackSpriteIndex(thing, it.count) : fluid ? fluidSpriteIndex(thing, it.count) : 0;
       const ox = (thing.offsetX || 0) + drawElevation;
       const oy = (thing.offsetY || 0) + drawElevation;
       for (let l = 0; l < thing.layers; l++) {
         for (let h = 0; h < thing.height; h++) {
           for (let w = 0; w < thing.width; w++) {
-            const sid = thing.spriteIndex[countStack ? stackIdx : getSpriteIndex(thing, w, h, l, px, py, 0, 0)];
+            const sid = thing.spriteIndex[countStack || fluid ? frameIdx : getSpriteIndex(thing, w, h, l, px, py, 0, 0)];
             if (!sid) continue;
             const data = atlas.data.current.get(sid);
             if (!data) {
@@ -343,14 +344,15 @@ export function buildSelectionGhost(
         const px = thing.hangable ? 0 : thing.patternX > 0 ? tx % thing.patternX : 0;
         const py = thing.patternY > 0 ? ty % thing.patternY : 0;
         const countStack = isCountStack(thing);
-        const stackIdx = countStack ? stackSpriteIndex(thing, ct.counts[ii]) : 0;
+        const fluid = !countStack && isFluidThing(thing);
+        const frameIdx = countStack ? stackSpriteIndex(thing, ct.counts[ii]) : fluid ? fluidSpriteIndex(thing, ct.counts[ii]) : 0;
         const ox = (thing.offsetX || 0) + drawElevation;
         const oy = (thing.offsetY || 0) + drawElevation;
 
         for (let l = 0; l < thing.layers; l++) {
           for (let h = 0; h < thing.height; h++) {
             for (let w = 0; w < thing.width; w++) {
-              const sid = thing.spriteIndex[countStack ? stackIdx : getSpriteIndex(thing, w, h, l, px, py, 0, 0)];
+              const sid = thing.spriteIndex[countStack || fluid ? frameIdx : getSpriteIndex(thing, w, h, l, px, py, 0, 0)];
               if (!sid) continue;
               const data = atlas.data.current.get(sid);
               if (!data || data.empty) continue;

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use tauri::ipc::Response;
 
 use crate::formats::tibia::otb::OtbItems;
-use crate::formats::tibia::otbm::{read_otbm_floor, ItemAttrs, OtbmVisitor};
+use crate::formats::tibia::otbm::{read_otbm_floor, ContainedItem, ItemAttrs, OtbmVisitor};
 use crate::formats::tibia::otbm_footer::MapIndex;
 use crate::{MapState, MinimapPaletteState, OtbState};
 
@@ -37,6 +37,7 @@ pub(crate) const ACTION_MOVE: u8 = 3;
 pub(crate) const ACTION_DELETE: u8 = 4;
 pub(crate) const ACTION_FLAG: u8 = 5;
 pub(crate) const ACTION_HOUSE: u8 = 6;
+pub(crate) const ACTION_ATTRS: u8 = 7;
 
 const DEFAULT_UNDO_STEPS: usize = 200;
 const DEFAULT_UNDO_BYTES: usize = 256 * 1024 * 1024;
@@ -70,12 +71,26 @@ struct DoorChange {
 	after: u8,
 }
 
+struct AttrChange {
+	key: u64,
+	before: Option<ItemAttrs>,
+	after: Option<ItemAttrs>,
+}
+
+struct ContentsChange {
+	key: u64,
+	before: Option<Vec<ContainedItem>>,
+	after: Option<Vec<ContainedItem>>,
+}
+
 #[derive(Default)]
 struct Batch {
 	items: Vec<TileChange>,
 	flags: Vec<FlagChange>,
 	houses: Vec<HouseChange>,
 	doors: Vec<DoorChange>,
+	attrs: Vec<AttrChange>,
+	contents: Vec<ContentsChange>,
 	sidecar_before: String,
 	sidecar_after: String,
 }
@@ -86,6 +101,8 @@ impl Batch {
 			&& self.flags.is_empty()
 			&& self.houses.is_empty()
 			&& self.doors.is_empty()
+			&& self.attrs.is_empty()
+			&& self.contents.is_empty()
 			&& self.sidecar_before.is_empty()
 			&& self.sidecar_after.is_empty()
 	}
@@ -96,6 +113,8 @@ impl Batch {
 			+ self.flags.len() * 16
 			+ self.houses.len() * 16
 			+ self.doors.len() * 8
+			+ self.attrs.len() * 80
+			+ self.contents.len() * 128
 			+ self.sidecar_before.len()
 			+ self.sidecar_after.len()
 			+ 64
@@ -115,6 +134,8 @@ struct History {
 	flag_recording: Option<HashMap<(u8, u32), u32>>,
 	house_recording: Option<HashMap<(u8, u32), u32>>,
 	door_recording: Option<HashMap<(u8, u32), u8>>,
+	attr_recording: Option<HashMap<u64, Option<ItemAttrs>>>,
+	contents_recording: Option<HashMap<u64, Option<Vec<ContainedItem>>>>,
 	undo: Vec<Batch>,
 	redo: Vec<Batch>,
 	last_kind: u8,
@@ -131,6 +152,8 @@ impl Default for History {
 			flag_recording: None,
 			house_recording: None,
 			door_recording: None,
+			attr_recording: None,
+			contents_recording: None,
 			undo: Vec::new(),
 			redo: Vec::new(),
 			last_kind: 0,
@@ -182,6 +205,7 @@ pub struct MapModel {
 	pub(crate) waypoints: Vec<Waypoint>,
 	pub(crate) house_tile_count: u32,
 	pub(crate) item_attrs: HashMap<u64, ItemAttrs>,
+	pub(crate) container_contents: HashMap<u64, Vec<ContainedItem>>,
 	pub(crate) strip_action_ids: bool,
 	pub(crate) strip_unique_ids: bool,
 	history: History,
@@ -343,6 +367,7 @@ pub(crate) fn build_map_model(
 		waypoints: Vec::new(),
 		house_tile_count: 0,
 		item_attrs: HashMap::new(),
+		container_contents: HashMap::new(),
 		strip_action_ids: false,
 		strip_unique_ids: false,
 		history: History::default(),
@@ -401,9 +426,15 @@ pub(crate) fn serialize_chunks(m: &MapModel, z: u8, keys: &[u32]) -> Vec<u8> {
 		}
 		if let Some(c) = edits_chunk {
 			for (&pos, stack) in c {
-				let base = base_flags(m, z, k, (pos >> 16) as u16, (pos & 0xFFFF) as u16);
-				let house = base_house_id(m, z, k, (pos >> 16) as u16, (pos & 0xFFFF) as u16);
-				let items = stack.iter().map(|&(cl, sv)| (cl, sv, 1u8)).collect();
+				let x = (pos >> 16) as u16;
+				let y = (pos & 0xFFFF) as u16;
+				let base = base_flags(m, z, k, x, y);
+				let house = base_house_id(m, z, k, x, y);
+				let items = stack
+					.iter()
+					.enumerate()
+					.map(|(idx, &(cl, sv))| (cl, sv, subtype_at(m, z, x, y, idx)))
+					.collect();
 				by_pos.insert(pos, (base, house, items));
 			}
 		}
@@ -617,6 +648,16 @@ pub(crate) fn base_subtype(m: &MapModel, z: u8, chunk_key: u32, x: u16, y: u16, 
 		}
 	}
 	1
+}
+
+pub(crate) fn subtype_at(m: &MapModel, z: u8, x: u16, y: u16, item_idx: usize) -> u8 {
+	let key = crate::formats::tibia::otbm::attrs_key(z, x, y, item_idx as u8);
+	if let Some(a) = m.item_attrs.get(&key) {
+		if a.subtype > 0 {
+			return a.subtype;
+		}
+	}
+	base_subtype(m, z, chunk_key_of(x, y), x, y, item_idx)
 }
 
 pub(crate) fn base_door_id(m: &MapModel, z: u8, chunk_key: u32, x: u16, y: u16) -> u8 {
@@ -869,10 +910,14 @@ impl MapModel {
 				house_ids: Vec::new(),
 				door_ids: Vec::new(),
 				attrs: Vec::new(),
+				contents: Vec::new(),
 			};
 			read_otbm_floor(&slice, &mut col)?;
 			for (x, y, idx, a) in &col.attrs {
 				self.item_attrs.insert(crate::formats::tibia::otbm::attrs_key(z, *x, *y, *idx), a.clone());
+			}
+			for (x, y, idx, c) in col.contents.drain(..) {
+				self.container_contents.insert(crate::formats::tibia::otbm::attrs_key(z, x, y, idx), c);
 			}
 			self.append_chunk(z, key, &col);
 			self.loaded_chunks.insert(ckey(z, key));
@@ -924,6 +969,12 @@ impl MapModel {
 		if self.history.door_recording.is_none() {
 			self.history.door_recording = Some(HashMap::new());
 		}
+		if self.history.attr_recording.is_none() {
+			self.history.attr_recording = Some(HashMap::new());
+		}
+		if self.history.contents_recording.is_none() {
+			self.history.contents_recording = Some(HashMap::new());
+		}
 	}
 
 	pub(crate) fn set_tile_flags(&mut self, z: u8, x: u16, y: u16, new_flags: u32) {
@@ -956,11 +1007,39 @@ impl MapModel {
 		self.door_edits.entry(z).or_default().entry(chunk_key).or_default().insert(pos, door_id);
 	}
 
+	pub(crate) fn set_item_attr(&mut self, key: u64, new_attrs: ItemAttrs) {
+		if let Some(r) = self.history.attr_recording.as_mut() {
+			if !r.contains_key(&key) {
+				r.insert(key, self.item_attrs.get(&key).cloned());
+			}
+		}
+		if new_attrs.is_default() {
+			self.item_attrs.remove(&key);
+		} else {
+			self.item_attrs.insert(key, new_attrs);
+		}
+	}
+
+	pub(crate) fn set_container_contents(&mut self, key: u64, contents: Vec<ContainedItem>) {
+		if let Some(r) = self.history.contents_recording.as_mut() {
+			if !r.contains_key(&key) {
+				r.insert(key, self.container_contents.get(&key).cloned());
+			}
+		}
+		if contents.is_empty() {
+			self.container_contents.remove(&key);
+		} else {
+			self.container_contents.insert(key, contents);
+		}
+	}
+
 	pub(crate) fn record_commit(&mut self, kind: u8) {
 		let item_before = self.history.recording.take();
 		let flag_before = self.history.flag_recording.take();
 		let house_before = self.history.house_recording.take();
 		let door_before = self.history.door_recording.take();
+		let attr_before = self.history.attr_recording.take();
+		let contents_before = self.history.contents_recording.take();
 		let mut items: Vec<TileChange> = item_before
 			.into_iter()
 			.flatten()
@@ -993,7 +1072,29 @@ impl MapModel {
 				(before != after).then_some(DoorChange { z, pos, before, after })
 			})
 			.collect();
-		if items.is_empty() && flags.is_empty() && houses.is_empty() && doors.is_empty() {
+		let mut attrs: Vec<AttrChange> = attr_before
+			.into_iter()
+			.flatten()
+			.filter_map(|(key, before)| {
+				let after = self.item_attrs.get(&key).cloned();
+				(before != after).then_some(AttrChange { key, before, after })
+			})
+			.collect();
+		let mut contents: Vec<ContentsChange> = contents_before
+			.into_iter()
+			.flatten()
+			.filter_map(|(key, before)| {
+				let after = self.container_contents.get(&key).cloned();
+				(before != after).then_some(ContentsChange { key, before, after })
+			})
+			.collect();
+		if items.is_empty()
+			&& flags.is_empty()
+			&& houses.is_empty()
+			&& doors.is_empty()
+			&& attrs.is_empty()
+			&& contents.is_empty()
+		{
 			return;
 		}
 
@@ -1030,6 +1131,18 @@ impl MapModel {
 						None => group.doors.push(ch),
 					}
 				}
+				for ch in attrs.drain(..) {
+					match group.attrs.iter_mut().find(|c| c.key == ch.key) {
+						Some(existing) => existing.after = ch.after,
+						None => group.attrs.push(ch),
+					}
+				}
+				for ch in contents.drain(..) {
+					match group.contents.iter_mut().find(|c| c.key == ch.key) {
+						Some(existing) => existing.after = ch.after,
+						None => group.contents.push(ch),
+					}
+				}
 				let new = group.memsize();
 				self.history.used_bytes = self.history.used_bytes + new - old;
 			}
@@ -1040,6 +1153,8 @@ impl MapModel {
 				flags,
 				houses,
 				doors,
+				attrs,
+				contents,
 				..Default::default()
 			});
 		}
@@ -1230,6 +1345,24 @@ impl MapModel {
 			let chunk_key = chunk_key_of((ch.pos >> 16) as u16, (ch.pos & 0xFFFF) as u16);
 			touched.insert((ch.z, chunk_key));
 		}
+		for ch in &batch.attrs {
+			let val = if to_before { &ch.before } else { &ch.after };
+			match val {
+				Some(a) => { self.item_attrs.insert(ch.key, a.clone()); }
+				None => { self.item_attrs.remove(&ch.key); }
+			}
+		}
+		for ch in &batch.contents {
+			let val = if to_before { &ch.before } else { &ch.after };
+			match val {
+				Some(c) => { self.container_contents.insert(ch.key, c.clone()); }
+				None => { self.container_contents.remove(&ch.key); }
+			}
+			let z = (ch.key >> 40) as u8;
+			let x = ((ch.key >> 24) & 0xFFFF) as u16;
+			let y = ((ch.key >> 8) & 0xFFFF) as u16;
+			touched.insert((z, chunk_key_of(x, y)));
+		}
 		touched.into_iter().collect()
 	}
 }
@@ -1285,6 +1418,7 @@ pub(crate) fn empty_model(width: u16, height: u16) -> MapModel {
 		waypoints: Vec::new(),
 		house_tile_count: 0,
 		item_attrs: HashMap::new(),
+		container_contents: HashMap::new(),
 		strip_action_ids: false,
 		strip_unique_ids: false,
 		history: History::default(),
@@ -1346,6 +1480,7 @@ pub(crate) fn lazy_model(width: u16, height: u16, idx: &MapIndex, source: std::p
 		waypoints: Vec::new(),
 		house_tile_count: idx.house_tile_count,
 		item_attrs: HashMap::new(),
+		container_contents: HashMap::new(),
 		strip_action_ids: false,
 		strip_unique_ids: false,
 		history: History::default(),
@@ -1365,6 +1500,7 @@ struct FloorCollector<'a> {
 	house_ids: Vec<u32>,
 	door_ids: Vec<u8>,
 	attrs: Vec<(u16, u16, u8, ItemAttrs)>,
+	contents: Vec<(u16, u16, u8, Vec<ContainedItem>)>,
 }
 
 impl OtbmVisitor for FloorCollector<'_> {
@@ -1409,6 +1545,9 @@ impl OtbmVisitor for FloorCollector<'_> {
 	}
 	fn tile_item_attrs(&mut self, x: u16, y: u16, _z: u8, stack_idx: u8, attrs: ItemAttrs) {
 		self.attrs.push((x, y, stack_idx, attrs));
+	}
+	fn tile_item_contents(&mut self, x: u16, y: u16, _z: u8, stack_idx: u8, contents: Vec<ContainedItem>) {
+		self.contents.push((x, y, stack_idx, contents));
 	}
 }
 
@@ -1495,12 +1634,18 @@ pub struct TileItemEntry {
 	pub server_id: u16,
 	pub client_id: u16,
 	pub subtype: u8,
+	pub group: u8,
+	pub kind: String,
 	pub action_id: u16,
 	pub unique_id: u16,
 	pub text: String,
 	pub desc: String,
 	pub charges: u16,
 	pub tier: u8,
+	pub depot_id: u16,
+	pub tele_x: u16,
+	pub tele_y: u16,
+	pub tele_z: u8,
 }
 
 #[derive(Serialize)]
@@ -1536,17 +1681,23 @@ pub fn get_tile_items(
 	for (i, &(cid, sid)) in stack.iter().enumerate() {
 		let key = crate::formats::tibia::otbm::attrs_key(z, x, y, i as u8);
 		let a = m.item_attrs.get(&key);
-		let sub = base_subtype(m, z, chunk_key, x, y, i);
+		let sub = subtype_at(m, z, x, y, i);
 		items.push(TileItemEntry {
 			server_id: sid,
 			client_id: cid,
 			subtype: sub,
+			group: otb.group(sid),
+			kind: otb.kind(sid).to_string(),
 			action_id: a.map_or(0, |a| a.action_id),
 			unique_id: a.map_or(0, |a| a.unique_id),
 			text: a.map_or_else(String::new, |a| a.text.clone()),
 			desc: a.map_or_else(String::new, |a| a.desc.clone()),
 			charges: a.map_or(0, |a| a.charges),
 			tier: a.map_or(0, |a| a.tier),
+			depot_id: a.map_or(0, |a| a.depot_id),
+			tele_x: a.map_or(0, |a| a.tele_x),
+			tele_y: a.map_or(0, |a| a.tele_y),
+			tele_z: a.map_or(0, |a| a.tele_z),
 		});
 	}
 	Ok(TilePropertiesPayload { flags: tile_flags, house_id: tile_house, door_id: tile_door, items })
@@ -1746,6 +1897,252 @@ pub fn clear_marker_at(map_id: u32, z: u8, x: u16, y: u16, action: bool, map_sta
 		}
 	}
 	m.item_attrs.retain(|_, a| !a.is_default());
+	Ok(())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemAttrsPatch {
+	pub action_id: u16,
+	pub unique_id: u16,
+	pub text: String,
+	pub desc: String,
+	pub charges: u16,
+	pub tier: u8,
+	pub depot_id: u16,
+	pub subtype: u8,
+	pub tele_x: u16,
+	pub tele_y: u16,
+	pub tele_z: u8,
+}
+
+#[tauri::command]
+pub fn set_item_attrs(
+	map_id: u32,
+	z: u8,
+	x: u16,
+	y: u16,
+	stack_idx: u8,
+	patch: ItemAttrsPatch,
+	map_state: tauri::State<MapState>,
+) -> Result<(), String> {
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+
+	let key = crate::formats::tibia::otbm::attrs_key(z, x, y, stack_idx);
+	let new_attrs = ItemAttrs {
+		action_id: patch.action_id,
+		unique_id: patch.unique_id,
+		text: patch.text,
+		desc: patch.desc,
+		charges: patch.charges,
+		tier: patch.tier,
+		depot_id: patch.depot_id,
+		subtype: patch.subtype,
+		has_contents: m.item_attrs.get(&key).map_or(false, |a| a.has_contents),
+		tele_x: patch.tele_x,
+		tele_y: patch.tele_y,
+		tele_z: patch.tele_z,
+	};
+
+	let old_tele = m.item_attrs.get(&key).map(|a| (a.tele_x, a.tele_y, a.tele_z));
+	let new_tele = (patch.tele_x, patch.tele_y, patch.tele_z);
+
+	m.record_begin();
+	m.set_item_attr(key, new_attrs);
+
+	let pos = (x as u32) << 16 | y as u32;
+	let chunk_key = chunk_key_of(x, y);
+	if !m.edits.get(&z).and_then(|f| f.get(&chunk_key)).is_some_and(|c| c.contains_key(&pos)) {
+		let stack = stack_at(m, z, x, y);
+		m.edits.entry(z).or_default().entry(chunk_key).or_default().insert(pos, stack);
+	}
+
+	m.record_commit(ACTION_ATTRS);
+
+	if old_tele != Some(new_tele) {
+		update_teleport_blob(m, x, y, z, new_tele.0, new_tele.1, new_tele.2);
+	}
+
+	Ok(())
+}
+
+fn update_teleport_blob(m: &mut MapModel, sx: u16, sy: u16, sz: u8, dx: u16, dy: u16, dz: u8) {
+	let count = m.teleport_count as usize;
+	for i in 0..count {
+		let off = i * 10;
+		let ex = u16::from_le_bytes([m.teleports[off], m.teleports[off + 1]]);
+		let ey = u16::from_le_bytes([m.teleports[off + 2], m.teleports[off + 3]]);
+		let ez = m.teleports[off + 4];
+		if ex == sx && ey == sy && ez == sz {
+			if dx == 0 && dy == 0 && dz == 0 {
+				m.teleports.drain(off..off + 10);
+				m.teleport_count -= 1;
+			} else {
+				m.teleports[off + 5..off + 7].copy_from_slice(&dx.to_le_bytes());
+				m.teleports[off + 7..off + 9].copy_from_slice(&dy.to_le_bytes());
+				m.teleports[off + 9] = dz;
+			}
+			return;
+		}
+	}
+	if dx != 0 || dy != 0 || dz != 0 {
+		m.teleports.extend_from_slice(&sx.to_le_bytes());
+		m.teleports.extend_from_slice(&sy.to_le_bytes());
+		m.teleports.push(sz);
+		m.teleports.extend_from_slice(&dx.to_le_bytes());
+		m.teleports.extend_from_slice(&dy.to_le_bytes());
+		m.teleports.push(dz);
+		m.teleport_count += 1;
+	}
+}
+
+fn ensure_tile_edited(m: &mut MapModel, z: u8, x: u16, y: u16) {
+	let pos = (x as u32) << 16 | y as u32;
+	let chunk_key = chunk_key_of(x, y);
+	if !m.edits.get(&z).and_then(|f| f.get(&chunk_key)).is_some_and(|c| c.contains_key(&pos)) {
+		let stack = stack_at(m, z, x, y);
+		m.edits.entry(z).or_default().entry(chunk_key).or_default().insert(pos, stack);
+	}
+}
+
+fn sync_has_contents(m: &mut MapModel, key: u64, has: bool) {
+	let cur = m.item_attrs.get(&key).map(|a| a.has_contents).unwrap_or(false);
+	if cur != has {
+		let mut a = m.item_attrs.get(&key).cloned().unwrap_or_default();
+		a.has_contents = has;
+		m.set_item_attr(key, a);
+	}
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerItemDto {
+	pub server_id: u16,
+	pub client_id: u16,
+	pub subtype: u8,
+	pub has_contents: bool,
+}
+
+fn nav_contents<'a>(root: &'a [ContainedItem], path: &[u32]) -> Option<&'a [ContainedItem]> {
+	let mut cur = root;
+	for &i in path {
+		cur = &cur.get(i as usize)?.items;
+	}
+	Some(cur)
+}
+
+fn nav_contents_mut<'a>(root: &'a mut Vec<ContainedItem>, path: &[u32]) -> Option<&'a mut Vec<ContainedItem>> {
+	let mut cur = root;
+	for &i in path {
+		cur = &mut cur.get_mut(i as usize)?.items;
+	}
+	Some(cur)
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub fn get_container(
+	map_id: u32,
+	z: u8,
+	x: u16,
+	y: u16,
+	stack_idx: u8,
+	path: Vec<u32>,
+	otb_state: tauri::State<OtbState>,
+	map_state: tauri::State<MapState>,
+) -> Result<Vec<ContainerItemDto>, String> {
+	let otb_guard = otb_state.read().map_err(|e| format!("Lock error: {}", e))?;
+	let empty = OtbItems::default();
+	let otb = otb_guard.as_ref().unwrap_or(&empty);
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+	m.ensure_chunks(z, &[chunk_key_of(x, y)], otb)?;
+	let key = crate::formats::tibia::otbm::attrs_key(z, x, y, stack_idx);
+	let root = m.container_contents.get(&key).cloned().unwrap_or_default();
+	let list = nav_contents(&root, &path).unwrap_or(&[]);
+	Ok(list
+		.iter()
+		.map(|c| ContainerItemDto {
+			server_id: c.server_id,
+			client_id: otb.client_id(c.server_id).unwrap_or(c.server_id),
+			subtype: c.subtype,
+			has_contents: !c.items.is_empty(),
+		})
+		.collect())
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub fn container_add_item(
+	map_id: u32,
+	z: u8,
+	x: u16,
+	y: u16,
+	stack_idx: u8,
+	path: Vec<u32>,
+	server_id: u16,
+	map_state: tauri::State<MapState>,
+) -> Result<(), String> {
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+	let key = crate::formats::tibia::otbm::attrs_key(z, x, y, stack_idx);
+	let mut root = m.container_contents.get(&key).cloned().unwrap_or_default();
+	let list = nav_contents_mut(&mut root, &path).ok_or("container path not found")?;
+	list.push(ContainedItem { server_id, subtype: 1, attrs: ItemAttrs::default(), items: Vec::new() });
+
+	m.record_begin();
+	m.set_container_contents(key, root);
+	sync_has_contents(m, key, true);
+	ensure_tile_edited(m, z, x, y);
+	m.record_commit(ACTION_ATTRS);
+	Ok(())
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub fn container_remove_item(
+	map_id: u32,
+	z: u8,
+	x: u16,
+	y: u16,
+	stack_idx: u8,
+	path: Vec<u32>,
+	child_idx: u8,
+	map_state: tauri::State<MapState>,
+) -> Result<(), String> {
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+	let key = crate::formats::tibia::otbm::attrs_key(z, x, y, stack_idx);
+	let mut root = m.container_contents.get(&key).cloned().unwrap_or_default();
+	let list = nav_contents_mut(&mut root, &path).ok_or("container path not found")?;
+	if (child_idx as usize) >= list.len() {
+		return Ok(());
+	}
+	list.remove(child_idx as usize);
+
+	m.record_begin();
+	sync_has_contents(m, key, !root.is_empty());
+	m.set_container_contents(key, root);
+	ensure_tile_edited(m, z, x, y);
+	m.record_commit(ACTION_ATTRS);
+	Ok(())
+}
+
+#[tauri::command]
+pub fn set_door_id(
+	map_id: u32,
+	z: u8,
+	x: u16,
+	y: u16,
+	door_id: u8,
+	map_state: tauri::State<MapState>,
+) -> Result<(), String> {
+	let mut guard = map_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+	let m = guard.maps.get_mut(&map_id).ok_or("map not loaded")?;
+	m.record_begin();
+	m.set_tile_door_id(z, x, y, door_id);
+	m.record_commit(ACTION_ATTRS);
 	Ok(())
 }
 

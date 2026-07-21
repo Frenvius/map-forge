@@ -53,10 +53,10 @@ use map_import::{import_cancel, import_commit, import_load, import_preview, new_
 use map_load::open_otbm;
 use map_meta::{get_map_properties, get_towns, get_waypoints, map_statistics, set_map_properties, set_towns};
 use map_model::{
-	attach_undo_sidecar, clear_marker_at, close_map, get_chunk_tooltips, get_map_chunks, get_minimap, get_tile_items,
-	list_id_markers, list_items_with_client_ids,
-	new_otbm, push_undo_sidecar, redo_edit, set_history_limits, set_minimap_palette, strip_action_ids, strip_unique_ids,
-	undo_edit, MapStore,
+	attach_undo_sidecar, clear_marker_at, close_map, container_add_item, container_remove_item, get_chunk_tooltips,
+	get_container, get_map_chunks, get_minimap, get_tile_items, list_id_markers, list_items_with_client_ids,
+	new_otbm, push_undo_sidecar, redo_edit, set_door_id, set_history_limits, set_item_attrs, set_minimap_palette, strip_action_ids,
+	strip_unique_ids, undo_edit, MapStore,
 };
 use map_save::save_otbm;
 
@@ -205,6 +205,11 @@ pub fn run() {
 			list_id_markers,
 			list_items_with_client_ids,
 			clear_marker_at,
+			set_item_attrs,
+			set_door_id,
+			get_container,
+			container_add_item,
+			container_remove_item,
 			remove_item_at,
 			remove_items_with_client_ids,
 			strip_action_ids,

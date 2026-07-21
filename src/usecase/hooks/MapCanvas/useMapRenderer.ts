@@ -8,8 +8,8 @@ import { MapCanvasInputs } from '~/components/MapCanvas/types';
 import { floorShift, visibleFloorRange } from '~/usecase/floors';
 import { SpawnArea, CreaturePlacement } from '~/domain/creature';
 import { MapMeta, Position, ChunkTiles, PreviewTile } from '~/domain/map';
-import { isCountStack, getSpriteIndex, stackSpriteIndex } from '~/domain/tibia';
 import { packChunkKey, previewPaint, fetchMapChunks, fetchChunkTooltips } from '~/adapter/map';
+import { isCountStack, isFluidThing, getSpriteIndex, stackSpriteIndex, fluidSpriteIndex } from '~/domain/tibia';
 import { TooltipBox, layoutTooltip, drawTooltipBox, buildTooltipFields, resolveTooltipTheme } from '~/usecase/tooltipOverlay';
 import {
   TILE,
@@ -493,7 +493,12 @@ export function useMapRenderer(deps: RendererDeps) {
           const px = thing.hangable ? 0 : thing.patternX > 0 ? tx % thing.patternX : 0;
           const py = thing.patternY > 0 ? ty % thing.patternY : 0;
           const countStack = isCountStack(thing);
-          const stackIdx = countStack ? stackSpriteIndex(thing, ct.counts[ii]) : 0;
+          const fluid = !countStack && isFluidThing(thing);
+          const frameIdx = countStack
+            ? stackSpriteIndex(thing, ct.counts[ii])
+            : fluid
+              ? fluidSpriteIndex(thing, ct.counts[ii])
+              : 0;
           const ox = (thing.offsetX || 0) + drawElevation;
           const oy = (thing.offsetY || 0) + drawElevation;
           const tint = selEntry ? (selEntry.all || ii === top ? 1 : 0) : 0;
@@ -504,7 +509,7 @@ export function useMapRenderer(deps: RendererDeps) {
           for (let l = 0; l < thing.layers; l++) {
             for (let h = 0; h < thing.height; h++) {
               for (let w = 0; w < thing.width; w++) {
-                const sid = thing.spriteIndex[countStack ? stackIdx : getSpriteIndex(thing, w, h, l, px, py, 0, 0)];
+                const sid = thing.spriteIndex[countStack || fluid ? frameIdx : getSpriteIndex(thing, w, h, l, px, py, 0, 0)];
                 if (!sid) continue;
                 const data = atlas.data.current.get(sid);
                 if (!data) {

@@ -246,7 +246,11 @@ pub fn load_otb(path: String, fm: tauri::State<FormatManagerState>, otb_state: t
 	let bytes = fs::read(&path).map_err(|e| format!("Failed to read {}: {}", path, e))?;
 	let count = fm.lock().map_err(|e| format!("Lock error: {}", e))?.item_db_mut().load(&bytes)?;
 
-	let items = crate::formats::tibia::otb::parse_otb(&bytes)?;
+	let mut items = crate::formats::tibia::otb::parse_otb(&bytes)?;
+	let xml_path = std::path::Path::new(&path).with_file_name("items.xml");
+	if let Ok(xml) = fs::read_to_string(&xml_path) {
+		items.server_to_type = crate::formats::tibia::otb::parse_item_types(&xml);
+	}
 	*otb_state.write().map_err(|e| format!("Lock error: {}", e))? = Some(items);
 	Ok(count)
 }

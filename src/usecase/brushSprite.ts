@@ -1,7 +1,7 @@
-import { PaletteBrush } from '~/domain/palette';
-import { ThingType, getSpriteIndex, SPRITE_SIZE } from '~/domain/tibia';
 import { Thing } from '~/domain/thing';
+import { PaletteBrush } from '~/domain/palette';
 import { isColorized, OutfitColors } from '~/domain/outfit';
+import { ThingType, SPRITE_SIZE, getSpriteIndex } from '~/domain/tibia';
 
 export interface SpriteCell {
   dx: number;
@@ -34,7 +34,22 @@ export function resolveBrushThing(
   return items.get(clientId) ?? null;
 }
 
-export function brushSpriteLayout(thing: Thing, isCreature: boolean, colors?: OutfitColors, tileSize = SPRITE_SIZE): BrushSpriteLayout {
+export function fluidSpriteLayout(thing: Thing, subtype: number, tileSize = SPRITE_SIZE): BrushSpriteLayout {
+  const len = thing.spriteIndex.length;
+  const exactSize = thing.exactSize > 0 ? thing.exactSize : tileSize;
+  if (len === 0) return { cols: 1, rows: 1, exactSize, cells: [] };
+  const idx = ((subtype % len) + len) % len;
+  const spriteId = thing.spriteIndex[idx];
+  const cells: SpriteCell[] = spriteId ? [{ dx: 0, dy: 0, spriteId }] : [];
+  return { cols: 1, rows: 1, exactSize, cells };
+}
+
+export function brushSpriteLayout(
+  thing: Thing,
+  isCreature: boolean,
+  colors?: OutfitColors,
+  tileSize = SPRITE_SIZE
+): BrushSpriteLayout {
   const cols = Math.max(1, thing.width);
   const rows = Math.max(1, thing.height);
   const patternX = isCreature ? Math.min(2, Math.max(0, thing.patternX - 1)) : 0;

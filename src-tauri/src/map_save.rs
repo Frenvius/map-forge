@@ -222,7 +222,22 @@ fn flatten_door_edits(model: &MapModel) -> HashMap<u8, HashMap<u32, u8>> {
 	out
 }
 
-fn serialize_tile_fresh(w: &mut NodeWriter, x: u16, y: u16, stack: &[(u16, u16)], flags: u32, house: u32, door: u8, door_set: &HashSet<u16>) {
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
+fn serialize_tile_fresh(
+	w: &mut NodeWriter,
+	x: u16,
+	y: u16,
+	z: u8,
+	stack: &[(u16, u16)],
+	flags: u32,
+	house: u32,
+	door: u8,
+	ctx: &EmitCtx,
+	model: &MapModel,
+	item_attrs: &HashMap<u64, crate::formats::tibia::otbm::ItemAttrs>,
+	item_contents: &HashMap<u64, Vec<crate::formats::tibia::otbm::ContainedItem>>,
+) {
 	w.node_start(if house != 0 { OTBM_HOUSETILE } else { OTBM_TILE });
 	w.u8((x & 0xFF) as u8);
 	w.u8((y & 0xFF) as u8);
@@ -233,23 +248,125 @@ fn serialize_tile_fresh(w: &mut NodeWriter, x: u16, y: u16, stack: &[(u16, u16)]
 		w.u8(OTBM_ATTR_TILE_FLAGS);
 		w.u32(flags);
 	}
-	let mut iter = stack.iter();
-	if let Some(&(_, ground)) = iter.next() {
+	let mut iter = stack.iter().enumerate();
+	if let Some((_, &(_, ground))) = iter.next() {
 		w.u8(OTBM_ATTR_ITEM);
 		w.u16(ground);
 	}
 	let mut door_left = door;
-	for &(_, server) in iter {
+	for (i, &(_, server)) in iter {
 		w.node_start(OTBM_ITEM);
 		w.u16(server);
-		if door_left != 0 && door_set.contains(&server) {
+		let sub = crate::map_model::subtype_at(model, z, x, y, i);
+		if sub > 1 {
+			w.u8(OTBM_ATTR_COUNT);
+			w.u8(sub);
+		}
+		if door_left != 0 && ctx.door_set.contains(&server) {
 			w.u8(OTBM_ATTR_HOUSEDOORID);
 			w.u8(door_left);
 			door_left = 0;
 		}
+		let key = crate::formats::tibia::otbm::attrs_key(z, x, y, i as u8);
+		if let Some(a) = item_attrs.get(&key) {
+			emit_fresh_item_attrs(w, a, ctx);
+		}
+		if let Some(children) = item_contents.get(&key) {
+			for child in children {
+				write_contained_item(w, child);
+			}
+		}
 		w.node_end();
 	}
 	w.node_end();
+}
+
+fn write_contained_item(w: &mut NodeWriter, item: &crate::formats::tibia::otbm::ContainedItem) {
+	w.node_start(OTBM_ITEM);
+	w.u16(item.server_id);
+	if item.subtype > 1 {
+		w.u8(OTBM_ATTR_COUNT);
+		w.u8(item.subtype);
+	}
+	emit_contained_attrs(w, &item.attrs);
+	for child in &item.items {
+		write_contained_item(w, child);
+	}
+	w.node_end();
+}
+
+fn emit_contained_attrs(w: &mut NodeWriter, a: &crate::formats::tibia::otbm::ItemAttrs) {
+	if a.action_id != 0 {
+		w.u8(OTBM_ATTR_ACTION_ID);
+		w.u16(a.action_id);
+	}
+	if a.unique_id != 0 {
+		w.u8(OTBM_ATTR_UNIQUE_ID);
+		w.u16(a.unique_id);
+	}
+	if !a.text.is_empty() {
+		w.u8(OTBM_ATTR_TEXT);
+		w.string(&a.text);
+	}
+	if !a.desc.is_empty() {
+		w.u8(OTBM_ATTR_DESC);
+		w.string(&a.desc);
+	}
+	if a.has_tele() {
+		w.u8(OTBM_ATTR_TELE_DEST);
+		w.u16(a.tele_x);
+		w.u16(a.tele_y);
+		w.u8(a.tele_z);
+	}
+	if a.depot_id != 0 {
+		w.u8(OTBM_ATTR_DEPOT_ID);
+		w.u16(a.depot_id);
+	}
+	if a.charges != 0 {
+		w.u8(OTBM_ATTR_CHARGES);
+		w.u16(a.charges);
+	}
+	if a.tier != 0 {
+		w.u8(OTBM_ATTR_TIER);
+		w.u8(a.tier);
+	}
+}
+
+fn emit_fresh_item_attrs(w: &mut NodeWriter, a: &crate::formats::tibia::otbm::ItemAttrs, ctx: &EmitCtx) {
+	if a.action_id != 0 && !ctx.strip_action_ids {
+		w.u8(OTBM_ATTR_ACTION_ID);
+		w.u16(a.action_id);
+	}
+	if a.unique_id != 0 && !ctx.strip_unique_ids {
+		w.u8(OTBM_ATTR_UNIQUE_ID);
+		w.u16(a.unique_id);
+	}
+	if !a.text.is_empty() {
+		w.u8(OTBM_ATTR_TEXT);
+		w.string(&a.text);
+	}
+	if !a.desc.is_empty() {
+		w.u8(OTBM_ATTR_DESC);
+		w.string(&a.desc);
+	}
+	if a.has_tele() {
+		w.u8(OTBM_ATTR_TELE_DEST);
+		w.u16(a.tele_x);
+		w.u16(a.tele_y);
+		w.u8(a.tele_z);
+	}
+	if a.depot_id != 0 {
+		w.u8(OTBM_ATTR_DEPOT_ID);
+		w.u16(a.depot_id);
+	}
+	if a.charges != 0 {
+		w.u8(OTBM_ATTR_CHARGES);
+		w.u16(a.charges);
+	}
+	if a.tier != 0 {
+		w.u8(OTBM_ATTR_TIER);
+		w.u8(a.tier);
+	}
 }
 
 fn scan_node_end(b: &[u8], start: usize) -> usize {
@@ -421,7 +538,9 @@ fn emit_tile_override(w: &mut NodeWriter, span: &[u8], ov: TileOverride, ctx: &E
 	}
 }
 
-fn emit_floor(w: &mut NodeWriter, bytes: Option<&[u8]>, z: u8, mut list: Vec<EmitTile>, ctx: &EmitCtx) -> Vec<ChunkEntry> {
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
+fn emit_floor(w: &mut NodeWriter, bytes: Option<&[u8]>, z: u8, mut list: Vec<EmitTile>, ctx: &EmitCtx, model: &MapModel, item_attrs: &HashMap<u64, crate::formats::tibia::otbm::ItemAttrs>, item_contents: &HashMap<u64, Vec<crate::formats::tibia::otbm::ContainedItem>>) -> Vec<ChunkEntry> {
 	list.sort_unstable_by_key(|t| {
 		let (x, y) = t.xy();
 		(y / CHUNK, x / CHUNK, y, x)
@@ -460,7 +579,7 @@ fn emit_floor(w: &mut NodeWriter, bytes: Option<&[u8]>, z: u8, mut list: Vec<Emi
 				let span = &bytes.expect("verbatim tile requires source bytes")[s..e];
 				emit_tile_override(w, span, TileOverride { flags, house, door }, ctx);
 			}
-			EmitTile::Fresh { x, y, stack, flags, house, door } => serialize_tile_fresh(w, x, y, stack, flags, house, door, ctx.door_set),
+			EmitTile::Fresh { x, y, stack, flags, house, door } => serialize_tile_fresh(w, x, y, z, stack, flags, house, door, ctx, model, item_attrs, item_contents),
 		}
 		count += 1;
 	}
@@ -622,7 +741,7 @@ fn build_faithful(model: &MapModel, bytes: &[u8], ctx: &EmitCtx, report: &mut dy
 		if list.is_empty() {
 			continue;
 		}
-		chunks.extend(emit_floor(&mut w, Some(bytes), z, list, ctx));
+		chunks.extend(emit_floor(&mut w, Some(bytes), z, list, ctx, model, &model.item_attrs, &model.container_contents));
 	}
 
 	serialize_towns(&mut w, model);
@@ -718,7 +837,7 @@ fn build_from_model(model: &MapModel, ctx: &EmitCtx, report: &mut dyn FnMut(f64,
 			.iter()
 			.map(|(x, y, st, fl, hs, dr)| EmitTile::Fresh { x: *x, y: *y, stack: st, flags: *fl, house: *hs, door: *dr })
 			.collect();
-		chunks.extend(emit_floor(&mut w, None, z, list, ctx));
+		chunks.extend(emit_floor(&mut w, None, z, list, ctx, model, &model.item_attrs, &model.container_contents));
 	}
 
 	serialize_towns(&mut w, model);

@@ -7,7 +7,7 @@ use tauri::Emitter;
 
 use crate::map_model::{build_map_model, lazy_model, serialize_meta, store_map, MapModel, Town, Waypoint};
 use crate::formats::tibia::otb::OtbItems;
-use crate::formats::tibia::otbm::{attrs_key, read_otbm, read_otbm_header, ItemAttrs, OtbmVisitor};
+use crate::formats::tibia::otbm::{attrs_key, read_otbm, read_otbm_header, ContainedItem, ItemAttrs, OtbmVisitor};
 use crate::formats::tibia::otbm_footer::MapIndex;
 use crate::{MapState, OtbState};
 
@@ -59,6 +59,7 @@ pub(crate) struct OtbmCollector<'a> {
 	pub(crate) waypoints: Vec<Waypoint>,
 	pub(crate) house_tile_count: u32,
 	pub(crate) item_attrs: HashMap<u64, ItemAttrs>,
+	pub(crate) container_contents: HashMap<u64, Vec<ContainedItem>>,
 }
 
 impl OtbmCollector<'_> {
@@ -90,6 +91,7 @@ impl OtbmCollector<'_> {
 		model.waypoints = self.waypoints;
 		model.house_tile_count = self.house_tile_count;
 		model.item_attrs = self.item_attrs;
+		model.container_contents = self.container_contents;
 		let _ = self.window.emit("otbm_progress", 1.0_f64);
 		model
 	}
@@ -186,6 +188,10 @@ impl OtbmVisitor for OtbmCollector<'_> {
 		self.item_attrs.insert(attrs_key(z, x, y, stack_idx), ia);
 	}
 
+	fn tile_item_contents(&mut self, x: u16, y: u16, z: u8, stack_idx: u8, contents: Vec<ContainedItem>) {
+		self.container_contents.insert(attrs_key(z, x, y, stack_idx), contents);
+	}
+
 	fn town(&mut self, id: u32, name: String, x: u16, y: u16, z: u8) {
 		self.towns.push(Town { id, name, x, y, z });
 	}
@@ -245,6 +251,7 @@ pub async fn open_otbm(
 			waypoints: Vec::new(),
 			house_tile_count: 0,
 			item_attrs: HashMap::new(),
+			container_contents: HashMap::new(),
 		};
 		read_otbm(&bytes, &mut collector)?;
 		let mut model = collector.finish();

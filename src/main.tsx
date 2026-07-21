@@ -33,6 +33,7 @@ import AssetsMissing from '~/components/AssetsMissing';
 import { Button } from '~/components/commons/ui/button';
 import { useSetting } from '~/usecase/hooks/useSetting';
 import { serializeSpawnXml } from '~/usecase/spawnEdits';
+import { CHUNK } from '~/components/MapCanvas/constants';
 import { formatPosition } from '~/usecase/positionFormat';
 import { Waypoint, MapWaypoints } from '~/domain/waypoint';
 import { serializeWaypointXml } from '~/adapter/waypoints';
@@ -58,10 +59,10 @@ import { addWaypoint, nextWaypointName } from '~/usecase/waypointEdits';
 import { useMapCreatures } from '~/usecase/hooks/Workspace/useMapCreatures';
 import { useMapWaypoints } from '~/usecase/hooks/Workspace/useMapWaypoints';
 import { useAppShortcuts } from '~/usecase/hooks/Workspace/useAppShortcuts';
-import { getTowns, getMapProperties, setMapProperties, stripActionIds, stripUniqueIds } from '~/adapter/map';
 import { AssetsProvider, useAssetsBundle } from '~/usecase/context/AssetsContext';
 import { useEditorSettings, EditorSettingsProvider } from '~/usecase/context/EditorSettingsContext';
 import { houseSizes, importLoad, importCommit, importCancel, importPreview, ImportPreview } from '~/adapter/map';
+import { getTowns, packChunkKey, stripActionIds, stripUniqueIds, getMapProperties, setMapProperties } from '~/adapter/map';
 import {
   Dialog,
   DialogTitle,
@@ -425,8 +426,7 @@ const App = () => {
 
   const executeDangerousAction = React.useCallback(async () => {
     if (activeMapId == null || !dangerousConfirm) return;
-    const count =
-      dangerousConfirm === 'action-ids' ? await stripActionIds(activeMapId) : await stripUniqueIds(activeMapId);
+    const count = dangerousConfirm === 'action-ids' ? await stripActionIds(activeMapId) : await stripUniqueIds(activeMapId);
     const label = dangerousConfirm === 'action-ids' ? 'action' : 'unique';
     handleStatus(count > 0 ? `Stripped ${count} ${label} ID${count === 1 ? '' : 's'}` : `No ${label} IDs found`);
     if (count > 0) {
@@ -828,6 +828,14 @@ const App = () => {
           itemNames={itemNames}
           items={assets.items ?? null}
           onClose={() => setPropertiesOpen(false)}
+          onEdited={() => {
+            markActiveDirty();
+            if (selectedItem) {
+              mapRefetchRef.current?.([
+                [selectedItem.z, packChunkKey(Math.floor(selectedItem.x / CHUNK), Math.floor(selectedItem.y / CHUNK))]
+              ]);
+            }
+          }}
         />
       );
     }
@@ -836,14 +844,14 @@ const App = () => {
         <IdMarkers
           dragHandle={handle}
           mapId={active.map.id}
-          items={assets.items ?? null}
-          version={idMarkersVersion}
           onGoto={gotoPosition}
+          version={idMarkersVersion}
+          items={assets.items ?? null}
+          onClose={() => setIdMarkersOpen(false)}
           onEdited={(tagged) => {
             markActiveDirty();
             if (tagged?.length) mapRefetchRef.current?.(tagged);
           }}
-          onClose={() => setIdMarkersOpen(false)}
         />
       );
     }
@@ -948,12 +956,10 @@ const App = () => {
       <Dialog open={dangerousConfirm !== null} onOpenChange={(open) => !open && setDangerousConfirm(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>
-              {dangerousConfirm === 'action-ids' ? 'Strip All Action IDs' : 'Strip All Unique IDs'}
-            </DialogTitle>
+            <DialogTitle>{dangerousConfirm === 'action-ids' ? 'Strip All Action IDs' : 'Strip All Unique IDs'}</DialogTitle>
             <DialogDescription>
-              This will remove every {dangerousConfirm === 'action-ids' ? 'action' : 'unique'} ID from all items in the
-              map. This cannot be undone.
+              This will remove every {dangerousConfirm === 'action-ids' ? 'action' : 'unique'} ID from all items in the map. This
+              cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -971,9 +977,9 @@ const App = () => {
 
       <MapTowns
         open={townsOpen}
-        onSaved={markActiveDirty}
         cursorRef={cursorRef}
         onGoto={gotoPosition}
+        onSaved={markActiveDirty}
         mapId={active?.map.id ?? null}
         onClose={() => setTownsOpen(false)}
       />

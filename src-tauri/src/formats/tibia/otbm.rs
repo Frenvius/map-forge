@@ -31,7 +31,7 @@ const OTBM_ATTR_COUNT: u8 = 15;
 const OTBM_ATTR_CHARGES: u8 = 22;
 const OTBM_ATTR_TIER: u8 = 41;
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, PartialEq)]
 pub struct ItemAttrs {
 	pub action_id: u16,
 	pub unique_id: u16,
@@ -40,7 +40,11 @@ pub struct ItemAttrs {
 	pub charges: u16,
 	pub tier: u8,
 	pub depot_id: u16,
+	pub subtype: u8,
 	pub has_contents: bool,
+	pub tele_x: u16,
+	pub tele_y: u16,
+	pub tele_z: u8,
 }
 
 impl ItemAttrs {
@@ -52,8 +56,24 @@ impl ItemAttrs {
 			&& self.charges == 0
 			&& self.tier == 0
 			&& self.depot_id == 0
+			&& self.subtype == 0
 			&& !self.has_contents
+			&& self.tele_x == 0
+			&& self.tele_y == 0
+			&& self.tele_z == 0
 	}
+
+	pub fn has_tele(&self) -> bool {
+		self.tele_x != 0 || self.tele_y != 0 || self.tele_z != 0
+	}
+}
+
+#[derive(Default, Clone, PartialEq)]
+pub struct ContainedItem {
+	pub server_id: u16,
+	pub subtype: u8,
+	pub attrs: ItemAttrs,
+	pub items: Vec<ContainedItem>,
 }
 
 pub fn attrs_key(z: u8, x: u16, y: u16, idx: u8) -> u64 {
@@ -66,6 +86,7 @@ pub trait OtbmVisitor {
 	fn tile(&mut self, x: u16, y: u16, z: u8, items: &[(u16, u8)]);
 	fn tile_flags(&mut self, _x: u16, _y: u16, _z: u8, _flags: u32) {}
 	fn tile_item_attrs(&mut self, _x: u16, _y: u16, _z: u8, _stack_idx: u8, _attrs: ItemAttrs) {}
+	fn tile_item_contents(&mut self, _x: u16, _y: u16, _z: u8, _stack_idx: u8, _contents: Vec<ContainedItem>) {}
 	fn teleport(&mut self, sx: u16, sy: u16, sz: u8, dx: u16, dy: u16, dz: u8);
 
 	fn identifier(&mut self, _start: usize, _end: usize) {}
@@ -416,8 +437,13 @@ impl<'a, V: OtbmVisitor> Parser<'a, V> {
 				OTBM_ATTR_TELE_DEST => {
 					if let (Some(dx), Some(dy), Some(dz)) = (self.r.data_u16(), self.r.data_u16(), self.r.data_u8()) {
 						self.v.teleport(tile_x, tile_y, base_z, dx, dy, dz);
+						ia.tele_x = dx;
+						ia.tele_y = dy;
+						ia.tele_z = dz;
+						true
+					} else {
+						false
 					}
-					false
 				}
 				_ => false,
 			};
@@ -427,18 +453,79 @@ impl<'a, V: OtbmVisitor> Parser<'a, V> {
 		}
 
 		self.r.skip_to_structural();
-		let mut has_child = false;
+		let mut contents: Vec<ContainedItem> = Vec::new();
 		self.each_child(|p| {
-			has_child = true;
-			p.r.data_u8();
-			p.skip_subtree()
+			let kind = p.r.data_u8().ok_or("otbm: missing node type")?;
+			if kind == OTBM_ITEM {
+				contents.push(p.contained_item()?);
+				Ok(())
+			} else {
+				p.skip_subtree()
+			}
 		})?;
-		ia.has_contents = has_child;
+		ia.has_contents = !contents.is_empty();
 
 		if !ia.is_default() {
 			self.v.tile_item_attrs(tile_x, tile_y, base_z, item_idx as u8, ia);
 		}
+		if !contents.is_empty() {
+			self.v.tile_item_contents(tile_x, tile_y, base_z, item_idx as u8, contents);
+		}
 		Ok(())
+	}
+
+	fn contained_item(&mut self) -> Result<ContainedItem, String> {
+		let server_id = self.r.data_u16().ok_or("otbm: contained item missing id")?;
+		let mut subtype = 1u8;
+		let mut attrs = ItemAttrs::default();
+
+		while let Some(attr) = self.r.data_u8() {
+			let ok = match attr {
+				OTBM_ATTR_COUNT => match self.r.data_u8() {
+					Some(c) => {
+						subtype = c.max(1);
+						true
+					}
+					None => false,
+				},
+				OTBM_ATTR_ACTION_ID => self.r.data_u16().map(|v| attrs.action_id = v).is_some(),
+				OTBM_ATTR_UNIQUE_ID => self.r.data_u16().map(|v| attrs.unique_id = v).is_some(),
+				OTBM_ATTR_CHARGES => self.r.data_u16().map(|v| attrs.charges = v).is_some(),
+				OTBM_ATTR_DEPOT_ID => self.r.data_u16().map(|v| attrs.depot_id = v).is_some(),
+				OTBM_ATTR_TIER => self.r.data_u8().map(|v| attrs.tier = v).is_some(),
+				OTBM_ATTR_RUNE_CHARGES => self.r.skip_data(1),
+				OTBM_ATTR_TEXT => self.r.data_string().map(|s| attrs.text = s).is_some(),
+				OTBM_ATTR_DESC | OTBM_ATTR_DESCRIPTION => self.r.data_string().map(|s| attrs.desc = s).is_some(),
+				OTBM_ATTR_TELE_DEST => match (self.r.data_u16(), self.r.data_u16(), self.r.data_u8()) {
+					(Some(dx), Some(dy), Some(dz)) => {
+						attrs.tele_x = dx;
+						attrs.tele_y = dy;
+						attrs.tele_z = dz;
+						true
+					}
+					_ => false,
+				},
+				_ => false,
+			};
+			if !ok {
+				break;
+			}
+		}
+
+		self.r.skip_to_structural();
+		let mut items: Vec<ContainedItem> = Vec::new();
+		self.each_child(|p| {
+			let kind = p.r.data_u8().ok_or("otbm: missing node type")?;
+			if kind == OTBM_ITEM {
+				items.push(p.contained_item()?);
+				Ok(())
+			} else {
+				p.skip_subtree()
+			}
+		})?;
+		attrs.has_contents = !items.is_empty();
+
+		Ok(ContainedItem { server_id, subtype, attrs, items })
 	}
 
 	fn skip_subtree(&mut self) -> Result<(), String> {

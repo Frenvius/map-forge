@@ -273,6 +273,16 @@ export function isCountStack(thing: Thing): boolean {
   return thing.stackable && thing.width <= 1 && thing.height <= 1 && thing.layers <= 1;
 }
 
+export function isFluidThing(thing: Thing): boolean {
+  return (thing.isFluid || thing.isFluidContainer) && thing.width <= 1 && thing.height <= 1 && thing.layers <= 1;
+}
+
+export function fluidSpriteIndex(thing: Thing, subtype: number): number {
+  const n = thing.spriteIndex.length;
+  if (n <= 1) return 0;
+  return ((subtype % n) + n) % n;
+}
+
 export function stackSpriteIndex(thing: Thing, count: number): number {
   const v = stackFrame(count);
   const n = thing.spriteIndex.length;

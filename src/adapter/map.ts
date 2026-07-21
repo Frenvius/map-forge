@@ -604,16 +604,44 @@ export async function fetchChunkTooltips(mapId: number, z: number, keys: number[
   return result;
 }
 
+export const OTB_GROUP_CONTAINER = 2;
+export const OTB_GROUP_TELEPORT = 7;
+export const OTB_GROUP_MAGICFIELD = 8;
+export const OTB_GROUP_WRITEABLE = 9;
+export const OTB_GROUP_SPLASH = 11;
+export const OTB_GROUP_FLUID = 12;
+export const OTB_GROUP_DOOR = 13;
+
 export interface TileItemEntry {
+  kind: string;
   tier: number;
   desc: string;
   text: string;
+  group: number;
   charges: number;
   subtype: number;
   serverId: number;
   clientId: number;
   actionId: number;
   uniqueId: number;
+  depotId: number;
+  teleX: number;
+  teleY: number;
+  teleZ: number;
+}
+
+export interface ItemAttrsPatch {
+  actionId: number;
+  uniqueId: number;
+  text: string;
+  desc: string;
+  charges: number;
+  tier: number;
+  depotId: number;
+  subtype: number;
+  teleX: number;
+  teleY: number;
+  teleZ: number;
 }
 
 export interface TilePropertiesPayload {
@@ -625,4 +653,47 @@ export interface TilePropertiesPayload {
 
 export async function getTileItems(mapId: number, z: number, x: number, y: number): Promise<TilePropertiesPayload> {
   return invoke<TilePropertiesPayload>('get_tile_items', { mapId, z, x, y });
+}
+
+export async function setItemAttrs(
+  mapId: number,
+  z: number,
+  x: number,
+  y: number,
+  stackIdx: number,
+  patch: ItemAttrsPatch
+): Promise<void> {
+  await invoke('set_item_attrs', { mapId, z, x, y, stackIdx, patch });
+}
+
+export async function setDoorId(mapId: number, z: number, x: number, y: number, doorId: number): Promise<void> {
+  await invoke('set_door_id', { mapId, z, x, y, doorId });
+}
+
+export interface ContainerItem {
+  subtype: number;
+  serverId: number;
+  clientId: number;
+  hasContents: boolean;
+}
+
+export interface ContainerLoc {
+  mapId: number;
+  z: number;
+  x: number;
+  y: number;
+  stackIdx: number;
+  path: number[];
+}
+
+export async function getContainer(loc: ContainerLoc): Promise<ContainerItem[]> {
+  return invoke<ContainerItem[]>('get_container', loc);
+}
+
+export async function containerAddItem(loc: ContainerLoc, serverId: number): Promise<void> {
+  await invoke('container_add_item', { ...loc, serverId });
+}
+
+export async function containerRemoveItem(loc: ContainerLoc, childIdx: number): Promise<void> {
+  await invoke('container_remove_item', { ...loc, childIdx });
 }
