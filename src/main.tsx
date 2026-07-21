@@ -2,7 +2,6 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { open } from '@tauri-apps/plugin-dialog';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
 import { House } from '~/domain/house';
@@ -60,6 +59,7 @@ import { useMapCreatures } from '~/usecase/hooks/Workspace/useMapCreatures';
 import { useMapWaypoints } from '~/usecase/hooks/Workspace/useMapWaypoints';
 import { useAppShortcuts } from '~/usecase/hooks/Workspace/useAppShortcuts';
 import { AssetsProvider, useAssetsBundle } from '~/usecase/context/AssetsContext';
+import ImportMapDialog, { HouseImportMode, ImportMapRequest } from '~/components/ImportMapDialog';
 import { useEditorSettings, EditorSettingsProvider } from '~/usecase/context/EditorSettingsContext';
 import { houseSizes, importLoad, importCommit, importCancel, importPreview, ImportPreview } from '~/adapter/map';
 import { getTowns, packChunkKey, stripActionIds, stripUniqueIds, getMapProperties, setMapProperties } from '~/adapter/map';
@@ -243,6 +243,7 @@ const App = () => {
   const mapCenterRef = React.useRef<((x: number, y: number) => void) | null>(null);
   const mapHighlightRef = React.useRef<((x: number, y: number, z: number, clientId?: number) => void) | null>(null);
   const mapRefetchRef = React.useRef<((tagged: [number, number][]) => void) | null>(null);
+  const [importOpen, setImportOpen] = React.useState(false);
   const [importGhost, setImportGhost] = React.useState<{
     width: number;
     height: number;
@@ -258,6 +259,7 @@ const App = () => {
     maxY: number;
     sourceHouses: House[];
     sourceSpawns: MapSpawns | null;
+    houseMode: HouseImportMode;
   } | null>(null);
   const [importBusy, setImportBusy] = React.useState<{ value: number; label: string } | null>(null);
   const spawnsRef = React.useRef<MapSpawns | null>(null);
@@ -467,78 +469,26 @@ const App = () => {
     markActiveDirty();
   }, [markActiveDirty]);
 
-  const handleImportMap = React.useCallback(async () => {
-    if (!active) return;
-    const activeMapIdSnapshot = active.map.id;
-    const selected = await open({
-      multiple: false,
-      title: 'Import map...',
-      filters: [{ name: 'OTBM Maps', extensions: ['otbm'] }]
-    });
-    if (!selected || typeof selected !== 'string') return;
-    setImportBusy({ value: 0, label: 'Reading map file...' });
-    const unlisten = await listen<number>('import_load_progress', (e) =>
-      setImportBusy({ value: e.payload, label: 'Reading map file...' })
-    );
-    try {
-      const info = await importLoad(selected);
-      const dir = dirOf(selected);
-      const base = (selected.split(/[\\/]/).pop() ?? '').replace(/\.otbm$/i, '');
-      const [sourceHouses, sourceSpawnsRaw] = await Promise.all([
-        loadHouses(`${dir}${base}-house.xml`).catch(() => ({ list: [] })),
-        creatureDb ? loadSpawns(`${dir}${base}-spawn.xml`, creatureDb).catch(() => null) : Promise.resolve(null)
-      ]);
-      importCtx.current = {
-        mapId: activeMapIdSnapshot,
-        minX: info.minX,
-        minY: info.minY,
-        maxX: info.maxX,
-        maxY: info.maxY,
-        sourceHouses: sourceHouses.list,
-        sourceSpawns: sourceSpawnsRaw
-      };
-      const width = Math.max(1, info.maxX - info.minX + 1);
-      const height = Math.max(1, info.maxY - info.minY + 1);
-      const minZ = info.floors[0] ?? 7;
-      const maxZ = info.floors[info.floors.length - 1] ?? minZ;
-      setImportBusy({ value: 1, label: 'Building preview...' });
-      const preview = assets
-        ? await importPreview(active.floorZ)
-            .then((p) => buildImportSpriteThumbnail(p, assets.items, assets.sprPath, assets.transparency))
-            .catch(() => null)
-        : null;
-      setImportGhost({ width, height, minZ, maxZ, preview });
-      handleStatus(
-        `Import: ${info.tileCount} tiles, ${info.townCount} towns, ${info.waypointCount} waypoints - click to drop, Esc to cancel`
-      );
-    } catch (e) {
-      handleStatus(`Import failed: ${e}`);
-    } finally {
-      unlisten();
-      setImportBusy(null);
-    }
-  }, [active, assets, creatureDb, handleStatus]);
-
-  const handleImportDrop = React.useCallback(
-    async (pos: Position) => {
-      const ctx = importCtx.current;
-      if (!ctx) return;
-      importCtx.current = null;
-      setImportGhost(null);
-      const w = ctx.maxX - ctx.minX + 1;
-      const h = ctx.maxY - ctx.minY + 1;
-      const ax = Math.max(0, Math.min(pos.x, 65536 - w));
-      const ay = Math.max(0, Math.min(pos.y, 65536 - h));
-      const dx = ax - ctx.minX;
-      const dy = ay - ctx.minY;
-      const dz = 0;
+  const commitImport = React.useCallback(
+    async (opts: {
+      mapId: number;
+      dx: number;
+      dy: number;
+      dz: number;
+      sourceHouses: House[];
+      sourceSpawns: MapSpawns | null;
+      houseMode: HouseImportMode;
+    }) => {
+      const { mapId, dx, dy, dz, sourceHouses, sourceSpawns, houseMode } = opts;
+      const importHouses = houseMode !== 'none';
 
       const existing = housesRef.current ?? { list: [] };
       const existingIds = new Set(existing.list.map((h) => h.id));
       const houseIdMap: Record<number, number> = {};
       let nextHouseId = existing.list.reduce((max, h) => Math.max(max, h.id), 0);
-      for (const h of ctx.sourceHouses) {
-        if (existingIds.has(h.id)) {
+      for (const h of sourceHouses) {
+        const remap = houseMode === 'insert' || (houseMode === 'smart' && existingIds.has(h.id));
+        if (remap) {
           nextHouseId += 1;
           houseIdMap[h.id] = nextHouseId;
         } else {
@@ -553,14 +503,14 @@ const App = () => {
       );
       try {
         const result = await importCommit({
-          mapId: ctx.mapId,
+          mapId,
           dx,
           dy,
           dz,
           houseIdMap,
           importTowns: true,
           importWaypoints: true,
-          importHouses: true
+          importHouses
         });
         patchActiveMap({
           bounds: { minX: result.bounds[0], minY: result.bounds[1], maxX: result.bounds[2], maxY: result.bounds[3] },
@@ -568,8 +518,8 @@ const App = () => {
         });
         mapRefetchRef.current?.(result.touched);
 
-        if (ctx.sourceHouses.length > 0) {
-          const remappedHouses: House[] = ctx.sourceHouses.map((h) => ({
+        if (sourceHouses.length > 0) {
+          const remappedHouses: House[] = sourceHouses.map((h) => ({
             ...h,
             id: houseIdMap[h.id] ?? h.id,
             townId: result.townIdMap[h.townId] ?? h.townId,
@@ -581,13 +531,13 @@ const App = () => {
           housesDirty.current = true;
         }
 
-        if (ctx.sourceSpawns) {
+        if (sourceSpawns) {
           const cur = spawnsRef.current;
           const areas = (cur?.areas ?? []).concat(
-            ctx.sourceSpawns.areas.map((a) => ({ x: a.x + dx, y: a.y + dy, z: a.z + dz, radius: a.radius }))
+            sourceSpawns.areas.map((a) => ({ x: a.x + dx, y: a.y + dy, z: a.z + dz, radius: a.radius }))
           );
           const placements = (cur?.placements ?? []).concat(
-            ctx.sourceSpawns.placements.map((p) => ({ ...p, x: p.x + dx, y: p.y + dy, z: p.z + dz }))
+            sourceSpawns.placements.map((p) => ({ ...p, x: p.x + dx, y: p.y + dy, z: p.z + dz }))
           );
           setSpawns(buildMapSpawns(areas, placements));
           spawnsDirty.current = true;
@@ -615,6 +565,105 @@ const App = () => {
       }
     },
     [activeMapId, handleStatus, markActiveDirty, patchActiveMap, setHouses, setSpawns]
+  );
+
+  const runImport = React.useCallback(
+    async (req: ImportMapRequest) => {
+      if (!active) return;
+      const mapId = active.map.id;
+      const importHouses = req.houseMode !== 'none';
+
+      setImportBusy({ value: 0, label: 'Reading map file...' });
+      const unlistenLoad = await listen<number>('import_load_progress', (e) =>
+        setImportBusy({ value: e.payload, label: 'Reading map file...' })
+      );
+      let info;
+      let sourceHouses: House[] = [];
+      let sourceSpawns: MapSpawns | null = null;
+      try {
+        info = await importLoad(req.path);
+        const dir = dirOf(req.path);
+        const base = (req.path.split(/[\\/]/).pop() ?? '').replace(/\.otbm$/i, '');
+        const [housesRaw, spawnsRaw] = await Promise.all([
+          importHouses ? loadHouses(`${dir}${base}-house.xml`).catch(() => ({ list: [] })) : Promise.resolve({ list: [] }),
+          req.spawnMode !== 'none' && creatureDb
+            ? loadSpawns(`${dir}${base}-spawn.xml`, creatureDb).catch(() => null)
+            : Promise.resolve(null)
+        ]);
+        sourceHouses = housesRaw.list;
+        sourceSpawns = spawnsRaw;
+      } catch (e) {
+        unlistenLoad();
+        setImportBusy(null);
+        handleStatus(`Import failed: ${e}`);
+        return;
+      }
+
+      if (req.placeMode === 'ghost') {
+        importCtx.current = {
+          mapId,
+          minX: info.minX,
+          minY: info.minY,
+          maxX: info.maxX,
+          maxY: info.maxY,
+          sourceHouses,
+          sourceSpawns,
+          houseMode: req.houseMode
+        };
+        const width = Math.max(1, info.maxX - info.minX + 1);
+        const height = Math.max(1, info.maxY - info.minY + 1);
+        const minZ = info.floors[0] ?? 7;
+        const maxZ = info.floors[info.floors.length - 1] ?? minZ;
+        setImportBusy({ value: 1, label: 'Building preview...' });
+        const preview = assets
+          ? await importPreview(active.floorZ)
+              .then((p) => buildImportSpriteThumbnail(p, assets.items, assets.sprPath, assets.transparency))
+              .catch(() => null)
+          : null;
+        unlistenLoad();
+        setImportBusy(null);
+        setImportGhost({ width, height, minZ, maxZ, preview });
+        handleStatus(
+          `Import: ${info.tileCount} tiles, ${info.townCount} towns, ${info.waypointCount} waypoints - click to drop, Esc to cancel`
+        );
+        return;
+      }
+
+      unlistenLoad();
+      await commitImport({
+        mapId,
+        dx: req.offsetX,
+        dy: req.offsetY,
+        dz: 0,
+        sourceHouses,
+        sourceSpawns,
+        houseMode: req.houseMode
+      });
+    },
+    [active, assets, commitImport, creatureDb, handleStatus]
+  );
+
+  const handleImportDrop = React.useCallback(
+    async (pos: Position) => {
+      const ctx = importCtx.current;
+      if (!ctx) return;
+      importCtx.current = null;
+      setImportGhost(null);
+      const w = ctx.maxX - ctx.minX + 1;
+      const h = ctx.maxY - ctx.minY + 1;
+      const ax = Math.max(0, Math.min(pos.x, 65536 - w));
+      const ay = Math.max(0, Math.min(pos.y, 65536 - h));
+      await commitImport({
+        mapId: ctx.mapId,
+        dx: ax - ctx.minX,
+        dy: ay - ctx.minY,
+        dz: 0,
+        sourceHouses: ctx.sourceHouses,
+        sourceSpawns: ctx.sourceSpawns,
+        houseMode: ctx.houseMode
+      });
+    },
+    [commitImport]
   );
 
   const handleImportCancel = React.useCallback(() => {
@@ -912,8 +961,8 @@ const App = () => {
         onToggleIdMarkers={toggleIdMarkers}
         onSaveAs={() => void handleSaveAs()}
         onToggleProperties={toggleProperties}
+        onImportMap={() => setImportOpen(true)}
         onOpenScripts={() => setScriptsOpen(true)}
-        onImportMap={() => void handleImportMap()}
         onOpenPreferences={() => openPreferences()}
         onOpenRecent={(path) => void openPath(path)}
         onSelectPaletteCategory={setPaletteCategory}
@@ -1085,6 +1134,8 @@ const App = () => {
         open={showCreatureDirDialog}
         mapName={active?.path?.split(/[\\/]/).pop() ?? 'this map'}
       />
+
+      <ImportMapDialog open={importOpen} onOpenChange={setImportOpen} onImport={(req) => void runImport(req)} />
     </div>
   );
 };
